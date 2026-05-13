@@ -2,11 +2,13 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod assets;
 mod db;
 mod library;
 mod modules;
 mod settings;
 
+use assets::{list_asset_formats, list_assets};
 use library::{
 	list_library_roots, register_library_root, remove_library_root, scan_library_root,
 };
@@ -93,6 +95,8 @@ fn main() {
 			list_library_roots,
 			remove_library_root,
 			scan_library_root,
+			list_assets,
+			list_asset_formats,
 			list_modules,
 		])
 		.run(tauri::generate_context!())

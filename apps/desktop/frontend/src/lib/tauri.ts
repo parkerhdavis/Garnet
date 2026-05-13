@@ -33,11 +33,45 @@ export type ModuleManifest = {
 	};
 };
 
+export type Asset = {
+	id: number;
+	root_id: number;
+	relative_path: string;
+	size: number | null;
+	mtime: number | null;
+	format: string | null;
+};
+
+export type AssetSortBy = "path" | "size" | "mtime" | "format";
+export type SortDir = "asc" | "desc";
+
+export type AssetQuery = {
+	root_id: number;
+	limit?: number;
+	offset?: number;
+	sort_by?: AssetSortBy;
+	sort_dir?: SortDir;
+	format_filter?: string | null;
+};
+
+export type AssetPage = {
+	assets: Asset[];
+	total: number;
+};
+
+export type FormatCount = {
+	format: string | null;
+	count: number;
+};
+
 export const api = {
 	registerLibraryRoot: (path: string) =>
 		invoke<LibraryRoot>("register_library_root", { path }),
 	listLibraryRoots: () => invoke<LibraryRoot[]>("list_library_roots"),
 	removeLibraryRoot: (id: number) => invoke<void>("remove_library_root", { id }),
 	scanLibraryRoot: (id: number) => invoke<ScanReport>("scan_library_root", { id }),
+	listAssets: (query: AssetQuery) => invoke<AssetPage>("list_assets", { query }),
+	listAssetFormats: (rootId: number) =>
+		invoke<FormatCount[]>("list_asset_formats", { rootId }),
 	listModules: () => invoke<ModuleManifest[]>("list_modules"),
 };
