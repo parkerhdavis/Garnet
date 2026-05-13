@@ -36,22 +36,28 @@ export type ModuleManifest = {
 export type Asset = {
 	id: number;
 	root_id: number;
+	root_path: string;
 	relative_path: string;
 	size: number | null;
 	mtime: number | null;
 	format: string | null;
 };
 
-export type AssetSortBy = "path" | "size" | "mtime" | "format";
+export type AssetSortBy = "path" | "size" | "mtime" | "format" | "root";
 export type SortDir = "asc" | "desc";
 
 export type AssetQuery = {
-	root_id: number;
+	root_id?: number | null;
 	limit?: number;
 	offset?: number;
 	sort_by?: AssetSortBy;
 	sort_dir?: SortDir;
-	format_filter?: string | null;
+	formats?: string[];
+	path_search?: string | null;
+	size_min?: number | null;
+	size_max?: number | null;
+	mtime_from?: number | null;
+	mtime_to?: number | null;
 };
 
 export type AssetPage = {
@@ -71,7 +77,9 @@ export const api = {
 	removeLibraryRoot: (id: number) => invoke<void>("remove_library_root", { id }),
 	scanLibraryRoot: (id: number) => invoke<ScanReport>("scan_library_root", { id }),
 	listAssets: (query: AssetQuery) => invoke<AssetPage>("list_assets", { query }),
-	listAssetFormats: (rootId: number) =>
+	listAssetFormats: (rootId: number | null) =>
 		invoke<FormatCount[]>("list_asset_formats", { rootId }),
+	getThumbnail: (absPath: string, mtime: number | null, size?: number) =>
+		invoke<string | null>("get_thumbnail", { absPath, mtime, size }),
 	listModules: () => invoke<ModuleManifest[]>("list_modules"),
 };
