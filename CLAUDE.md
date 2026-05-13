@@ -1,0 +1,1 @@
+/home/parker/Garnet/AGENTS.md
