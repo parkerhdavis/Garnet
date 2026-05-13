@@ -1,21 +1,38 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { HiFolderPlus, HiArrowPath, HiTrash } from "react-icons/hi2";
+import {
+	HiFolderPlus,
+	HiArrowPath,
+	HiTrash,
+	HiFolderOpen,
+} from "react-icons/hi2";
+import { AssetsView } from "@/components/AssetsView";
 import { useLibraryStore } from "@/stores/libraryStore";
+import { useAssetsStore } from "@/stores/assetsStore";
 
 export default function App() {
 	const { roots, lastScan, loading, error, refresh, addRoot, removeRoot, scanRoot } =
 		useLibraryStore();
+	const { rootId: openRootId, openRoot, refresh: refreshAssets } = useAssetsStore();
 
 	useEffect(() => {
 		void refresh();
 	}, [refresh]);
 
+	const openRoot$ = roots.find((r) => r.id === openRootId) ?? null;
+
 	async function pickAndAddRoot() {
 		const selected = await open({ directory: true, multiple: false });
 		if (typeof selected === "string") {
 			await addRoot(selected);
+		}
+	}
+
+	async function scanAndRefresh(id: number) {
+		await scanRoot(id);
+		if (openRootId === id) {
+			await refreshAssets();
 		}
 	}
 
@@ -28,82 +45,123 @@ export default function App() {
 						v{__APP_VERSION__}
 					</span>
 				</div>
-				<div className="flex-none">
-					<button
-						type="button"
-						className="btn btn-primary btn-sm"
-						onClick={pickAndAddRoot}
-					>
-						<HiFolderPlus className="size-4" />
-						Add library root
-					</button>
-				</div>
-			</header>
-
-			<main className="flex-1 p-6 max-w-4xl w-full mx-auto">
-				{error && (
-					<div className="alert alert-error mb-4">
-						<span>{error}</span>
+				{!openRoot$ && (
+					<div className="flex-none">
+						<button
+							type="button"
+							className="btn btn-primary btn-sm"
+							onClick={pickAndAddRoot}
+						>
+							<HiFolderPlus className="size-4" />
+							Add library root
+						</button>
 					</div>
 				)}
+			</header>
 
-				{loading && roots.length === 0 ? (
-					<div className="text-base-content/60">Loading…</div>
-				) : roots.length === 0 ? (
-					<EmptyState onAdd={pickAndAddRoot} />
+			<main className="flex-1 p-6 max-w-5xl w-full mx-auto">
+				{openRoot$ ? (
+					<AssetsView root={openRoot$} />
 				) : (
-					<div className="flex flex-col gap-3">
-						<h2 className="text-lg font-medium">Library roots</h2>
-						{roots.map((root) => (
-							<div
-								key={root.id}
-								className="card bg-base-100 border border-base-300"
-							>
-								<div className="card-body p-4 flex-row items-center gap-3">
-									<div className="flex-1 min-w-0">
-										<div className="font-mono text-sm truncate">
-											{root.path}
-										</div>
-										<div className="text-xs text-base-content/60">
-											added {new Date(root.added_at * 1000).toLocaleString()}
-										</div>
-									</div>
-									<button
-										type="button"
-										className="btn btn-sm"
-										onClick={() => scanRoot(root.id)}
-									>
-										<HiArrowPath className="size-4" />
-										Scan
-									</button>
-									<button
-										type="button"
-										className="btn btn-sm btn-ghost text-error"
-										onClick={() => removeRoot(root.id)}
-										aria-label="Remove root"
-									>
-										<HiTrash className="size-4" />
-									</button>
-								</div>
-							</div>
-						))}
-
-						{lastScan && (
-							<div className="alert mt-2">
-								<span>
-									Scan complete — {lastScan.files_inserted} indexed,{" "}
-									{lastScan.files_skipped} skipped (of{" "}
-									{lastScan.files_seen} seen).
-								</span>
-							</div>
-						)}
-					</div>
+					<RootsView
+						roots={roots}
+						loading={loading}
+						error={error}
+						lastScan={lastScan}
+						onAdd={pickAndAddRoot}
+						onOpen={openRoot}
+						onScan={scanAndRefresh}
+						onRemove={removeRoot}
+					/>
 				)}
 			</main>
 
 			<footer className="text-center text-xs text-base-content/50 p-3 border-t border-base-300">
-				Phase 1 starter — base toolkit, modules disabled.
+				Phase 1 — base toolkit. Modules disabled.
 			</footer>
+		</div>
+	);
+}
+
+type RootsViewProps = {
+	roots: ReturnType<typeof useLibraryStore.getState>["roots"];
+	loading: boolean;
+	error: string | null;
+	lastScan: ReturnType<typeof useLibraryStore.getState>["lastScan"];
+	onAdd: () => void;
+	onOpen: (id: number) => void;
+	onScan: (id: number) => void;
+	onRemove: (id: number) => void;
+};
+
+function RootsView({
+	roots,
+	loading,
+	error,
+	lastScan,
+	onAdd,
+	onOpen,
+	onScan,
+	onRemove,
+}: RootsViewProps) {
+	if (loading && roots.length === 0) {
+		return <div className="text-base-content/60">Loading…</div>;
+	}
+	if (roots.length === 0) {
+		return <EmptyState onAdd={onAdd} />;
+	}
+	return (
+		<div className="flex flex-col gap-3">
+			<h2 className="text-lg font-medium">Library roots</h2>
+			{error && (
+				<div className="alert alert-error">
+					<span>{error}</span>
+				</div>
+			)}
+			{roots.map((root) => (
+				<div key={root.id} className="card bg-base-100 border border-base-300">
+					<div className="card-body p-4 flex-row items-center gap-3">
+						<div className="flex-1 min-w-0">
+							<div className="font-mono text-sm truncate">{root.path}</div>
+							<div className="text-xs text-base-content/60">
+								added {new Date(root.added_at * 1000).toLocaleString()}
+							</div>
+						</div>
+						<button
+							type="button"
+							className="btn btn-sm btn-primary"
+							onClick={() => onOpen(root.id)}
+						>
+							<HiFolderOpen className="size-4" />
+							Open
+						</button>
+						<button
+							type="button"
+							className="btn btn-sm"
+							onClick={() => onScan(root.id)}
+						>
+							<HiArrowPath className="size-4" />
+							Scan
+						</button>
+						<button
+							type="button"
+							className="btn btn-sm btn-ghost text-error"
+							onClick={() => onRemove(root.id)}
+							aria-label="Remove root"
+						>
+							<HiTrash className="size-4" />
+						</button>
+					</div>
+				</div>
+			))}
+			{lastScan && (
+				<div className="alert mt-2">
+					<span>
+						Scan complete — {lastScan.files_inserted} indexed,{" "}
+						{lastScan.files_skipped} skipped (of {lastScan.files_seen} seen).
+					</span>
+				</div>
+			)}
 		</div>
 	);
 }
