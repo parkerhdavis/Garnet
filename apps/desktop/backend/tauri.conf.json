@@ -1,0 +1,73 @@
+{
+	"$schema": "https://schema.tauri.app/config/2",
+	"productName": "Garnet",
+	"version": "0.0.1",
+	"identifier": "com.parkerhdavis.garnet",
+	"build": {
+		"beforeDevCommand": {
+			"script": "bun run dev",
+			"cwd": ".."
+		},
+		"devUrl": "http://localhost:5173",
+		"frontendDist": "../frontend/dist"
+	},
+	"app": {
+		"windows": [
+			{
+				"title": "Garnet",
+				"width": 1280,
+				"height": 840,
+				"minWidth": 1000,
+				"minHeight": 700,
+				"resizable": true,
+				"dragDropEnabled": false
+			}
+		],
+		"security": {
+			"csp": null,
+			"capabilities": [
+				{
+					"identifier": "main-capability",
+					"windows": ["*"],
+					"permissions": [
+						"dialog:allow-open",
+						"dialog:allow-save",
+						"fs:allow-read-text-file",
+						"fs:allow-write-text-file",
+						"fs:allow-read-file",
+						"fs:allow-write-file",
+						"fs:allow-exists",
+						"fs:allow-read-dir",
+						"fs:allow-mkdir",
+						"fs:allow-copy-file",
+						{
+							"identifier": "fs:scope",
+							"allow": [
+								"$DOWNLOAD/**",
+								"$DOCUMENT/**",
+								"$DESKTOP/**",
+								"$HOME/**"
+							]
+						},
+						"core:path:allow-resolve-directory",
+						"core:event:allow-listen",
+						"opener:allow-open-url"
+					]
+				}
+			]
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": "all",
+		"licenseFile": "../../../LICENSE.md",
+		"icon": [
+			"../../../resources/icons/32x32.png",
+			"../../../resources/icons/128x128.png",
+			"../../../resources/icons/128x128@2x.png",
+			"../../../resources/icons/512x512.png",
+			"../../../resources/icons/icon.icns",
+			"../../../resources/icons/icon.ico"
+		]
+	}
+}

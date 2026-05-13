@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+[build]
+# target-dir resolves relative to this file's directory
+# (apps/desktop/backend/.cargo/), so ../../../target points at the
+# repo-root `target/` — keeps cargo output colocated with other
+# project-wide build artifacts and matches the `.gitignore` entry.
+target-dir = "../../../target"
