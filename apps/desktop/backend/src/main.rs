@@ -4,17 +4,23 @@
 
 mod assets;
 mod db;
+mod indexer;
 mod library;
 mod modules;
 mod settings;
+mod tags;
 mod thumbnails;
 
-use assets::{list_asset_formats, list_assets};
+use assets::{get_asset, list_asset_formats, list_assets};
 use library::{
 	list_library_roots, register_library_root, remove_library_root, scan_library_root,
 };
 use modules::list_modules;
 use settings::{load_settings, save_settings};
+use tags::{
+	create_tag, delete_tag, list_asset_metadata, list_asset_tags, list_tags, tag_asset,
+	untag_asset,
+};
 use thumbnails::get_thumbnail;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -98,8 +104,16 @@ fn main() {
 			remove_library_root,
 			scan_library_root,
 			list_assets,
+			get_asset,
 			list_asset_formats,
+			list_asset_metadata,
 			get_thumbnail,
+			list_tags,
+			create_tag,
+			delete_tag,
+			tag_asset,
+			untag_asset,
+			list_asset_tags,
 			list_modules,
 		])
 		.run(tauri::generate_context!())

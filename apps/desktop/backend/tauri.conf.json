@@ -25,6 +25,15 @@
 		],
 		"security": {
 			"csp": null,
+			"assetProtocol": {
+				"enable": true,
+				"scope": [
+					"$DOWNLOAD/**",
+					"$DOCUMENT/**",
+					"$DESKTOP/**",
+					"$HOME/**"
+				]
+			},
 			"capabilities": [
 				{
 					"identifier": "main-capability",

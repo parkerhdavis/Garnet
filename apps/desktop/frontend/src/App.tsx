@@ -2,6 +2,7 @@
 import { Component, type ReactNode } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/Layout";
+import { AssetDetailPage } from "@/pages/AssetDetailPage";
 import { LibraryPage } from "@/pages/LibraryPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 
@@ -12,6 +13,7 @@ export default function App() {
 				<Routes>
 					<Route element={<Layout />}>
 						<Route index element={<LibraryPage />} />
+						<Route path="asset/:id" element={<AssetDetailPage />} />
 						<Route path="settings" element={<SettingsPage />} />
 						<Route path="*" element={<Navigate to="/" replace />} />
 					</Route>

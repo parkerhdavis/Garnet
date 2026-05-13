@@ -43,6 +43,24 @@ export type Asset = {
 	format: string | null;
 };
 
+export type Tag = {
+	id: number;
+	name: string;
+	parent_id: number | null;
+	created_at: number;
+};
+
+export type TagWithCount = {
+	id: number;
+	name: string;
+	count: number;
+};
+
+export type AssetMetadata = {
+	key: string;
+	value: string;
+};
+
 export type AssetSortBy = "path" | "size" | "mtime" | "format" | "root";
 export type SortDir = "asc" | "desc";
 
@@ -58,6 +76,7 @@ export type AssetQuery = {
 	size_max?: number | null;
 	mtime_from?: number | null;
 	mtime_to?: number | null;
+	tag_ids?: number[];
 };
 
 export type AssetPage = {
@@ -77,9 +96,20 @@ export const api = {
 	removeLibraryRoot: (id: number) => invoke<void>("remove_library_root", { id }),
 	scanLibraryRoot: (id: number) => invoke<ScanReport>("scan_library_root", { id }),
 	listAssets: (query: AssetQuery) => invoke<AssetPage>("list_assets", { query }),
+	getAsset: (id: number) => invoke<Asset>("get_asset", { id }),
 	listAssetFormats: (rootId: number | null) =>
 		invoke<FormatCount[]>("list_asset_formats", { rootId }),
+	listAssetMetadata: (assetId: number) =>
+		invoke<AssetMetadata[]>("list_asset_metadata", { assetId }),
 	getThumbnail: (absPath: string, mtime: number | null, size?: number) =>
 		invoke<string | null>("get_thumbnail", { absPath, mtime, size }),
+	listTags: () => invoke<TagWithCount[]>("list_tags"),
+	createTag: (name: string) => invoke<Tag>("create_tag", { name }),
+	deleteTag: (id: number) => invoke<void>("delete_tag", { id }),
+	tagAsset: (assetId: number, tagId: number) =>
+		invoke<void>("tag_asset", { assetId, tagId }),
+	untagAsset: (assetId: number, tagId: number) =>
+		invoke<void>("untag_asset", { assetId, tagId }),
+	listAssetTags: (assetId: number) => invoke<Tag[]>("list_asset_tags", { assetId }),
 	listModules: () => invoke<ModuleManifest[]>("list_modules"),
 };

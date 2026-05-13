@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { HiFolderPlus } from "react-icons/hi2";
 import { AssetGrid } from "@/components/AssetGrid";
 import { AssetList } from "@/components/AssetList";
+import { DetailsSidebar } from "@/components/DetailsSidebar";
 import { FilterBar } from "@/components/FilterBar";
 import { Pagination } from "@/components/Pagination";
+import type { Asset } from "@/lib/tauri";
 import { useAssetsStore, PAGE_SIZE } from "@/stores/assetsStore";
 import { useLibraryStore } from "@/stores/libraryStore";
 
@@ -19,11 +21,14 @@ export function LibraryPage() {
 		page,
 		sortBy,
 		sortDir,
+		selectedId,
 		setPage,
 		setSort,
+		select,
 		refresh,
 	} = useAssetsStore();
 	const { roots, refresh: refreshRoots, loading: rootsLoading } = useLibraryStore();
+	const navigate = useNavigate();
 
 	useEffect(() => {
 		void refreshRoots();
@@ -34,37 +39,56 @@ export function LibraryPage() {
 	}, [refresh]);
 
 	const noRoots = !rootsLoading && roots.length === 0;
+	const selected = selectedId !== null ? assets.find((a) => a.id === selectedId) ?? null : null;
+
+	function openAsset(asset: Asset) {
+		navigate(`/asset/${asset.id}`);
+	}
 
 	return (
-		<div className="flex-1 flex flex-col min-w-0">
-			<FilterBar />
+		<div className="flex-1 flex min-w-0">
+			<div className="flex-1 flex flex-col min-w-0">
+				<FilterBar />
 
-			{error && (
-				<div className="alert alert-error mx-6 mt-4">
-					<span>{error}</span>
-				</div>
-			)}
-
-			<div className="flex-1 min-h-0 overflow-auto">
-				{noRoots ? (
-					<EmptyNoRoots />
-				) : loading && assets.length === 0 ? (
-					<div className="p-12 text-center text-base-content/60">Loading…</div>
-				) : assets.length === 0 ? (
-					<EmptyNoMatches />
-				) : viewMode === "grid" ? (
-					<AssetGrid assets={assets} />
-				) : (
-					<AssetList
-						assets={assets}
-						sortBy={sortBy}
-						sortDir={sortDir}
-						onSort={setSort}
-					/>
+				{error && (
+					<div className="alert alert-error mx-6 mt-4">
+						<span>{error}</span>
+					</div>
 				)}
+
+				<div className="flex-1 min-h-0 overflow-auto">
+					{noRoots ? (
+						<EmptyNoRoots />
+					) : loading && assets.length === 0 ? (
+						<div className="p-12 text-center text-base-content/60">Loading…</div>
+					) : assets.length === 0 ? (
+						<EmptyNoMatches />
+					) : viewMode === "grid" ? (
+						<AssetGrid
+							assets={assets}
+							selectedId={selectedId}
+							onSelect={select}
+							onOpen={openAsset}
+						/>
+					) : (
+						<AssetList
+							assets={assets}
+							sortBy={sortBy}
+							sortDir={sortDir}
+							selectedId={selectedId}
+							onSort={setSort}
+							onSelect={select}
+							onOpen={openAsset}
+						/>
+					)}
+				</div>
+
+				<Pagination page={page} pageSize={PAGE_SIZE} total={total} onPage={setPage} />
 			</div>
 
-			<Pagination page={page} pageSize={PAGE_SIZE} total={total} onPage={setPage} />
+			{selected && (
+				<DetailsSidebar asset={selected} onClose={() => select(null)} />
+			)}
 		</div>
 	);
 }

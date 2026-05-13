@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Library roots and the stub indexer. The indexer is intentionally minimal
-//! for Phase 1: it walks the directory tree under a root and inserts one row
-//! per file with `relative_path`, `size`, `mtime`, and a guessed-by-extension
-//! `format` tag. Real metadata extraction (EXIF, ID3, stream info, etc.) lives
-//! in modules and lands in later phases.
+//! Library roots and the scan command. The actual scanning logic lives in
+//! `crate::indexer` — this module just wraps it as a Tauri command and owns
+//! the register/list/remove commands that round out the root lifecycle.
 
+use crate::indexer;
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tauri::State;
-use walkdir::WalkDir;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct LibraryRoot {
@@ -18,13 +16,7 @@ pub struct LibraryRoot {
 	pub added_at: i64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ScanReport {
-	pub root_id: i64,
-	pub files_seen: u64,
-	pub files_inserted: u64,
-	pub files_skipped: u64,
-}
+pub use indexer::ScanReport;
 
 fn stringify<E: std::fmt::Display>(e: E) -> String {
 	e.to_string()
@@ -107,72 +99,6 @@ pub fn scan_library_root(state: State<AppState>, id: i64) -> Result<ScanReport, 
 		.map_err(|e| format!("unknown library root id={id}: {e}"))?
 	};
 
-	let root = PathBuf::from(&root_path);
-	let mut report = ScanReport {
-		root_id: id,
-		files_seen: 0,
-		files_inserted: 0,
-		files_skipped: 0,
-	};
-
 	let conn = state.db.lock().map_err(stringify)?;
-	let tx = conn.unchecked_transaction().map_err(stringify)?;
-	{
-		let mut insert = tx
-			.prepare(
-				"INSERT INTO assets (root_id, relative_path, size, mtime, format)
-				 VALUES (?1, ?2, ?3, ?4, ?5)
-				 ON CONFLICT(root_id, relative_path) DO UPDATE SET
-					size = excluded.size,
-					mtime = excluded.mtime,
-					format = excluded.format",
-			)
-			.map_err(stringify)?;
-
-		for entry in WalkDir::new(&root).follow_links(false).into_iter().filter_map(|e| e.ok()) {
-			if !entry.file_type().is_file() {
-				continue;
-			}
-			report.files_seen += 1;
-
-			let abs = entry.path();
-			let relative = match abs.strip_prefix(&root) {
-				Ok(p) => p.to_string_lossy().to_string(),
-				Err(_) => {
-					report.files_skipped += 1;
-					continue;
-				}
-			};
-
-			let meta = match entry.metadata() {
-				Ok(m) => m,
-				Err(_) => {
-					report.files_skipped += 1;
-					continue;
-				}
-			};
-			let size = meta.len() as i64;
-			let mtime = meta
-				.modified()
-				.ok()
-				.and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-				.map(|d| d.as_secs() as i64);
-			let format = abs
-				.extension()
-				.and_then(|s| s.to_str())
-				.map(|s| s.to_ascii_lowercase());
-
-			insert
-				.execute(rusqlite::params![id, relative, size, mtime, format])
-				.map_err(stringify)?;
-			report.files_inserted += 1;
-		}
-	}
-	tx.commit().map_err(stringify)?;
-
-	tracing::info!(
-		"scan complete: root_id={} seen={} inserted={} skipped={}",
-		id, report.files_seen, report.files_inserted, report.files_skipped
-	);
-	Ok(report)
+	indexer::scan_root(&conn, id, &PathBuf::from(&root_path)).map_err(stringify)
 }

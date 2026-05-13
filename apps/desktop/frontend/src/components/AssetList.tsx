@@ -1,38 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { HiArrowsUpDown, HiBarsArrowDown, HiBarsArrowUp } from "react-icons/hi2";
 import type { Asset, AssetSortBy, SortDir } from "@/lib/tauri";
-
-function formatSize(bytes: number | null): string {
-	if (bytes === null) return "—";
-	const units = ["B", "KB", "MB", "GB", "TB"];
-	let n = bytes;
-	let i = 0;
-	while (n >= 1024 && i < units.length - 1) {
-		n /= 1024;
-		i += 1;
-	}
-	return `${n < 10 && i > 0 ? n.toFixed(1) : Math.round(n)} ${units[i]}`;
-}
-
-function formatTime(unix: number | null): string {
-	if (unix === null) return "—";
-	return new Date(unix * 1000).toLocaleString();
-}
-
-function abbreviatePath(p: string): string {
-	const parts = p.split("/").filter(Boolean);
-	if (parts.length <= 2) return p;
-	return `…/${parts.slice(-2).join("/")}`;
-}
+import { abbreviatePath, formatSize, formatTime } from "@/lib/paths";
 
 type Props = {
 	assets: Asset[];
 	sortBy: AssetSortBy;
 	sortDir: SortDir;
+	selectedId: number | null;
 	onSort: (by: AssetSortBy) => void;
+	onSelect: (id: number | null) => void;
+	onOpen: (asset: Asset) => void;
 };
 
-export function AssetList({ assets, sortBy, sortDir, onSort }: Props) {
+export function AssetList({
+	assets,
+	sortBy,
+	sortDir,
+	selectedId,
+	onSort,
+	onSelect,
+	onOpen,
+}: Props) {
 	return (
 		<div className="p-6">
 			<div className="card bg-base-100 border border-base-300 overflow-hidden">
@@ -58,31 +47,41 @@ export function AssetList({ assets, sortBy, sortDir, onSort }: Props) {
 							</tr>
 						</thead>
 						<tbody>
-							{assets.map((a) => (
-								<tr key={a.id}>
-									<td
-										className="font-mono text-xs truncate max-w-md"
-										title={a.relative_path}
+							{assets.map((a) => {
+								const selected = a.id === selectedId;
+								return (
+									<tr
+										key={a.id}
+										className={`cursor-pointer ${selected ? "bg-primary/10" : ""}`}
+										onClick={() => onSelect(a.id === selectedId ? null : a.id)}
+										onDoubleClick={() => onOpen(a)}
 									>
-										{a.relative_path}
-									</td>
-									<td
-										className="text-xs text-base-content/70 max-w-[180px] truncate"
-										title={a.root_path}
-									>
-										{abbreviatePath(a.root_path)}
-									</td>
-									<td>
-										{a.format ? (
-											<span className="badge badge-sm badge-ghost">{a.format}</span>
-										) : (
-											<span className="text-base-content/40">—</span>
-										)}
-									</td>
-									<td className="tabular-nums">{formatSize(a.size)}</td>
-									<td className="text-xs text-base-content/70">{formatTime(a.mtime)}</td>
-								</tr>
-							))}
+										<td
+											className="font-mono text-xs truncate max-w-md"
+											title={a.relative_path}
+										>
+											{a.relative_path}
+										</td>
+										<td
+											className="text-xs text-base-content/70 max-w-[180px] truncate"
+											title={a.root_path}
+										>
+											{abbreviatePath(a.root_path)}
+										</td>
+										<td>
+											{a.format ? (
+												<span className="badge badge-sm badge-ghost">{a.format}</span>
+											) : (
+												<span className="text-base-content/40">—</span>
+											)}
+										</td>
+										<td className="tabular-nums">{formatSize(a.size)}</td>
+										<td className="text-xs text-base-content/70">
+											{formatTime(a.mtime)}
+										</td>
+									</tr>
+								);
+							})}
 						</tbody>
 					</table>
 				</div>

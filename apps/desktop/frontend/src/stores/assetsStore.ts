@@ -9,6 +9,7 @@ import {
 	type AssetSortBy,
 	type FormatCount,
 	type SortDir,
+	type TagWithCount,
 } from "@/lib/tauri";
 
 export const PAGE_SIZE = 60;
@@ -19,6 +20,7 @@ type AssetsState = {
 	// Query parameters
 	rootId: number | null;
 	formats: string[];
+	tagIds: number[];
 	pathSearch: string;
 	sizeMin: number | null;
 	sizeMax: number | null;
@@ -31,10 +33,14 @@ type AssetsState = {
 	// View
 	viewMode: ViewMode;
 
+	// Selection (for the details sidebar)
+	selectedId: number | null;
+
 	// Data
 	assets: Asset[];
 	total: number;
 	formatCounts: FormatCount[];
+	tagCounts: TagWithCount[];
 	loading: boolean;
 	error: string | null;
 
@@ -42,6 +48,8 @@ type AssetsState = {
 	setRootId: (rootId: number | null) => Promise<void>;
 	toggleFormat: (format: string) => Promise<void>;
 	clearFormats: () => Promise<void>;
+	toggleTagFilter: (tagId: number) => Promise<void>;
+	clearTagFilter: () => Promise<void>;
 	setPathSearch: (search: string) => Promise<void>;
 	setSizeMin: (min: number | null) => Promise<void>;
 	setSizeMax: (max: number | null) => Promise<void>;
@@ -50,6 +58,7 @@ type AssetsState = {
 	setSort: (by: AssetSortBy) => Promise<void>;
 	setPage: (page: number) => Promise<void>;
 	setViewMode: (mode: ViewMode) => void;
+	select: (id: number | null) => void;
 	resetFilters: () => Promise<void>;
 	refresh: () => Promise<void>;
 };
@@ -57,6 +66,7 @@ type AssetsState = {
 export const useAssetsStore = create<AssetsState>((set, get) => ({
 	rootId: null,
 	formats: [],
+	tagIds: [],
 	pathSearch: "",
 	sizeMin: null,
 	sizeMax: null,
@@ -68,9 +78,12 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 
 	viewMode: "grid",
 
+	selectedId: null,
+
 	assets: [],
 	total: 0,
 	formatCounts: [],
+	tagCounts: [],
 	loading: false,
 	error: null,
 
@@ -89,6 +102,20 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 
 	clearFormats: async () => {
 		set({ formats: [], page: 0 });
+		await get().refresh();
+	},
+
+	toggleTagFilter: async (tagId) => {
+		const current = get().tagIds;
+		const next = current.includes(tagId)
+			? current.filter((t) => t !== tagId)
+			: [...current, tagId];
+		set({ tagIds: next, page: 0 });
+		await get().refresh();
+	},
+
+	clearTagFilter: async () => {
+		set({ tagIds: [], page: 0 });
 		await get().refresh();
 	},
 
@@ -130,9 +157,14 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 		set({ viewMode });
 	},
 
+	select: (id) => {
+		set({ selectedId: id });
+	},
+
 	resetFilters: async () => {
 		set({
 			formats: [],
+			tagIds: [],
 			pathSearch: "",
 			sizeMin: null,
 			sizeMax: null,
@@ -147,7 +179,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 		const s = get();
 		set({ loading: true, error: null });
 		try {
-			const [page, formatCounts] = await Promise.all([
+			const [page, formatCounts, tagCounts] = await Promise.all([
 				api.listAssets({
 					root_id: s.rootId,
 					limit: PAGE_SIZE,
@@ -160,13 +192,16 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 					size_max: s.sizeMax,
 					mtime_from: s.mtimeFrom,
 					mtime_to: s.mtimeTo,
+					tag_ids: s.tagIds,
 				}),
 				api.listAssetFormats(s.rootId),
+				api.listTags(),
 			]);
 			set({
 				assets: page.assets,
 				total: page.total,
 				formatCounts,
+				tagCounts,
 				loading: false,
 			});
 		} catch (e) {
