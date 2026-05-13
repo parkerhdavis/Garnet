@@ -7,6 +7,7 @@ mod db;
 mod library;
 mod modules;
 mod settings;
+mod thumbnails;
 
 use assets::{list_asset_formats, list_assets};
 use library::{
@@ -14,6 +15,7 @@ use library::{
 };
 use modules::list_modules;
 use settings::{load_settings, save_settings};
+use thumbnails::get_thumbnail;
 use std::sync::Mutex;
 use tauri::Manager;
 use tracing_subscriber::EnvFilter;
@@ -97,6 +99,7 @@ fn main() {
 			scan_library_root,
 			list_assets,
 			list_asset_formats,
+			get_thumbnail,
 			list_modules,
 		])
 		.run(tauri::generate_context!())

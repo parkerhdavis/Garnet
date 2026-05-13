@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+//! Library-view query state: filters, sort, view mode, and the current page of
+//! assets. Cross-root by default; `rootId` scopes to one root.
+
 import { create } from "zustand";
 import {
 	api,
@@ -8,96 +11,162 @@ import {
 	type SortDir,
 } from "@/lib/tauri";
 
-export const PAGE_SIZE = 100;
+export const PAGE_SIZE = 60;
+
+export type ViewMode = "grid" | "list";
 
 type AssetsState = {
+	// Query parameters
 	rootId: number | null;
-	assets: Asset[];
-	total: number;
-	formats: FormatCount[];
-	page: number;
+	formats: string[];
+	pathSearch: string;
+	sizeMin: number | null;
+	sizeMax: number | null;
+	mtimeFrom: number | null;
+	mtimeTo: number | null;
 	sortBy: AssetSortBy;
 	sortDir: SortDir;
-	formatFilter: string | null;
+	page: number;
+
+	// View
+	viewMode: ViewMode;
+
+	// Data
+	assets: Asset[];
+	total: number;
+	formatCounts: FormatCount[];
 	loading: boolean;
 	error: string | null;
 
-	openRoot: (rootId: number) => Promise<void>;
-	close: () => void;
-	setPage: (page: number) => Promise<void>;
+	// Actions
+	setRootId: (rootId: number | null) => Promise<void>;
+	toggleFormat: (format: string) => Promise<void>;
+	clearFormats: () => Promise<void>;
+	setPathSearch: (search: string) => Promise<void>;
+	setSizeMin: (min: number | null) => Promise<void>;
+	setSizeMax: (max: number | null) => Promise<void>;
+	setMtimeFrom: (from: number | null) => Promise<void>;
+	setMtimeTo: (to: number | null) => Promise<void>;
 	setSort: (by: AssetSortBy) => Promise<void>;
-	setFormatFilter: (format: string | null) => Promise<void>;
+	setPage: (page: number) => Promise<void>;
+	setViewMode: (mode: ViewMode) => void;
+	resetFilters: () => Promise<void>;
 	refresh: () => Promise<void>;
 };
 
 export const useAssetsStore = create<AssetsState>((set, get) => ({
 	rootId: null,
-	assets: [],
-	total: 0,
 	formats: [],
-	page: 0,
+	pathSearch: "",
+	sizeMin: null,
+	sizeMax: null,
+	mtimeFrom: null,
+	mtimeTo: null,
 	sortBy: "path",
 	sortDir: "asc",
-	formatFilter: null,
+	page: 0,
+
+	viewMode: "grid",
+
+	assets: [],
+	total: 0,
+	formatCounts: [],
 	loading: false,
 	error: null,
 
-	openRoot: async (rootId: number) => {
-		set({
-			rootId,
-			page: 0,
-			sortBy: "path",
-			sortDir: "asc",
-			formatFilter: null,
-			assets: [],
-			total: 0,
-			formats: [],
-			error: null,
-		});
+	setRootId: async (rootId) => {
+		set({ rootId, page: 0 });
 		await get().refresh();
 	},
 
-	close: () => {
-		set({ rootId: null, assets: [], total: 0, formats: [], error: null });
-	},
-
-	setPage: async (page: number) => {
-		set({ page: Math.max(0, page) });
+	toggleFormat: async (format) => {
+		const lc = format.toLowerCase();
+		const current = get().formats;
+		const next = current.includes(lc) ? current.filter((f) => f !== lc) : [...current, lc];
+		set({ formats: next, page: 0 });
 		await get().refresh();
 	},
 
-	setSort: async (by: AssetSortBy) => {
+	clearFormats: async () => {
+		set({ formats: [], page: 0 });
+		await get().refresh();
+	},
+
+	setPathSearch: async (search) => {
+		set({ pathSearch: search, page: 0 });
+		await get().refresh();
+	},
+
+	setSizeMin: async (min) => {
+		set({ sizeMin: min, page: 0 });
+		await get().refresh();
+	},
+	setSizeMax: async (max) => {
+		set({ sizeMax: max, page: 0 });
+		await get().refresh();
+	},
+	setMtimeFrom: async (from) => {
+		set({ mtimeFrom: from, page: 0 });
+		await get().refresh();
+	},
+	setMtimeTo: async (to) => {
+		set({ mtimeTo: to, page: 0 });
+		await get().refresh();
+	},
+
+	setSort: async (by) => {
 		const { sortBy, sortDir } = get();
 		const nextDir: SortDir = sortBy === by ? (sortDir === "asc" ? "desc" : "asc") : "asc";
 		set({ sortBy: by, sortDir: nextDir, page: 0 });
 		await get().refresh();
 	},
 
-	setFormatFilter: async (format: string | null) => {
-		set({ formatFilter: format, page: 0 });
+	setPage: async (page) => {
+		set({ page: Math.max(0, page) });
+		await get().refresh();
+	},
+
+	setViewMode: (viewMode) => {
+		set({ viewMode });
+	},
+
+	resetFilters: async () => {
+		set({
+			formats: [],
+			pathSearch: "",
+			sizeMin: null,
+			sizeMax: null,
+			mtimeFrom: null,
+			mtimeTo: null,
+			page: 0,
+		});
 		await get().refresh();
 	},
 
 	refresh: async () => {
-		const { rootId, page, sortBy, sortDir, formatFilter } = get();
-		if (rootId === null) return;
+		const s = get();
 		set({ loading: true, error: null });
 		try {
-			const [page$, formats] = await Promise.all([
+			const [page, formatCounts] = await Promise.all([
 				api.listAssets({
-					root_id: rootId,
+					root_id: s.rootId,
 					limit: PAGE_SIZE,
-					offset: page * PAGE_SIZE,
-					sort_by: sortBy,
-					sort_dir: sortDir,
-					format_filter: formatFilter ?? null,
+					offset: s.page * PAGE_SIZE,
+					sort_by: s.sortBy,
+					sort_dir: s.sortDir,
+					formats: s.formats,
+					path_search: s.pathSearch.trim() || null,
+					size_min: s.sizeMin,
+					size_max: s.sizeMax,
+					mtime_from: s.mtimeFrom,
+					mtime_to: s.mtimeTo,
 				}),
-				api.listAssetFormats(rootId),
+				api.listAssetFormats(s.rootId),
 			]);
 			set({
-				assets: page$.assets,
-				total: page$.total,
-				formats,
+				assets: page.assets,
+				total: page.total,
+				formatCounts,
 				loading: false,
 			});
 		} catch (e) {
