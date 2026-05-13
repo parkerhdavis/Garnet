@@ -33,9 +33,6 @@ type AssetsState = {
 	// View
 	viewMode: ViewMode;
 
-	// Selection (for the details sidebar)
-	selectedId: number | null;
-
 	// Data
 	assets: Asset[];
 	total: number;
@@ -58,7 +55,6 @@ type AssetsState = {
 	setSort: (by: AssetSortBy) => Promise<void>;
 	setPage: (page: number) => Promise<void>;
 	setViewMode: (mode: ViewMode) => void;
-	select: (id: number | null) => void;
 	resetFilters: () => Promise<void>;
 	refresh: () => Promise<void>;
 };
@@ -77,8 +73,6 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 	page: 0,
 
 	viewMode: "grid",
-
-	selectedId: null,
 
 	assets: [],
 	total: 0,
@@ -155,10 +149,6 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 
 	setViewMode: (viewMode) => {
 		set({ viewMode });
-	},
-
-	select: (id) => {
-		set({ selectedId: id });
 	},
 
 	resetFilters: async () => {

@@ -7,21 +7,11 @@ type Props = {
 	assets: Asset[];
 	sortBy: AssetSortBy;
 	sortDir: SortDir;
-	selectedId: number | null;
 	onSort: (by: AssetSortBy) => void;
-	onSelect: (id: number | null) => void;
 	onOpen: (asset: Asset) => void;
 };
 
-export function AssetList({
-	assets,
-	sortBy,
-	sortDir,
-	selectedId,
-	onSort,
-	onSelect,
-	onOpen,
-}: Props) {
+export function AssetList({ assets, sortBy, sortDir, onSort, onOpen }: Props) {
 	return (
 		<div className="p-6">
 			<div className="card bg-base-100 border border-base-300 overflow-hidden">
@@ -47,41 +37,35 @@ export function AssetList({
 							</tr>
 						</thead>
 						<tbody>
-							{assets.map((a) => {
-								const selected = a.id === selectedId;
-								return (
-									<tr
-										key={a.id}
-										className={`cursor-pointer ${selected ? "bg-primary/10" : ""}`}
-										onClick={() => onSelect(a.id === selectedId ? null : a.id)}
-										onDoubleClick={() => onOpen(a)}
+							{assets.map((a) => (
+								<tr
+									key={a.id}
+									className="cursor-pointer hover:bg-base-200"
+									onClick={() => onOpen(a)}
+								>
+									<td
+										className="font-mono text-xs truncate max-w-md"
+										title={a.relative_path}
 									>
-										<td
-											className="font-mono text-xs truncate max-w-md"
-											title={a.relative_path}
-										>
-											{a.relative_path}
-										</td>
-										<td
-											className="text-xs text-base-content/70 max-w-[180px] truncate"
-											title={a.root_path}
-										>
-											{abbreviatePath(a.root_path)}
-										</td>
-										<td>
-											{a.format ? (
-												<span className="badge badge-sm badge-ghost">{a.format}</span>
-											) : (
-												<span className="text-base-content/40">—</span>
-											)}
-										</td>
-										<td className="tabular-nums">{formatSize(a.size)}</td>
-										<td className="text-xs text-base-content/70">
-											{formatTime(a.mtime)}
-										</td>
-									</tr>
-								);
-							})}
+										{a.relative_path}
+									</td>
+									<td
+										className="text-xs text-base-content/70 max-w-[180px] truncate"
+										title={a.root_path}
+									>
+										{abbreviatePath(a.root_path)}
+									</td>
+									<td>
+										{a.format ? (
+											<span className="badge badge-sm badge-ghost">{a.format}</span>
+										) : (
+											<span className="text-base-content/40">—</span>
+										)}
+									</td>
+									<td className="tabular-nums">{formatSize(a.size)}</td>
+									<td className="text-xs text-base-content/70">{formatTime(a.mtime)}</td>
+								</tr>
+							))}
 						</tbody>
 					</table>
 				</div>

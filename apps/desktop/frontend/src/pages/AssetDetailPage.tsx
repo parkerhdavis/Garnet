@@ -26,6 +26,7 @@ export function AssetDetailPage() {
 	const [metadata, setMetadata] = useState<AssetMetadata[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [mediaError, setMediaError] = useState<string | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -36,6 +37,7 @@ export function AssetDetailPage() {
 			return;
 		}
 		setLoading(true);
+		setMediaError(null);
 		Promise.all([api.getAsset(id), api.listAssetMetadata(id)])
 			.then(([a, md]) => {
 				if (cancelled) return;
@@ -77,6 +79,10 @@ export function AssetDetailPage() {
 	const ext = asset.format?.toLowerCase();
 	const livePath = convertFileSrc(absPathFor(asset));
 
+	const isVideo = !!ext && VIDEO_EXTS.has(ext);
+	const isAudio = !!ext && AUDIO_EXTS.has(ext);
+	const isImage = !!ext && RASTER_EXTS.has(ext);
+
 	return (
 		<div className="flex-1 overflow-auto">
 			<div className="max-w-5xl mx-auto p-6 space-y-4">
@@ -104,20 +110,37 @@ export function AssetDetailPage() {
 
 				<div className="card bg-base-100 border border-base-300 overflow-hidden">
 					<div className="aspect-video bg-base-200 flex items-center justify-center">
-						{ext && VIDEO_EXTS.has(ext) ? (
+						{mediaError ? (
+							<MediaErrorPanel kind={isVideo ? "video" : isAudio ? "audio" : "image"} message={mediaError} />
+						) : isVideo ? (
 							// biome-ignore lint/a11y/useMediaCaption: source content has no caption track
 							<video
 								src={livePath}
 								controls
+								onError={() =>
+									setMediaError(
+										"Couldn't play this video in the webview. On Linux, MP4/H.264 typically needs gstreamer1.0-libav installed (`sudo apt install gstreamer1.0-libav`).",
+									)
+								}
 								className="w-full h-full object-contain bg-black"
 							/>
-						) : ext && AUDIO_EXTS.has(ext) ? (
+						) : isAudio ? (
 							// biome-ignore lint/a11y/useMediaCaption: source content has no caption track
-							<audio src={livePath} controls className="w-3/4" />
-						) : ext && RASTER_EXTS.has(ext) ? (
+							<audio
+								src={livePath}
+								controls
+								onError={() => setMediaError("Couldn't play this audio file in the webview.")}
+								className="w-3/4"
+							/>
+						) : isImage ? (
 							<img
 								src={livePath}
 								alt={asset.relative_path}
+								onError={() =>
+									setMediaError(
+										"Couldn't load the image — the asset protocol may not be reaching this path. Check that the file is inside HOME / DOCUMENT / DOWNLOAD / DESKTOP.",
+									)
+								}
 								className="w-full h-full object-contain"
 							/>
 						) : (
@@ -183,6 +206,15 @@ function KV({ label, value, mono }: { label: string; value: string; mono?: boole
 			<dd className={`truncate ${mono ? "font-mono" : ""}`} title={value}>
 				{value}
 			</dd>
+		</div>
+	);
+}
+
+function MediaErrorPanel({ kind, message }: { kind: "video" | "audio" | "image"; message: string }) {
+	return (
+		<div className="p-6 max-w-xl text-center">
+			<div className="text-sm font-medium mb-1">Couldn't load this {kind}</div>
+			<div className="text-xs text-base-content/70">{message}</div>
 		</div>
 	);
 }
