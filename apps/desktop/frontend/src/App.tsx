@@ -62,8 +62,9 @@ function SplashGate({ children }: { children: ReactNode }) {
 	}, [libraryLoading, assetsLoading, mountedAt]);
 
 	return (
-		<div className="relative min-h-screen">
+		<div className="relative h-full">
 			<motion.div
+				className="h-full"
 				initial={{ opacity: 0, y: 8 }}
 				animate={splashGone ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
 				transition={{ duration: 0.65, delay: splashGone ? 0.15 : 0, ease: [0.16, 1, 0.3, 1] }}

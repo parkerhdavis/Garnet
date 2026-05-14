@@ -9,7 +9,7 @@ const NAV_ITEMS = [
 
 export function Layout() {
 	return (
-		<div className="min-h-screen flex">
+		<div className="h-full flex">
 			<aside className="w-56 shrink-0 bg-base-100 border-r border-base-300 flex flex-col">
 				<div className="px-4 py-4 border-b border-base-300">
 					<div className="text-lg font-semibold tracking-tight">Garnet</div>
