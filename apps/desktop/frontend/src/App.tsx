@@ -57,18 +57,25 @@ function useSplashTimer() {
 		void Promise.all([refreshLibrary(), refreshAssets()]);
 	}, [refreshLibrary, refreshAssets]);
 
+	// Two effects rather than one combined timer block: the previous version
+	// scheduled both timers in a single effect whose dep array included
+	// `loaded`, so when `setLoaded(true)` fired, the cleanup ran and cleared
+	// the still-pending `splashGone` timer before it could trip. The splash
+	// then faded to invisible but never unmounted, leaving a blank screen.
 	useEffect(() => {
 		if (loaded) return;
 		if (libraryLoading || assetsLoading) return;
 		const elapsed = performance.now() - mountedAt;
 		const waitMore = Math.max(0, SPLASH_MIN_MS - elapsed);
-		const fade = setTimeout(() => setLoaded(true), waitMore);
-		const gone = setTimeout(() => setSplashGone(true), waitMore + SPLASH_FADE_MS);
-		return () => {
-			clearTimeout(fade);
-			clearTimeout(gone);
-		};
+		const t = setTimeout(() => setLoaded(true), waitMore);
+		return () => clearTimeout(t);
 	}, [libraryLoading, assetsLoading, mountedAt, loaded]);
+
+	useEffect(() => {
+		if (!loaded || splashGone) return;
+		const t = setTimeout(() => setSplashGone(true), SPLASH_FADE_MS);
+		return () => clearTimeout(t);
+	}, [loaded, splashGone]);
 
 	return { loaded, splashGone };
 }
