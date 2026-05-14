@@ -14,6 +14,13 @@ export function basename(p: string): string {
 	return i === -1 ? p : p.slice(i + 1);
 }
 
+/// Returns the directory portion of a path, with no leading or trailing
+/// slash. Returns "" if the path is a bare filename.
+export function dirname(p: string): string {
+	const i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+	return i === -1 ? "" : p.slice(0, i);
+}
+
 export function abbreviatePath(p: string): string {
 	const parts = p.split("/").filter(Boolean);
 	if (parts.length <= 2) return p;

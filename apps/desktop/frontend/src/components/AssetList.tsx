@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { HiArrowsUpDown, HiBarsArrowDown, HiBarsArrowUp } from "react-icons/hi2";
 import type { Asset, AssetSortBy, SortDir } from "@/lib/tauri";
+import { openContextMenu } from "@/components/ContextMenu";
+import { buildAssetContextMenu } from "@/lib/assetContextMenu";
 import { abbreviatePath, formatSize, formatTime } from "@/lib/paths";
 
 type Props = {
@@ -42,6 +44,9 @@ export function AssetList({ assets, sortBy, sortDir, onSort, onOpen }: Props) {
 									key={a.id}
 									className="cursor-pointer hover:bg-base-200"
 									onClick={() => onOpen(a)}
+									onContextMenu={(e) =>
+										openContextMenu(e, buildAssetContextMenu(a))
+									}
 								>
 									<td
 										className="font-mono text-xs truncate max-w-md"
