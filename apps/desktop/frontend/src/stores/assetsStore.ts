@@ -78,7 +78,10 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 	total: 0,
 	formatCounts: [],
 	tagCounts: [],
-	loading: false,
+	// Same rationale as libraryStore: start as loading so the first paint
+	// doesn't show "No assets match the current filters" before the initial
+	// query has had a chance to fire.
+	loading: true,
 	error: null,
 
 	setRootId: async (rootId) => {

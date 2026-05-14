@@ -157,6 +157,17 @@ ifeq ($(DETECTED_OS),linux)
 	else \
 		echo "All recommended media codecs present."; \
 	fi
+	@echo ""
+	@echo "Checking ffmpeg (video thumbnail extraction)..."
+	@if ! command -v ffmpeg >/dev/null 2>&1; then \
+		echo "ffmpeg not on PATH."; \
+		echo ""; \
+		echo "Install with: sudo apt install ffmpeg"; \
+		echo ""; \
+		echo "Without it, video tiles in the library view fall back to the film icon."; \
+	else \
+		echo "ffmpeg: $$(ffmpeg -version | head -1)"; \
+	fi
 else ifeq ($(DETECTED_OS),macos)
 	@echo ""
 	@echo "Checking macOS system dependencies..."

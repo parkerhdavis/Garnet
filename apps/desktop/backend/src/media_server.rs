@@ -16,7 +16,7 @@
 
 use axum::{
 	extract::Query,
-	http::StatusCode,
+	http::{header, Method, StatusCode},
 	response::{IntoResponse, Response},
 	routing::get,
 	Router,
@@ -24,6 +24,7 @@ use axum::{
 use serde::Deserialize;
 use std::path::PathBuf;
 use tower::ServiceExt;
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeFile;
 
 #[derive(Deserialize)]
@@ -50,7 +51,18 @@ async fn handle(
 /// guarantees the frontend can be told the port before any media URL is
 /// constructed.
 pub fn spawn() -> std::io::Result<u16> {
-	let app = Router::new().route("/file", get(handle));
+	// CORS: the webview's origin (tauri://localhost in prod, http://localhost:5173
+	// in dev) is distinct from this server's origin (http://127.0.0.1:<port>), so
+	// without CORS headers webkit will taint any canvas drawn from a <video>
+	// element backed by this server — `canvas.toDataURL` then throws
+	// SecurityError. Allowing any origin is safe because the server only ever
+	// binds to loopback.
+	let cors = CorsLayer::new()
+		.allow_origin(Any)
+		.allow_methods([Method::GET, Method::HEAD])
+		.allow_headers([header::RANGE]);
+
+	let app = Router::new().route("/file", get(handle)).layer(cors);
 	let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
 	listener.set_nonblocking(true)?;
 	let port = listener.local_addr()?.port();

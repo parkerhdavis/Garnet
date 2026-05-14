@@ -27,7 +27,6 @@ import {
 } from "react-icons/hi2";
 import { api, mediaUrl, type Asset } from "@/lib/tauri";
 import { absPathFor } from "@/lib/paths";
-import { getVideoThumbnail } from "@/lib/videoThumbnail";
 
 const RASTER_EXTS = new Set([
 	"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp",
@@ -91,29 +90,22 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 		let cancelled = false;
 		setSrc(null);
 		setFailed(false);
-		if (isRaster) {
-			api.getThumbnail(absPathFor(asset), asset.mtime, size)
-				.then((b64) => {
-					if (cancelled) return;
-					if (b64) setSrc(`data:image/png;base64,${b64}`);
-					else setFailed(true);
-				})
-				.catch(() => {
-					if (!cancelled) setFailed(true);
-				});
-		} else if (isVideo) {
-			getVideoThumbnail(absPathFor(asset), asset.mtime)
-				.then((dataUrl) => {
-					if (cancelled) return;
-					if (dataUrl) setSrc(dataUrl);
-					else setFailed(true);
-				})
-				.catch(() => {
-					if (!cancelled) setFailed(true);
-				});
-		} else {
+		if (!isRaster && !isVideo) {
 			setFailed(true);
+			return;
 		}
+		// Both image and video thumbnails go through the same Rust command,
+		// which routes by extension (image crate for raster, ffmpeg subprocess
+		// for video) and caches the result on disk.
+		api.getThumbnail(absPathFor(asset), asset.mtime, size)
+			.then((b64) => {
+				if (cancelled) return;
+				if (b64) setSrc(`data:image/png;base64,${b64}`);
+				else setFailed(true);
+			})
+			.catch(() => {
+				if (!cancelled) setFailed(true);
+			});
 		return () => {
 			cancelled = true;
 		};
