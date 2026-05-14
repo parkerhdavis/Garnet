@@ -28,6 +28,7 @@ import {
 	HiFolder,
 	HiFolderOpen,
 	HiFolderPlus,
+	HiGlobeAlt,
 	HiInformationCircle,
 	HiMusicalNote,
 	HiPhoto,
@@ -96,17 +97,14 @@ export function Sidebar() {
 					</NavAction>
 				</NavSection>
 
-				<NavSection title="Types">
-					<NavItem to="/types/images" icon={HiPhoto}>Images</NavItem>
-					<NavItem to="/types/videos" icon={HiFilm}>Videos</NavItem>
-					<NavItem to="/types/animations" icon={HiSparkles}>
-						Animations
-					</NavItem>
-					<NavItem to="/types/audio" icon={HiMusicalNote}>Audio</NavItem>
-					<NavItem to="/types/models" icon={HiCube}>Models</NavItem>
-				</NavSection>
-
 				<NavSection title="Sources">
+					{/* "All Sources" is the default landing view at /, showing
+					    every asset across every library root. It's deliberately
+					    non-editable — it isn't backed by a pinned_sources row
+					    and there's no unpin affordance on it. */}
+					<NavItem to="/" icon={HiGlobeAlt} end>
+						All Sources
+					</NavItem>
 					{sources.map((s) => (
 						<NavItem
 							key={s.id}
@@ -125,6 +123,16 @@ export function Sidebar() {
 							{pinError}
 						</li>
 					)}
+				</NavSection>
+
+				<NavSection title="Types">
+					<NavItem to="/types/images" icon={HiPhoto}>Images</NavItem>
+					<NavItem to="/types/videos" icon={HiFilm}>Videos</NavItem>
+					<NavItem to="/types/animations" icon={HiSparkles}>
+						Animations
+					</NavItem>
+					<NavItem to="/types/audio" icon={HiMusicalNote}>Audio</NavItem>
+					<NavItem to="/types/models" icon={HiCube}>Models</NavItem>
 				</NavSection>
 
 				<NavSection title="Functions">
@@ -176,17 +184,22 @@ function NavItem({
 	icon: Icon,
 	children,
 	title,
+	end,
 }: {
 	to: string;
 	icon: IconType;
 	children: React.ReactNode;
 	title?: string;
+	/** Pass through to NavLink — required when the route is `/` so partial
+	 * prefix matches against deeper routes don't keep the item highlighted. */
+	end?: boolean;
 }) {
 	return (
 		<li>
 			<NavLink
 				to={to}
 				title={title}
+				end={end}
 				className={({ isActive }) =>
 					`flex items-center gap-2 px-2 py-1.5 rounded transition-colors ${
 						isActive
