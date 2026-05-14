@@ -3,12 +3,19 @@ import { useEffect } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { HiFolderPlus, HiArrowPath, HiTrash } from "react-icons/hi2";
 import { useLibraryStore } from "@/stores/libraryStore";
-import { useAssetsStore } from "@/stores/assetsStore";
 
 export function SettingsPage() {
-	const { roots, lastScan, loading, error, refresh, addRoot, removeRoot, scanRoot } =
-		useLibraryStore();
-	const { refresh: refreshAssets } = useAssetsStore();
+	const {
+		roots,
+		lastScan,
+		loading,
+		error,
+		scansInProgress,
+		refresh,
+		addRoot,
+		removeRoot,
+		scanRoot,
+	} = useLibraryStore();
 
 	useEffect(() => {
 		void refresh();
@@ -21,11 +28,6 @@ export function SettingsPage() {
 		}
 	}
 
-	async function scanAndRefresh(id: number) {
-		await scanRoot(id);
-		await refreshAssets();
-	}
-
 	return (
 		<div className="flex-1 overflow-auto">
 			<div className="max-w-3xl mx-auto p-6">
@@ -34,7 +36,8 @@ export function SettingsPage() {
 						<h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
 						<p className="text-sm text-base-content/60">
 							Library roots and other preferences. Garnet never moves files — it
-							just remembers where to look.
+							just remembers where to look. Scans run in the background and the
+							library updates automatically when they complete.
 						</p>
 					</div>
 				</div>
@@ -54,7 +57,7 @@ export function SettingsPage() {
 						</div>
 
 						{error && (
-							<div className="alert alert-error mt-3">
+							<div className="alert alert-error mt-3 text-sm">
 								<span>{error}</span>
 							</div>
 						)}
@@ -67,42 +70,53 @@ export function SettingsPage() {
 							</div>
 						) : (
 							<ul className="mt-3 divide-y divide-base-300">
-								{roots.map((root) => (
-									<li key={root.id} className="py-3 flex items-center gap-3">
-										<div className="flex-1 min-w-0">
-											<div className="font-mono text-sm truncate" title={root.path}>
-												{root.path}
+								{roots.map((root) => {
+									const scanning = scansInProgress.has(root.id);
+									return (
+										<li key={root.id} className="py-3 flex items-center gap-3">
+											<div className="flex-1 min-w-0">
+												<div className="font-mono text-sm truncate" title={root.path}>
+													{root.path}
+												</div>
+												<div className="text-xs text-base-content/60">
+													added {new Date(root.added_at * 1000).toLocaleString()}
+													{scanning && <span className="text-warning ml-2">· scanning…</span>}
+												</div>
 											</div>
-											<div className="text-xs text-base-content/60">
-												added {new Date(root.added_at * 1000).toLocaleString()}
-											</div>
-										</div>
-										<button
-											type="button"
-											className="btn btn-sm"
-											onClick={() => scanAndRefresh(root.id)}
-										>
-											<HiArrowPath className="size-4" />
-											Scan
-										</button>
-										<button
-											type="button"
-											className="btn btn-sm btn-ghost text-error"
-											onClick={() => removeRoot(root.id)}
-											aria-label="Remove root"
-										>
-											<HiTrash className="size-4" />
-										</button>
-									</li>
-								))}
+											<button
+												type="button"
+												className="btn btn-sm"
+												onClick={() => scanRoot(root.id)}
+												disabled={scanning}
+												title={scanning ? "Scan already in progress" : "Re-scan this root"}
+											>
+												<HiArrowPath
+													className={`size-4 ${scanning ? "animate-spin" : ""}`}
+												/>
+												{scanning ? "Scanning" : "Scan"}
+											</button>
+											<button
+												type="button"
+												className="btn btn-sm btn-ghost text-error"
+												onClick={() => removeRoot(root.id)}
+												aria-label="Remove root"
+												disabled={scanning}
+											>
+												<HiTrash className="size-4" />
+											</button>
+										</li>
+									);
+								})}
 							</ul>
 						)}
 
 						{lastScan && (
 							<div className="alert alert-success mt-3 text-sm">
 								<span>
-									Scan complete — {lastScan.files_inserted.toLocaleString()} indexed,{" "}
-									{lastScan.files_skipped.toLocaleString()} skipped (of{" "}
+									Last scan — {lastScan.files_inserted.toLocaleString()} new,{" "}
+									{lastScan.files_updated.toLocaleString()} updated,{" "}
+									{lastScan.files_renamed.toLocaleString()} renamed,{" "}
+									{lastScan.files_deleted.toLocaleString()} deleted (of{" "}
 									{lastScan.files_seen.toLocaleString()} seen).
 								</span>
 							</div>

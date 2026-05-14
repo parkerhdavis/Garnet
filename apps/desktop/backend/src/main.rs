@@ -39,6 +39,20 @@ fn get_media_port(state: tauri::State<AppState>) -> u16 {
 	state.media_port
 }
 
+/// Enumerate registered library roots from a fresh SQLite connection. Used by
+/// the startup auto-scan, which runs on a blocking task with no access to
+/// `AppState`.
+fn collect_roots() -> anyhow::Result<Vec<(i64, String)>> {
+	let path = db::db_path()?;
+	let conn = rusqlite::Connection::open(&path)?;
+	let mut stmt = conn.prepare("SELECT id, path FROM library_roots ORDER BY added_at ASC")?;
+	let rows: Vec<(i64, String)> = stmt
+		.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+		.filter_map(|r| r.ok())
+		.collect();
+	Ok(rows)
+}
+
 fn init_logging() {
 	let log_dir = match dirs::config_dir() {
 		Some(d) => d.join("garnet").join("logs"),
@@ -97,6 +111,31 @@ fn main() {
 					}
 				}
 			}
+
+			// Background auto-scan: enumerate every registered library root
+			// and spawn a scan for each. Each scan opens its own SQLite
+			// connection (WAL mode), so they don't block IPC commands on the
+			// shared `AppState.db` mutex. Frontend listens for `scan:completed`
+			// events and refreshes its views.
+			let handle = app.handle().clone();
+			tauri::async_runtime::spawn_blocking(move || {
+				let roots = match collect_roots() {
+					Ok(rs) => rs,
+					Err(e) => {
+						tracing::error!("startup auto-scan: enumerate roots failed: {e:#}");
+						return;
+					}
+				};
+				if roots.is_empty() {
+					tracing::info!("startup auto-scan: no library roots registered");
+					return;
+				}
+				tracing::info!("startup auto-scan: queueing {} root(s)", roots.len());
+				for (id, path) in roots {
+					library::spawn_scan(handle.clone(), id, std::path::PathBuf::from(path));
+				}
+			});
+
 			Ok(())
 		})
 		.on_window_event(|window, event| {
