@@ -112,4 +112,19 @@ export const api = {
 		invoke<void>("untag_asset", { assetId, tagId }),
 	listAssetTags: (assetId: number) => invoke<Tag[]>("list_asset_tags", { assetId }),
 	listModules: () => invoke<ModuleManifest[]>("list_modules"),
+	getMediaPort: () => invoke<number>("get_media_port"),
 };
+
+/// Construct a URL for inline `<video>` / `<audio>` playback. Goes through
+/// the localhost HTTP server (see backend/src/media_server.rs) rather than
+/// the `asset://` protocol — on Linux, webkit2gtk's media element refuses
+/// custom URI schemes regardless of how their handlers respond, and Tauri's
+/// asset pipe wasn't built to stream video-sized payloads anyway. Images
+/// continue to use `convertFileSrc` (asset://) where that works fine.
+let _cachedMediaPort: number | null = null;
+export async function mediaUrl(absPath: string): Promise<string> {
+	if (_cachedMediaPort === null) {
+		_cachedMediaPort = await api.getMediaPort();
+	}
+	return `http://127.0.0.1:${_cachedMediaPort}/file?path=${encodeURIComponent(absPath)}`;
+}

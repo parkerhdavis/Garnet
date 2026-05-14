@@ -4,7 +4,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { HiArrowLeft, HiArrowTopRightOnSquare, HiFolderOpen } from "react-icons/hi2";
-import { api, type Asset, type AssetMetadata } from "@/lib/tauri";
+import { api, mediaUrl, type Asset, type AssetMetadata } from "@/lib/tauri";
+import { MediaDiagnostic } from "@/components/MediaDiagnostic";
 import { TagEditor } from "@/components/TagEditor";
 import {
 	absPathFor,
@@ -28,6 +29,8 @@ export function AssetDetailPage() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [mediaError, setMediaError] = useState<string | null>(null);
+	const [openerError, setOpenerError] = useState<string | null>(null);
+	const [diagnosticOpen, setDiagnosticOpen] = useState(false);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -78,25 +81,48 @@ export function AssetDetailPage() {
 	}
 
 	const ext = asset.format?.toLowerCase();
-	const livePath = convertFileSrc(absPathFor(asset));
 	const absPath = absPathFor(asset);
 
 	const isVideo = !!ext && VIDEO_EXTS.has(ext);
 	const isAudio = !!ext && AUDIO_EXTS.has(ext);
 	const isImage = !!ext && RASTER_EXTS.has(ext);
 
+	// Image preview goes through the asset:// protocol (webkit serves it
+	// happily). Video/audio go through the localhost media server because
+	// webkit's media element rejects asset:// — see media_server.rs.
+	const [livePath, setLivePath] = useState<string>("");
+	useEffect(() => {
+		let cancelled = false;
+		if (isVideo || isAudio) {
+			void mediaUrl(absPath).then((u) => {
+				if (!cancelled) setLivePath(u);
+			});
+		} else {
+			setLivePath(convertFileSrc(absPath));
+		}
+		return () => {
+			cancelled = true;
+		};
+	}, [absPath, isVideo, isAudio]);
+
 	const handleOpenExternally = async () => {
+		setOpenerError(null);
 		try {
 			await openPath(absPath);
 		} catch (e) {
-			console.error("openPath failed:", e);
+			const msg = `openPath failed: ${String(e)}`;
+			console.error(msg);
+			setOpenerError(msg);
 		}
 	};
 	const handleRevealInDir = async () => {
+		setOpenerError(null);
 		try {
 			await revealItemInDir(absPath);
 		} catch (e) {
-			console.error("revealItemInDir failed:", e);
+			const msg = `revealItemInDir failed: ${String(e)}`;
+			console.error(msg);
+			setOpenerError(msg);
 		}
 	};
 
@@ -140,7 +166,21 @@ export function AssetDetailPage() {
 					>
 						<HiFolderOpen className="size-4" />
 					</button>
+					<button
+						type="button"
+						className={`btn btn-sm ${diagnosticOpen ? "btn-warning" : "btn-ghost"}`}
+						onClick={() => setDiagnosticOpen((v) => !v)}
+						title="Toggle media diagnostic panel"
+					>
+						Diagnose
+					</button>
 				</div>
+
+				{openerError && (
+					<div className="alert alert-error text-xs">
+						<span className="font-mono break-all">{openerError}</span>
+					</div>
+				)}
 
 				<div className="card bg-base-100 border border-base-300 overflow-hidden">
 					<div className="aspect-video bg-base-200 flex items-center justify-center">
@@ -163,8 +203,9 @@ export function AssetDetailPage() {
 										? `MediaError code ${err.code}${err.message ? ": " + err.message : ""}`
 										: "no error object";
 									setMediaError(
-										`The webview rejected this video (${code}). Most common causes: stale GStreamer plugin cache after a codec install (try \`rm -rf ~/.cache/gstreamer-1.0 && killall garnet && make dev\`), an unsupported codec inside the container, or an asset-protocol URL the webview can't fetch (open devtools → Network to check).`,
+										`The webview rejected this video (${code}). Diagnostic panel below — click Run fetches to probe the asset protocol.`,
 									);
+									setDiagnosticOpen(true);
 								}}
 								className="w-full h-full object-contain bg-black"
 							/>
@@ -180,6 +221,7 @@ export function AssetDetailPage() {
 										? `MediaError code ${err.code}${err.message ? ": " + err.message : ""}`
 										: "no error object";
 									setMediaError(`The webview rejected this audio file (${code}).`);
+									setDiagnosticOpen(true);
 								}}
 								className="w-3/4"
 							/>
@@ -241,6 +283,10 @@ export function AssetDetailPage() {
 						</div>
 					</div>
 				</div>
+
+				{diagnosticOpen && (
+					<MediaDiagnostic url={livePath} absPath={absPath} autoRun />
+				)}
 
 				<div className="text-[10px] text-base-content/40 font-mono break-all">
 					{absPathFor(asset)}

@@ -15,7 +15,7 @@ import {
 	HiOutlineCube,
 	HiOutlineCodeBracket,
 } from "react-icons/hi2";
-import { api, type Asset } from "@/lib/tauri";
+import { api, mediaUrl, type Asset } from "@/lib/tauri";
 import { absPathFor } from "@/lib/paths";
 
 const RASTER_EXTS = new Set([
@@ -98,6 +98,27 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 	const playable = isHoverPlayable(asset.format);
 	const showLive = liveOnHover && hovering && playable !== null;
 
+	// Resolve the live-preview URL once we're hovering. Videos go through the
+	// HTTP media server; animated GIFs work fine via asset://.
+	const [liveSrc, setLiveSrc] = useState<string | null>(null);
+	useEffect(() => {
+		if (!showLive) {
+			setLiveSrc(null);
+			return;
+		}
+		let cancelled = false;
+		if (playable === "video") {
+			void mediaUrl(absPathFor(asset)).then((u) => {
+				if (!cancelled) setLiveSrc(u);
+			});
+		} else {
+			setLiveSrc(convertFileSrc(absPathFor(asset)));
+		}
+		return () => {
+			cancelled = true;
+		};
+	}, [showLive, playable, asset.id, asset.mtime, asset.relative_path, asset.root_path]);
+
 	const onEnter = () => {
 		if (!liveOnHover || playable === null) return;
 		if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
@@ -115,8 +136,6 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 			if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
 		};
 	}, []);
-
-	const liveSrc = showLive ? convertFileSrc(absPathFor(asset)) : null;
 
 	const wrapperProps = liveOnHover && playable !== null
 		? { onMouseEnter: onEnter, onMouseLeave: onLeave }

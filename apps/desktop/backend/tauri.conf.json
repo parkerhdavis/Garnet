@@ -61,8 +61,14 @@
 						"core:path:allow-resolve-directory",
 						"core:event:allow-listen",
 						"opener:allow-open-url",
-						"opener:allow-open-path",
-						"opener:allow-reveal-item-in-dir"
+						{
+							"identifier": "opener:allow-open-path",
+							"allow": [{ "path": "**" }]
+						},
+						{
+							"identifier": "opener:allow-reveal-item-in-dir",
+							"allow": [{ "path": "**" }]
+						}
 					]
 				}
 			]

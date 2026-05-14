@@ -6,6 +6,7 @@ mod assets;
 mod db;
 mod indexer;
 mod library;
+mod media_server;
 mod modules;
 mod settings;
 mod tags;
@@ -28,6 +29,12 @@ use tracing_subscriber::EnvFilter;
 
 pub struct AppState {
 	pub db: Mutex<rusqlite::Connection>,
+	pub media_port: u16,
+}
+
+#[tauri::command]
+fn get_media_port(state: tauri::State<AppState>) -> u16 {
+	state.media_port
 }
 
 fn init_logging() {
@@ -65,11 +72,20 @@ fn main() {
 		}
 	};
 
+	let media_port = match media_server::spawn() {
+		Ok(p) => p,
+		Err(e) => {
+			tracing::error!("Failed to start media server: {e}");
+			eprintln!("Failed to start media server: {e}");
+			std::process::exit(1);
+		}
+	};
+
 	tauri::Builder::default()
 		.plugin(tauri_plugin_dialog::init())
 		.plugin(tauri_plugin_fs::init())
 		.plugin(tauri_plugin_opener::init())
-		.manage(AppState { db: Mutex::new(db) })
+		.manage(AppState { db: Mutex::new(db), media_port })
 		.setup(|app| {
 			if let Ok(settings) = settings::load_settings() {
 				if let (Some(w), Some(h)) = (settings.window_width, settings.window_height) {
@@ -115,6 +131,7 @@ fn main() {
 			untag_asset,
 			list_asset_tags,
 			list_modules,
+			get_media_port,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
