@@ -6,6 +6,8 @@ import type { ScanReport } from "@/lib/tauri";
 import { ConfirmDialogRoot } from "@/components/ConfirmDialog";
 import { ContextMenuRoot } from "@/components/ContextMenu";
 import { Layout } from "@/components/Layout";
+import { PromptDialogRoot } from "@/components/PromptDialog";
+import { useUndoStore } from "@/stores/undoStore";
 import { AssetDetailPage } from "@/pages/AssetDetailPage";
 import { LibraryPage } from "@/pages/LibraryPage";
 import { SettingsPage } from "@/pages/SettingsPage";
@@ -29,6 +31,7 @@ const SPLASH_FADE_MS = 500;
 export default function App() {
 	const { loaded, splashGone } = useSplashTimer();
 	useScanEventBridge();
+	useUndoHotkeys();
 
 	return (
 		<ErrorBoundary>
@@ -65,6 +68,7 @@ export default function App() {
 
 			<ContextMenuRoot />
 			<ConfirmDialogRoot />
+			<PromptDialogRoot />
 
 			{!splashGone && <Splash fadeOut={loaded} />}
 		</ErrorBoundary>
@@ -142,6 +146,39 @@ function useScanEventBridge() {
 		return () => {
 			for (const u of unlistens) u();
 		};
+	}, []);
+}
+
+/// Global Ctrl+Z / Ctrl+Shift+Z (and Cmd-equivalents) handler. Lives at the
+/// App level so any focused page can trigger undo. Skips when an editable
+/// element (input, textarea, contenteditable) currently owns focus, so
+/// typing into a text field doesn't unexpectedly fire app-wide undo.
+function useUndoHotkeys() {
+	useEffect(() => {
+		function onKey(e: KeyboardEvent) {
+			const target = e.target as HTMLElement | null;
+			if (target) {
+				const tag = target.tagName;
+				if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) {
+					return;
+				}
+			}
+			const mod = e.ctrlKey || e.metaKey;
+			if (!mod) return;
+			// Lowercase `e.key` for the comparison — when Shift is held,
+			// browsers report the shifted character (`Z`, not `z`), so a
+			// case-sensitive compare would miss Ctrl+Shift+Z.
+			const key = e.key.toLowerCase();
+			if (key === "z" && !e.shiftKey) {
+				e.preventDefault();
+				void useUndoStore.getState().undo();
+			} else if ((key === "z" && e.shiftKey) || key === "y") {
+				e.preventDefault();
+				void useUndoStore.getState().redo();
+			}
+		}
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
 	}, []);
 }
 

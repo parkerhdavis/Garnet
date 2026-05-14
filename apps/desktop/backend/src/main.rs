@@ -2,6 +2,7 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod asset_ops;
 mod assets;
 mod db;
 mod indexer;
@@ -14,6 +15,7 @@ mod tags;
 mod thumbnails;
 mod watcher;
 
+use asset_ops::{move_asset, move_file, rename_asset, restore_from_trash, trash_asset};
 use assets::{get_asset, list_asset_formats, list_assets};
 use library::{
 	list_library_roots, register_library_root, remove_library_root, scan_library_root,
@@ -179,6 +181,11 @@ fn main() {
 			list_assets,
 			get_asset,
 			list_asset_formats,
+			rename_asset,
+			move_asset,
+			move_file,
+			trash_asset,
+			restore_from_trash,
 			list_asset_metadata,
 			get_thumbnail,
 			list_tags,

@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 import { motion } from "motion/react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { HiFolderPlus } from "react-icons/hi2";
+import { HiFolderPlus, HiXMark } from "react-icons/hi2";
 import { AssetGrid } from "@/components/AssetGrid";
 import { AssetList } from "@/components/AssetList";
 import { FilterBar } from "@/components/FilterBar";
@@ -68,7 +68,15 @@ export function LibraryPage() {
 
 			{error && (
 				<div className="alert alert-error mx-6 mt-4 text-sm">
-					<span>{error}</span>
+					<span className="flex-1">{error}</span>
+					<button
+						type="button"
+						className="btn btn-ghost btn-xs btn-square"
+						aria-label="Dismiss"
+						onClick={() => useAssetsStore.setState({ error: null })}
+					>
+						<HiXMark className="size-4" />
+					</button>
 				</div>
 			)}
 

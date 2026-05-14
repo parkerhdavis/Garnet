@@ -187,7 +187,12 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 	refresh: async () => {
 		const myToken = ++refreshToken;
 		const s = get();
-		set({ loading: true, error: null });
+		// Note: don't clear `error` here. It's used for sticky user-facing
+		// messages from asset operations (rename/move/trash failures, "moved
+		// out of library" notices). A background scan-driven refresh
+		// shouldn't wipe a message the user hasn't read yet. The error
+		// banner has its own dismiss button.
+		set({ loading: true });
 		try {
 			const [page, formatCounts, tagCounts] = await Promise.all([
 				api.listAssets({

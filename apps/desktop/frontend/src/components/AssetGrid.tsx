@@ -2,6 +2,8 @@
 import { motion } from "motion/react";
 import type { Asset } from "@/lib/tauri";
 import { AssetThumbnail } from "@/components/AssetThumbnail";
+import { openContextMenu } from "@/components/ContextMenu";
+import { buildAssetContextMenu } from "@/lib/assetContextMenu";
 import { basename, formatSize } from "@/lib/paths";
 
 type Props = {
@@ -25,6 +27,9 @@ export function AssetGrid({ assets, onOpen }: Props) {
 						type="button"
 						key={asset.id}
 						onClick={() => onOpen(asset)}
+						onContextMenu={(e) =>
+							openContextMenu(e, buildAssetContextMenu(asset))
+						}
 						initial={{ opacity: 0, y: 6 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ duration: 0.28, delay, ease: [0.16, 1, 0.3, 1] }}

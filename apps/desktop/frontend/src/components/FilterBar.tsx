@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from "react";
 import {
+	HiArrowUturnLeft,
+	HiArrowUturnRight,
 	HiMagnifyingGlass,
 	HiSquares2X2,
 	HiBars3,
@@ -8,6 +10,7 @@ import {
 } from "react-icons/hi2";
 import { useAssetsStore } from "@/stores/assetsStore";
 import { useLibraryStore } from "@/stores/libraryStore";
+import { useUndoStore } from "@/stores/undoStore";
 
 const SIZE_PRESETS = [
 	{ label: "Any size", min: null as number | null, max: null as number | null },
@@ -55,6 +58,7 @@ export function FilterBar() {
 		resetFilters,
 	} = useAssetsStore();
 	const { roots } = useLibraryStore();
+	const { canUndo, canRedo, busy: undoBusy, undo, redo } = useUndoStore();
 
 	// Local debounced state for the search box so we don't refire the query
 	// on every keystroke.
@@ -185,6 +189,31 @@ export function FilterBar() {
 						Reset
 					</button>
 				)}
+
+				<div className="ml-auto flex items-center">
+					<div className="join">
+						<button
+							type="button"
+							className="btn btn-sm btn-ghost join-item"
+							onClick={() => void undo()}
+							disabled={!canUndo || undoBusy}
+							aria-label="Undo (Ctrl+Z)"
+							title="Undo (Ctrl+Z)"
+						>
+							<HiArrowUturnLeft className="size-4" />
+						</button>
+						<button
+							type="button"
+							className="btn btn-sm btn-ghost join-item"
+							onClick={() => void redo()}
+							disabled={!canRedo || undoBusy}
+							aria-label="Redo (Ctrl+Shift+Z)"
+							title="Redo (Ctrl+Shift+Z)"
+						>
+							<HiArrowUturnRight className="size-4" />
+						</button>
+					</div>
+				</div>
 			</div>
 
 			{formatCounts.length > 0 && (

@@ -104,6 +104,22 @@ export type FormatCount = {
 	count: number;
 };
 
+export type AssetOpResult = {
+	asset_id: number;
+	relative_path: string;
+	abs_path: string;
+	previous_abs_path: string;
+	/** False if the move dropped the asset from the library (destination
+	 *  was outside every registered root). True for in-library moves and
+	 *  every rename. */
+	still_in_library: boolean;
+};
+
+export type TrashResult = {
+	trash_path: string;
+	original_abs_path: string;
+};
+
 export const api = {
 	registerLibraryRoot: (path: string) =>
 		invoke<LibraryRoot>("register_library_root", { path }),
@@ -132,6 +148,15 @@ export const api = {
 	unpinSource: (id: number) => invoke<void>("unpin_source", { id }),
 	listModules: () => invoke<ModuleManifest[]>("list_modules"),
 	getMediaPort: () => invoke<number>("get_media_port"),
+	renameAsset: (assetId: number, newName: string) =>
+		invoke<AssetOpResult>("rename_asset", { assetId, newName }),
+	moveAsset: (assetId: number, destDir: string) =>
+		invoke<AssetOpResult>("move_asset", { assetId, destDir }),
+	moveFile: (fromAbsPath: string, destDir: string) =>
+		invoke<string>("move_file", { fromAbsPath, destDir }),
+	trashAsset: (assetId: number) => invoke<TrashResult>("trash_asset", { assetId }),
+	restoreFromTrash: (trashPath: string, destinationAbsPath: string) =>
+		invoke<void>("restore_from_trash", { trashPath, destinationAbsPath }),
 };
 
 /// Construct a URL for inline `<video>` / `<audio>` playback. Goes through
