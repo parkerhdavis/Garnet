@@ -2,79 +2,41 @@
 @import "tailwindcss";
 @plugin "daisyui";
 
-/* ─── Custom Garnet Themes ──────────────────────────────────────────── */
-/* Brand color is #560000 ≈ oklch(0.31 0.14 28) — a deep oxblood/wine.
- * Backgrounds use very low-chroma warm-neutral greys (hue 60, chroma ~0.003)
- * so they read as true neutrals rather than the cool-blue tilt of the prior
- * palette. The accent surfaces the literal brand color; the primary is a
- * bumped lightness/chroma variant for interactive contrast on dark
- * surfaces. */
+/* ─── Garnet palette overrides ──────────────────────────────────────── */
+/* Piggy-back on daisyUI's built-in light/dark themes and only retone the
+ * variables we actually want to change. Brand color is #560000 ≈
+ * oklch(0.31 0.14 28) — a deep oxblood/wine. Backgrounds shift from
+ * daisyUI's cool-blue dark greys to warm-neutral greys (hue 60, very low
+ * chroma). data-theme is pinned in index.html, so [data-theme="dark"]
+ * matches the html element directly and wins specificity over daisyUI's
+ * built-in `:root:not([data-theme])` rule. Everything we don't list here
+ * — secondary, info, success, warning, error, radii, sizes — falls back
+ * to daisyUI's default so we benefit from future daisyUI tuning. */
 
-@plugin "daisyui/theme" {
-	name: "dark";
-	default: true;
-	color-scheme: dark;
+[data-theme="dark"] {
 	--color-base-100: oklch(0.205 0.003 60);
 	--color-base-200: oklch(0.150 0.004 60);
 	--color-base-300: oklch(0.275 0.005 60);
 	--color-base-content: oklch(0.910 0.004 60);
 	--color-primary: oklch(0.535 0.180 28);
 	--color-primary-content: oklch(0.985 0 0);
-	--color-secondary: oklch(0.480 0.025 28);
-	--color-secondary-content: oklch(0.950 0.004 60);
-	--color-accent: oklch(0.310 0.140 28); /* the literal #560000 */
+	--color-accent: oklch(0.310 0.140 28); /* literal #560000 */
 	--color-accent-content: oklch(0.985 0 0);
 	--color-neutral: oklch(0.180 0.004 60);
 	--color-neutral-content: oklch(0.880 0.004 60);
-	--color-info: oklch(0.650 0.110 240);
-	--color-info-content: oklch(0.950 0 0);
-	--color-success: oklch(0.670 0.140 155);
-	--color-success-content: oklch(0.950 0 0);
-	--color-warning: oklch(0.780 0.140 80);
-	--color-warning-content: oklch(0.220 0.040 65);
-	--color-error: oklch(0.600 0.170 25);
-	--color-error-content: oklch(0.950 0 0);
-	--radius-selector: 0.5rem;
-	--radius-field: 0.375rem;
-	--radius-box: 0.625rem;
-	--size-selector: 0.22rem;
-	--size-field: 0.22rem;
-	--border: 1px;
-	--depth: 1;
-	--noise: 0;
 }
 
-@plugin "daisyui/theme" {
-	name: "light";
-	color-scheme: light;
+[data-theme="light"] {
 	--color-base-100: oklch(0.985 0.002 60);
 	--color-base-200: oklch(0.948 0.004 60);
 	--color-base-300: oklch(0.865 0.005 60);
 	--color-base-content: oklch(0.225 0.005 60);
-	--color-primary: oklch(0.310 0.140 28); /* the literal #560000 */
+	--color-primary: oklch(0.310 0.140 28); /* literal #560000 */
 	--color-primary-content: oklch(0.985 0 0);
-	--color-secondary: oklch(0.560 0.025 28);
-	--color-secondary-content: oklch(0.985 0 0);
 	--color-accent: oklch(0.420 0.165 28);
 	--color-accent-content: oklch(0.985 0 0);
 	--color-neutral: oklch(0.225 0.005 60);
 	--color-neutral-content: oklch(0.940 0.003 60);
-	--color-info: oklch(0.680 0.120 240);
-	--color-info-content: oklch(0.980 0 0);
-	--color-success: oklch(0.700 0.160 155);
-	--color-success-content: oklch(0.980 0 0);
-	--color-warning: oklch(0.820 0.160 80);
-	--color-warning-content: oklch(0.260 0.045 65);
-	--color-error: oklch(0.630 0.190 25);
-	--color-error-content: oklch(0.980 0 0);
-	--radius-selector: 0.5rem;
-	--radius-field: 0.375rem;
-	--radius-box: 0.625rem;
-	--size-selector: 0.22rem;
-	--size-field: 0.22rem;
-	--border: 1px;
-	--depth: 1;
-	--noise: 0;
 }
 
 /* ─── Splash screen icon animation ──────────────────────────────────── */
