@@ -129,7 +129,7 @@ export function SettingsAboutPage() {
 		<StubPage
 			title={`Garnet v${__APP_VERSION__}`}
 			icon={HiInformationCircle}
-			description="A free, open-source digital asset manager with pluggable per-format
+			description="A free, open-source digital asset manager with modular per-format
                 plugins. Developed by Parker H. Davis under PhD LLC. AGPL-3.0-or-later."
 		/>
 	);

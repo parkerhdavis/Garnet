@@ -1,6 +1,6 @@
 # Garnet
 
-A free, open-source desktop application that bundles a general-purpose digital asset manager with a pluggable system of media-specific operation suites. The base install is a working DAM for any media type you drop into it — cross-format organization, search, preview, and metadata. Optional plugins (3D, 2D, video, audio, fonts, documents, …) add per-format depth on top. Borrowed from Visual Studio's installer model: a small, useful base, with the user assembling exactly the toolset they need.
+A free, open-source desktop application that bundles a general-purpose digital asset manager with a modular system of media-specific operation suites. The base install is a working DAM for any media type you drop into it — cross-format organization, search, preview, and metadata. Optional plugins (3D, 2D, video, audio, fonts, documents, …) add per-format depth on top. Borrowed from Visual Studio's installer model: a small, useful base, with the user assembling exactly the toolset they need.
 
 Garnet is **offline and local** — no proprietary library format, no forced ingestion, no cloud, no accounts. It indexes where files already live.
 
