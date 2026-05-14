@@ -5,6 +5,7 @@ import { Layout } from "@/components/Layout";
 import { AssetDetailPage } from "@/pages/AssetDetailPage";
 import { LibraryPage } from "@/pages/LibraryPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { SourcePage } from "@/pages/SourcePage";
 import {
 	AutomationsPage,
 	ModulesPage,
@@ -39,6 +40,7 @@ export default function App() {
 						<Route path="types/:kind" element={<TypePage />} />
 
 						<Route path="sources" element={<SourcesIndexPage />} />
+						<Route path="sources/:id" element={<SourcePage />} />
 
 						<Route path="functions/modules" element={<ModulesPage />} />
 						<Route path="functions/automations" element={<AutomationsPage />} />

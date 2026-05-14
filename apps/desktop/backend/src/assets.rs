@@ -93,6 +93,12 @@ pub struct AssetQuery {
 	/// **all** listed tag ids (AND semantics).
 	#[serde(default)]
 	pub tag_ids: Vec<i64>,
+	/// Scope to a pinned source: resolves to the pin's (root_id,
+	/// relative_path_to_root) and limits the results accordingly. Honored
+	/// alongside an explicit `root_id` (if both are set the explicit
+	/// root_id must match the pin's root_id or the query returns nothing).
+	#[serde(default)]
+	pub pinned_source_id: Option<i64>,
 }
 
 fn default_limit() -> i64 {
@@ -123,14 +129,25 @@ fn stringify<E: std::fmt::Display>(e: E) -> String {
 
 /// Build a parameterized `WHERE ...` clause for the given query. Always starts
 /// with `WHERE 1=1` so subsequent `AND` clauses compose cleanly regardless of
-/// which filters are active.
-fn where_clause(q: &AssetQuery) -> (String, Vec<Box<dyn ToSql>>) {
+/// which filters are active. `pinned_prefix`, when present, scopes results to
+/// the path `relative_path = ? OR relative_path LIKE ? || '/%'` — used after
+/// resolving a `pinned_source_id` filter to its (root_id, relative) pair.
+fn where_clause(
+	q: &AssetQuery,
+	pinned_prefix: Option<&str>,
+) -> (String, Vec<Box<dyn ToSql>>) {
 	let mut sql = String::from("WHERE 1=1");
 	let mut params: Vec<Box<dyn ToSql>> = Vec::new();
 
 	if let Some(root_id) = q.root_id {
 		sql.push_str(" AND a.root_id = ?");
 		params.push(Box::new(root_id));
+	}
+
+	if let Some(prefix) = pinned_prefix {
+		sql.push_str(" AND (a.relative_path = ? OR a.relative_path LIKE ? || '/%')");
+		params.push(Box::new(prefix.to_string()));
+		params.push(Box::new(prefix.to_string()));
 	}
 
 	if !q.formats.is_empty() {
@@ -189,9 +206,29 @@ fn where_clause(q: &AssetQuery) -> (String, Vec<Box<dyn ToSql>>) {
 }
 
 pub fn list_assets_impl(conn: &Connection, q: &AssetQuery) -> rusqlite::Result<AssetPage> {
-	let (where_sql, where_params) = where_clause(q);
-	let limit = q.limit.clamp(1, 5_000);
-	let offset = q.offset.max(0);
+	// Resolve a pinned_source_id filter into root_id + relative-path-prefix
+	// constraints before building the WHERE clause. Done here rather than in
+	// where_clause() so the resolution can issue its own SQL query.
+	let mut effective = q.clone();
+	let mut pinned_prefix: Option<String> = None;
+	if let Some(psid) = q.pinned_source_id {
+		let (root_id, rel) = crate::pinned_sources::resolve_pinned_source(conn, psid)?;
+		// If an explicit root_id was already set and conflicts, force-empty
+		// the result rather than silently widening.
+		if let Some(rid) = effective.root_id {
+			if rid != root_id {
+				return Ok(AssetPage { assets: Vec::new(), total: 0 });
+			}
+		}
+		effective.root_id = Some(root_id);
+		if !rel.is_empty() {
+			pinned_prefix = Some(rel);
+		}
+	}
+
+	let (where_sql, where_params) = where_clause(&effective, pinned_prefix.as_deref());
+	let limit = effective.limit.clamp(1, 5_000);
+	let offset = effective.offset.max(0);
 
 	let total: i64 = {
 		let total_sql = format!(
@@ -353,6 +390,7 @@ mod tests {
 			mtime_from: None,
 			mtime_to: None,
 			tag_ids: Vec::new(),
+			pinned_source_id: None,
 		}
 	}
 
@@ -543,5 +581,62 @@ mod tests {
 		q.sort_dir = SortDir::Desc;
 		let page = list_assets_impl(&conn, &q).unwrap();
 		assert_eq!(page.assets[0].root_path, "/tmp/r2");
+	}
+
+	fn fresh_db_with_pins() -> Connection {
+		let conn = fresh_db();
+		conn.execute_batch(
+			"
+			CREATE TABLE pinned_sources (
+				id                    INTEGER PRIMARY KEY,
+				root_id               INTEGER NOT NULL,
+				relative_path_to_root TEXT    NOT NULL,
+				name                  TEXT    NOT NULL,
+				added_at              INTEGER NOT NULL,
+				UNIQUE (root_id, relative_path_to_root)
+			);
+			-- pin id=1 → all of root 1
+			-- pin id=2 → root 1, subfolder 'sub'
+			-- pin id=3 → root 1, subfolder 'docs'
+			INSERT INTO pinned_sources (id, root_id, relative_path_to_root, name, added_at)
+			VALUES
+				(1, 1, '',     'r1 root', 0),
+				(2, 1, 'sub',  'sub',     0),
+				(3, 1, 'docs', 'docs',    0);
+			",
+		)
+		.unwrap();
+		conn
+	}
+
+	#[test]
+	fn pinned_source_root_level_returns_all_assets_in_that_root() {
+		let conn = fresh_db_with_pins();
+		let mut q = default_query();
+		q.pinned_source_id = Some(1);
+		let page = list_assets_impl(&conn, &q).unwrap();
+		assert_eq!(page.total, 5);
+		assert!(page.assets.iter().all(|a| a.root_id == 1));
+	}
+
+	#[test]
+	fn pinned_source_subfolder_filters_by_path_prefix() {
+		let conn = fresh_db_with_pins();
+		let mut q = default_query();
+		q.pinned_source_id = Some(2); // pin → 'sub'
+		let page = list_assets_impl(&conn, &q).unwrap();
+		assert_eq!(page.total, 1);
+		assert!(page.assets[0].relative_path.starts_with("sub"));
+	}
+
+	#[test]
+	fn pinned_source_returns_empty_when_explicit_root_id_conflicts() {
+		let conn = fresh_db_with_pins();
+		let mut q = default_query();
+		q.pinned_source_id = Some(1); // pin → root_id=1
+		q.root_id = Some(2);          // caller asked for root_id=2
+		let page = list_assets_impl(&conn, &q).unwrap();
+		assert_eq!(page.total, 0);
+		assert!(page.assets.is_empty());
 	}
 }

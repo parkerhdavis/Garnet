@@ -21,6 +21,7 @@ type AssetsState = {
 	rootId: number | null;
 	formats: string[];
 	tagIds: number[];
+	pinnedSourceId: number | null;
 	pathSearch: string;
 	sizeMin: number | null;
 	sizeMax: number | null;
@@ -43,6 +44,7 @@ type AssetsState = {
 
 	// Actions
 	setRootId: (rootId: number | null) => Promise<void>;
+	setPinnedSourceId: (id: number | null) => Promise<void>;
 	toggleFormat: (format: string) => Promise<void>;
 	clearFormats: () => Promise<void>;
 	toggleTagFilter: (tagId: number) => Promise<void>;
@@ -63,6 +65,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 	rootId: null,
 	formats: [],
 	tagIds: [],
+	pinnedSourceId: null,
 	pathSearch: "",
 	sizeMin: null,
 	sizeMax: null,
@@ -86,6 +89,11 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 
 	setRootId: async (rootId) => {
 		set({ rootId, page: 0 });
+		await get().refresh();
+	},
+
+	setPinnedSourceId: async (id) => {
+		set({ pinnedSourceId: id, page: 0 });
 		await get().refresh();
 	},
 
@@ -186,6 +194,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 					mtime_from: s.mtimeFrom,
 					mtime_to: s.mtimeTo,
 					tag_ids: s.tagIds,
+					pinned_source_id: s.pinnedSourceId,
 				}),
 				api.listAssetFormats(s.rootId),
 				api.listTags(),

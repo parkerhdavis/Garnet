@@ -141,6 +141,25 @@ pub static MIGRATIONS: &[(i64, &str)] = &[
 		CREATE INDEX collection_assets_by_asset ON collection_assets(asset_id);
 		",
 	),
+	(
+		3,
+		"
+		-- Sidebar pinned sources. A pin can target either a whole library
+		-- root or a sub-folder under one. relative_path_to_root is '' for
+		-- root-level pins, otherwise the path under the root (no leading
+		-- slash, no trailing slash). CASCADE on the root means removing a
+		-- library root drops its pins too.
+		CREATE TABLE pinned_sources (
+			id                    INTEGER PRIMARY KEY,
+			root_id               INTEGER NOT NULL REFERENCES library_roots(id) ON DELETE CASCADE,
+			relative_path_to_root TEXT    NOT NULL,
+			name                  TEXT    NOT NULL,
+			added_at              INTEGER NOT NULL,
+			UNIQUE (root_id, relative_path_to_root)
+		);
+		CREATE INDEX pinned_sources_by_root ON pinned_sources(root_id);
+		",
+	),
 ];
 
 #[cfg(test)]
@@ -171,6 +190,7 @@ mod tests {
 			"asset_tags",
 			"collections",
 			"collection_assets",
+			"pinned_sources",
 		] {
 			conn.query_row(
 				"SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?1",

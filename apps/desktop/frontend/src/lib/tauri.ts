@@ -61,6 +61,16 @@ export type AssetMetadata = {
 	value: string;
 };
 
+export type PinnedSource = {
+	id: number;
+	root_id: number;
+	root_path: string;
+	relative_path: string;
+	abs_path: string;
+	name: string;
+	added_at: number;
+};
+
 export type AssetSortBy = "path" | "size" | "mtime" | "format" | "root";
 export type SortDir = "asc" | "desc";
 
@@ -77,6 +87,7 @@ export type AssetQuery = {
 	mtime_from?: number | null;
 	mtime_to?: number | null;
 	tag_ids?: number[];
+	pinned_source_id?: number | null;
 };
 
 export type AssetPage = {
@@ -111,6 +122,10 @@ export const api = {
 	untagAsset: (assetId: number, tagId: number) =>
 		invoke<void>("untag_asset", { assetId, tagId }),
 	listAssetTags: (assetId: number) => invoke<Tag[]>("list_asset_tags", { assetId }),
+	listPinnedSources: () => invoke<PinnedSource[]>("list_pinned_sources"),
+	pinSource: (absPath: string, name?: string | null) =>
+		invoke<PinnedSource>("pin_source", { absPath, name: name ?? null }),
+	unpinSource: (id: number) => invoke<void>("unpin_source", { id }),
 	listModules: () => invoke<ModuleManifest[]>("list_modules"),
 	getMediaPort: () => invoke<number>("get_media_port"),
 };
