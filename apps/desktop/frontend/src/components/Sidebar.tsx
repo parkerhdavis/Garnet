@@ -17,8 +17,9 @@
 //! Clicking the Garnet logo/title returns to the all-assets root view.
 
 import { useEffect, useMemo } from "react";
-import { NavLink, Link } from "react-router-dom";
+import { NavLink, Link, useNavigate, useParams } from "react-router-dom";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { openPath } from "@tauri-apps/plugin-opener";
 import type { IconType } from "react-icons";
 import {
 	HiBolt,
@@ -37,17 +38,58 @@ import {
 	HiSparkles,
 	HiSquares2X2,
 	HiSwatch,
+	HiTrash,
 } from "react-icons/hi2";
+import { confirm } from "@/components/ConfirmDialog";
+import { openContextMenu } from "@/components/ContextMenu";
+import type { PinnedSource } from "@/lib/tauri";
 import { useLibraryStore } from "@/stores/libraryStore";
 import { usePinnedSourcesStore } from "@/stores/pinnedSourcesStore";
 
 export function Sidebar() {
-	const { sources, refresh, pin, error: pinError } = usePinnedSourcesStore();
+	const { sources, refresh, pin, unpin, error: pinError } = usePinnedSourcesStore();
 	const roots = useLibraryStore((s) => s.roots);
+	const navigate = useNavigate();
+	const params = useParams<{ id?: string }>();
+	const activeSourceId = params.id ? Number(params.id) : null;
 
 	useEffect(() => {
 		void refresh();
 	}, [refresh]);
+
+	async function handleRemovePin(source: PinnedSource) {
+		const ok = await confirm({
+			title: "Remove pinned source?",
+			message: `“${source.name}” will be removed from the sidebar. The folder and its files are not affected.`,
+			confirmLabel: "Remove pin",
+			danger: true,
+		});
+		if (!ok) return;
+		// If the user is currently viewing the source about to be removed,
+		// drop them back to All Sources so the view doesn't show a stale filter.
+		if (activeSourceId === source.id) navigate("/", { replace: true });
+		await unpin(source.id);
+	}
+
+	function handlePinnedSourceContextMenu(
+		event: React.MouseEvent,
+		source: PinnedSource,
+	) {
+		openContextMenu(event, [
+			{
+				label: "Open folder",
+				icon: HiFolderOpen,
+				onClick: () => openPath(source.abs_path).catch(() => undefined),
+			},
+			{ kind: "separator" },
+			{
+				label: "Remove pin",
+				icon: HiTrash,
+				danger: true,
+				onClick: () => handleRemovePin(source),
+			},
+		]);
+	}
 
 	// Pre-pick a sensible starting directory for the folder picker: the most
 	// recently-added library root, if any.
@@ -72,7 +114,6 @@ export function Sidebar() {
 			<Link
 				to="/"
 				className="px-4 py-3.5 border-b border-base-300 flex items-center gap-2.5 hover:bg-base-200/60 transition-colors"
-				title="Garnet — all assets"
 			>
 				<img
 					src="/garnet-icon.png"
@@ -110,7 +151,7 @@ export function Sidebar() {
 							key={s.id}
 							to={`/sources/${s.id}`}
 							icon={s.relative_path === "" ? HiFolder : HiFolderOpen}
-							title={s.abs_path}
+							onContextMenu={(e) => handlePinnedSourceContextMenu(e, s)}
 						>
 							{s.name}
 						</NavItem>
@@ -183,23 +224,23 @@ function NavItem({
 	to,
 	icon: Icon,
 	children,
-	title,
 	end,
+	onContextMenu,
 }: {
 	to: string;
 	icon: IconType;
 	children: React.ReactNode;
-	title?: string;
 	/** Pass through to NavLink — required when the route is `/` so partial
 	 * prefix matches against deeper routes don't keep the item highlighted. */
 	end?: boolean;
+	onContextMenu?: (e: React.MouseEvent) => void;
 }) {
 	return (
 		<li>
 			<NavLink
 				to={to}
-				title={title}
 				end={end}
+				onContextMenu={onContextMenu}
 				className={({ isActive }) =>
 					`flex items-center gap-2 px-2 py-1.5 rounded transition-colors ${
 						isActive

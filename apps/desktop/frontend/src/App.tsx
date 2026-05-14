@@ -3,6 +3,8 @@ import { Component, type ReactNode, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import type { ScanReport } from "@/lib/tauri";
+import { ConfirmDialogRoot } from "@/components/ConfirmDialog";
+import { ContextMenuRoot } from "@/components/ContextMenu";
 import { Layout } from "@/components/Layout";
 import { AssetDetailPage } from "@/pages/AssetDetailPage";
 import { LibraryPage } from "@/pages/LibraryPage";
@@ -60,6 +62,9 @@ export default function App() {
 					</Route>
 				</Routes>
 			</HashRouter>
+
+			<ContextMenuRoot />
+			<ConfirmDialogRoot />
 
 			{!splashGone && <Splash fadeOut={loaded} />}
 		</ErrorBoundary>
