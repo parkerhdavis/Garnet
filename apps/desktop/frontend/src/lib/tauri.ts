@@ -15,7 +15,11 @@ export type ScanReport = {
 	root_id: number;
 	files_seen: number;
 	files_inserted: number;
+	files_updated: number;
+	files_renamed: number;
+	files_deleted: number;
 	files_skipped: number;
+	metadata_extracted: number;
 };
 
 export type ModuleManifest = {
@@ -105,7 +109,7 @@ export const api = {
 		invoke<LibraryRoot>("register_library_root", { path }),
 	listLibraryRoots: () => invoke<LibraryRoot[]>("list_library_roots"),
 	removeLibraryRoot: (id: number) => invoke<void>("remove_library_root", { id }),
-	scanLibraryRoot: (id: number) => invoke<ScanReport>("scan_library_root", { id }),
+	scanLibraryRoot: (id: number) => invoke<void>("scan_library_root", { id }),
 	listAssets: (query: AssetQuery) => invoke<AssetPage>("list_assets", { query }),
 	getAsset: (id: number) => invoke<Asset>("get_asset", { id }),
 	listAssetFormats: (rootId: number | null) =>

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Component, type ReactNode, useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import type { ScanReport } from "@/lib/tauri";
 import { Layout } from "@/components/Layout";
 import { AssetDetailPage } from "@/pages/AssetDetailPage";
 import { LibraryPage } from "@/pages/LibraryPage";
@@ -24,6 +26,7 @@ const SPLASH_FADE_MS = 500;
 
 export default function App() {
 	const { loaded, splashGone } = useSplashTimer();
+	useScanEventBridge();
 
 	return (
 		<ErrorBoundary>
@@ -101,6 +104,40 @@ function useSplashTimer() {
 	}, [loaded, splashGone]);
 
 	return { loaded, splashGone };
+}
+
+/// Bridges the Rust-side scan lifecycle events into the zustand stores:
+///   - `scan:started`   → libraryStore marks the root as in-progress
+///   - `scan:completed` → libraryStore stores the report + clears in-progress,
+///                        assetsStore refreshes to pick up the new rows
+///   - `scan:failed`    → libraryStore clears in-progress, records the error
+///
+/// One subscriber at the App level so the listeners survive page navigation.
+function useScanEventBridge() {
+	useEffect(() => {
+		const unlistens: Array<() => void> = [];
+		const setError = (msg: string) => useLibraryStore.setState({ error: msg });
+
+		void listen<number>("scan:started", (e) => {
+			useLibraryStore.getState()._markScanStarted(e.payload);
+		}).then((u) => unlistens.push(u));
+
+		void listen<ScanReport>("scan:completed", (e) => {
+			const report = e.payload;
+			useLibraryStore.getState()._markScanFinished(report.root_id, report);
+			// New rows may have landed — refresh the visible library view.
+			void useAssetsStore.getState().refresh();
+		}).then((u) => unlistens.push(u));
+
+		void listen<{ root_id: number; error: string }>("scan:failed", (e) => {
+			useLibraryStore.getState()._markScanFinished(e.payload.root_id, null);
+			setError(`Scan failed: ${e.payload.error}`);
+		}).then((u) => unlistens.push(u));
+
+		return () => {
+			for (const u of unlistens) u();
+		};
+	}, []);
 }
 
 function Splash({ fadeOut }: { fadeOut: boolean }) {
