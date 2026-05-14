@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Component, type ReactNode, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { Component, type ReactNode, useEffect, useState } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { AssetDetailPage } from "@/pages/AssetDetailPage";
@@ -9,8 +8,14 @@ import { SettingsPage } from "@/pages/SettingsPage";
 import { useAssetsStore } from "@/stores/assetsStore";
 import { useLibraryStore } from "@/stores/libraryStore";
 
+// Min dwell before fade-out begins. The fade itself runs for SPLASH_FADE_MS
+// (must match the `duration-[Nms]` utility on the splash overlay below).
+const SPLASH_MIN_MS = 1800;
+const SPLASH_FADE_MS = 500;
+
 export default function App() {
-	useSplashCloser();
+	const { loaded, splashGone } = useSplashTimer();
+
 	return (
 		<ErrorBoundary>
 			<HashRouter>
@@ -23,42 +28,69 @@ export default function App() {
 					</Route>
 				</Routes>
 			</HashRouter>
+
+			{!splashGone && <Splash fadeOut={loaded} />}
 		</ErrorBoundary>
 	);
 }
 
-const SPLASH_MIN_MS = 1800;
-
-/// Pre-warms the initial library + assets queries and signals the Rust side
-/// once both have returned, after at least SPLASH_MIN_MS of dwell. The splash
-/// is a separate Tauri window (defined in tauri.conf.json); the React app
-/// loads invisibly in the main window during this period. Rust's
-/// `frontend_ready` command closes the splash and shows the main window.
-function useSplashCloser() {
+/// Pre-warms the initial library + assets queries. Once both report
+/// loading=false AND `SPLASH_MIN_MS` has elapsed, `loaded` flips (starts the
+/// fade); SPLASH_FADE_MS later `splashGone` flips (unmounts the splash).
+///
+/// The router is always rendered from the first frame — the splash overlays
+/// it with `fixed inset-0` and a high z-index, so when the splash fades its
+/// opacity transition reveals the (already-rendered, already-laid-out)
+/// library underneath. The min-h-0 fix on LibraryPage means the layout chain
+/// no longer depends on what wraps the router, so this works cleanly.
+function useSplashTimer() {
 	const refreshLibrary = useLibraryStore((s) => s.refresh);
 	const refreshAssets = useAssetsStore((s) => s.refresh);
 	const libraryLoading = useLibraryStore((s) => s.loading);
 	const assetsLoading = useAssetsStore((s) => s.loading);
 	const [mountedAt] = useState(() => performance.now());
-	const fired = useRef(false);
+	const [loaded, setLoaded] = useState(false);
+	const [splashGone, setSplashGone] = useState(false);
 
 	useEffect(() => {
 		void Promise.all([refreshLibrary(), refreshAssets()]);
 	}, [refreshLibrary, refreshAssets]);
 
 	useEffect(() => {
-		if (fired.current) return;
+		if (loaded) return;
 		if (libraryLoading || assetsLoading) return;
 		const elapsed = performance.now() - mountedAt;
 		const waitMore = Math.max(0, SPLASH_MIN_MS - elapsed);
-		const t = setTimeout(() => {
-			fired.current = true;
-			void invoke("frontend_ready").catch((e) =>
-				console.error("frontend_ready failed:", e),
-			);
-		}, waitMore);
+		const t = setTimeout(() => setLoaded(true), waitMore);
 		return () => clearTimeout(t);
-	}, [libraryLoading, assetsLoading, mountedAt]);
+	}, [libraryLoading, assetsLoading, mountedAt, loaded]);
+
+	useEffect(() => {
+		if (!loaded || splashGone) return;
+		const t = setTimeout(() => setSplashGone(true), SPLASH_FADE_MS);
+		return () => clearTimeout(t);
+	}, [loaded, splashGone]);
+
+	return { loaded, splashGone };
+}
+
+function Splash({ fadeOut }: { fadeOut: boolean }) {
+	return (
+		<div
+			className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-base-200 pointer-events-none transition-opacity duration-[500ms] ease-out ${
+				fadeOut ? "opacity-0" : "opacity-100"
+			}`}
+		>
+			<img
+				src="/garnet-splash-dark.png"
+				alt="Garnet"
+				className="size-36 animate-splash-icon"
+			/>
+			<span className="text-4xl font-bold tracking-tight animate-fade-in-up">
+				Garnet
+			</span>
+		</div>
+	);
 }
 
 type ErrorBoundaryState = { error: Error | null };
@@ -75,11 +107,6 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
 
 	componentDidCatch(error: Error, info: { componentStack?: string | null }) {
 		console.error("Garnet render error:", error, info.componentStack);
-		// Make sure the user actually sees this — the main window is hidden
-		// until frontend_ready fires, so a render error pre-ready would
-		// otherwise leave them staring at the splash until the 15s safety
-		// timeout. Force the main window up so the error UI is visible.
-		void invoke("frontend_ready").catch(() => {});
 	}
 
 	render() {
