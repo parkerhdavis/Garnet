@@ -12,6 +12,7 @@ mod pinned_sources;
 mod settings;
 mod tags;
 mod thumbnails;
+mod watcher;
 
 use assets::{get_asset, list_asset_formats, list_assets};
 use library::{
@@ -112,26 +113,41 @@ fn main() {
 				}
 			}
 
+			// Install the filesystem watcher and start watching the existing
+			// roots. The watcher debounces OS-native events (~1.5s) and
+			// enqueues a scan on the affected root when a batch fires, reusing
+			// the diff-aware indexer for the actual work.
+			let handle = app.handle().clone();
+			let mut watcher = match watcher::FileWatcher::new(handle.clone()) {
+				Ok(w) => w,
+				Err(e) => {
+					tracing::error!("watcher init failed: {e}");
+					return Err(anyhow::anyhow!(e).into());
+				}
+			};
+			let initial_roots = collect_roots().unwrap_or_default();
+			for (id, path) in &initial_roots {
+				if let Err(e) = watcher.watch(*id, std::path::Path::new(path)) {
+					tracing::warn!("watcher: failed to watch root_id={}: {}", id, e);
+				}
+			}
+			app.manage(watcher::WatcherState(std::sync::Mutex::new(watcher)));
+
 			// Background auto-scan: enumerate every registered library root
 			// and spawn a scan for each. Each scan opens its own SQLite
 			// connection (WAL mode), so they don't block IPC commands on the
 			// shared `AppState.db` mutex. Frontend listens for `scan:completed`
 			// events and refreshes its views.
-			let handle = app.handle().clone();
 			tauri::async_runtime::spawn_blocking(move || {
-				let roots = match collect_roots() {
-					Ok(rs) => rs,
-					Err(e) => {
-						tracing::error!("startup auto-scan: enumerate roots failed: {e:#}");
-						return;
-					}
-				};
-				if roots.is_empty() {
+				if initial_roots.is_empty() {
 					tracing::info!("startup auto-scan: no library roots registered");
 					return;
 				}
-				tracing::info!("startup auto-scan: queueing {} root(s)", roots.len());
-				for (id, path) in roots {
+				tracing::info!(
+					"startup auto-scan: queueing {} root(s)",
+					initial_roots.len()
+				);
+				for (id, path) in initial_roots {
 					library::spawn_scan(handle.clone(), id, std::path::PathBuf::from(path));
 				}
 			});
