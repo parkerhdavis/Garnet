@@ -72,12 +72,12 @@ export function TypePage() {
 	return <StubPage title={meta.title} icon={meta.icon} description={meta.description} />;
 }
 
-export function ModulesPage() {
+export function PluginsPage() {
 	return (
 		<StubPage
-			title="Modules"
+			title="Plugins"
 			icon={HiPuzzlePiece}
-			description="Install, configure, and remove first-party modules. The module API is a
+			description="Install, configure, and remove first-party plugins. The plugin API is a
                 Phase 2 deliverable; today this is a manager shell awaiting the loader."
 		/>
 	);
@@ -129,8 +129,8 @@ export function SettingsAboutPage() {
 		<StubPage
 			title={`Garnet v${__APP_VERSION__}`}
 			icon={HiInformationCircle}
-			description="A free, open-source digital asset manager with pluggable per-format
-                modules. Developed by Parker H. Davis under PhD LLC. AGPL-3.0-or-later."
+			description="A free, open-source digital asset manager with modular per-format
+                plugins. Developed by Parker H. Davis under PhD LLC. AGPL-3.0-or-later."
 		/>
 	);
 }

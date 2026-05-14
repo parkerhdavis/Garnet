@@ -22,7 +22,7 @@ export type ScanReport = {
 	metadata_extracted: number;
 };
 
-export type ModuleManifest = {
+export type PluginManifest = {
 	identity: string;
 	version: string;
 	name: string;
@@ -146,7 +146,7 @@ export const api = {
 	pinSource: (absPath: string, name?: string | null) =>
 		invoke<PinnedSource>("pin_source", { absPath, name: name ?? null }),
 	unpinSource: (id: number) => invoke<void>("unpin_source", { id }),
-	listModules: () => invoke<ModuleManifest[]>("list_modules"),
+	listPlugins: () => invoke<PluginManifest[]>("list_plugins"),
 	getMediaPort: () => invoke<number>("get_media_port"),
 	renameAsset: (assetId: number, newName: string) =>
 		invoke<AssetOpResult>("rename_asset", { assetId, newName }),
