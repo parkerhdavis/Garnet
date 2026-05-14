@@ -61,20 +61,16 @@ function SplashGate({ children }: { children: ReactNode }) {
 		return () => clearTimeout(t);
 	}, [libraryLoading, assetsLoading, mountedAt]);
 
-	// Children render in normal layout flow inside a plain wrapper so the
-	// `h-full` / flex chain that Layout depends on isn't disturbed by an
-	// extra motion.div in the tree. The splash sits in a `fixed inset-0`
-	// overlay above everything, so its presence (and exit animation) never
-	// affects the underlying layout.
+	// No wrapper around `children` — every wrapper I tried (motion.div with
+	// h-full, plain div with h-full + opacity transition) broke Layout's
+	// h-full flex chain in some subtle way and the LibraryPage's overflow-auto
+	// pane either ran past the viewport or stopped scrolling. The splash is a
+	// fixed-position overlay above everything, so its presence never enters
+	// the layout. The children are visible from the first frame but hidden by
+	// the opaque splash; once the splash fades, the library is revealed.
 	return (
 		<>
-			<div
-				className={`h-full transition-opacity duration-[600ms] ease-out ${
-					splashGone ? "opacity-100 delay-150" : "opacity-0"
-				}`}
-			>
-				{children}
-			</div>
+			{children}
 
 			<AnimatePresence>
 				{!splashGone && (
