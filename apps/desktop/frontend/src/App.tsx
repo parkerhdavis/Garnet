@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Component, type ReactNode, useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { AssetDetailPage } from "@/pages/AssetDetailPage";
@@ -8,8 +9,7 @@ import { SettingsPage } from "@/pages/SettingsPage";
 import { useAssetsStore } from "@/stores/assetsStore";
 import { useLibraryStore } from "@/stores/libraryStore";
 
-const SPLASH_MIN_MS = 1800; // floor — long enough to actually read the wordmark
-const SPLASH_FADE_MS = 700; // matches the splash-out keyframe duration
+const SPLASH_MIN_MS = 1800; // floor so the wordmark is actually readable
 
 export default function App() {
 	return (
@@ -30,18 +30,23 @@ export default function App() {
 	);
 }
 
-/// Blocks the router from mounting until the library and assets stores have
-/// returned their first query. Pre-warms both queries here so the splash
-/// covers actual data-loading time, not just animation. Mirrors the splash
-/// pattern in ~/Lily and ~/Packi.
+/// Splash gate. The library content is always mounted inside the same
+/// `motion.div` wrapper from the first frame — its remount across phases was
+/// what caused the earlier "library pops in" glitch. The splash itself is
+/// rendered above via AnimatePresence so it can run a real exit animation
+/// (scale + fade) instead of disappearing in one frame.
+///
+/// Timing: the queries kick off on mount; once both stores report not-loading
+/// AND the elapsed time has cleared SPLASH_MIN_MS, the splash unmounts. Motion
+/// handles its exit; AnimatePresence keeps it in the DOM for the animation's
+/// duration.
 function SplashGate({ children }: { children: ReactNode }) {
 	const refreshLibrary = useLibraryStore((s) => s.refresh);
 	const refreshAssets = useAssetsStore((s) => s.refresh);
 	const libraryLoading = useLibraryStore((s) => s.loading);
 	const assetsLoading = useAssetsStore((s) => s.loading);
 
-	const [splashDone, setSplashDone] = useState(false);
-	const [fadeOut, setFadeOut] = useState(false);
+	const [splashGone, setSplashGone] = useState(false);
 	const [mountedAt] = useState(() => performance.now());
 
 	useEffect(() => {
@@ -52,39 +57,49 @@ function SplashGate({ children }: { children: ReactNode }) {
 		if (libraryLoading || assetsLoading) return;
 		const elapsed = performance.now() - mountedAt;
 		const waitMore = Math.max(0, SPLASH_MIN_MS - elapsed);
-		const fadeTimer = setTimeout(() => setFadeOut(true), waitMore);
-		const doneTimer = setTimeout(
-			() => setSplashDone(true),
-			waitMore + SPLASH_FADE_MS,
-		);
-		return () => {
-			clearTimeout(fadeTimer);
-			clearTimeout(doneTimer);
-		};
+		const t = setTimeout(() => setSplashGone(true), waitMore);
+		return () => clearTimeout(t);
 	}, [libraryLoading, assetsLoading, mountedAt]);
 
-	if (splashDone) return <>{children}</>;
-
-	// Crossfade phase: render the app underneath the splash so the user sees
-	// the library rise into view as the splash scales up and out. Without
-	// this both elements only swap; with it, the transition feels intentional.
 	return (
 		<div className="relative min-h-screen">
-			{fadeOut && <div className="absolute inset-0 animate-app-in">{children}</div>}
-			<div
-				className={`absolute inset-0 flex flex-col items-center justify-center gap-5 bg-base-200 ${
-					fadeOut ? "animate-splash-out pointer-events-none" : ""
-				}`}
+			<motion.div
+				initial={{ opacity: 0, y: 8 }}
+				animate={splashGone ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
+				transition={{ duration: 0.65, delay: splashGone ? 0.15 : 0, ease: [0.16, 1, 0.3, 1] }}
 			>
-				<img
-					src="/garnet-splash-dark.png"
-					alt="Garnet"
-					className="size-36 animate-splash-icon"
-				/>
-				<span className="text-4xl font-bold tracking-tight animate-fade-in-up">
-					Garnet
-				</span>
-			</div>
+				{children}
+			</motion.div>
+
+			<AnimatePresence>
+				{!splashGone && (
+					<motion.div
+						key="splash"
+						initial={{ opacity: 1 }}
+						animate={{ opacity: 1 }}
+						exit={{ opacity: 0, scale: 1.06 }}
+						transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
+						className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-base-200 pointer-events-none"
+					>
+						<motion.img
+							src="/garnet-splash-dark.png"
+							alt="Garnet"
+							className="size-36"
+							initial={{ opacity: 0, scale: 0.72 }}
+							animate={{ opacity: 1, scale: 1 }}
+							transition={{ duration: 0.8, ease: "easeOut" }}
+						/>
+						<motion.span
+							className="text-4xl font-bold tracking-tight"
+							initial={{ opacity: 0, y: 12 }}
+							animate={{ opacity: 1, y: 0 }}
+							transition={{ duration: 0.6, delay: 0.55, ease: "easeOut" }}
+						>
+							Garnet
+						</motion.span>
+					</motion.div>
+				)}
+			</AnimatePresence>
 		</div>
 	);
 }
