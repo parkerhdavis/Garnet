@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from "react";
+import { motion } from "motion/react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { HiArrowLeft, HiArrowTopRightOnSquare, HiFolderOpen } from "react-icons/hi2";
+import {
+	HiArrowLeft,
+	HiArrowTopRightOnSquare,
+	HiFolderOpen,
+} from "react-icons/hi2";
 import { api, mediaUrl, type Asset, type AssetMetadata } from "@/lib/tauri";
 import { MediaDiagnostic } from "@/components/MediaDiagnostic";
 import { TagEditor } from "@/components/TagEditor";
@@ -66,11 +71,6 @@ export function AssetDetailPage() {
 		};
 	}, [idParam]);
 
-	// Image preview goes through the asset:// protocol (webkit serves it
-	// happily). Video/audio go through the localhost media server because
-	// webkit's media element rejects asset:// — see media_server.rs. All hooks
-	// must run on every render before the early-return branches below, so this
-	// effect lives up here with the other state.
 	useEffect(() => {
 		if (!asset) {
 			setLivePath("");
@@ -91,13 +91,15 @@ export function AssetDetailPage() {
 
 	if (loading) {
 		return (
-			<div className="flex-1 p-12 text-center text-base-content/60">Loading…</div>
+			<div className="flex-1 p-12 text-center text-base-content/60 text-sm">
+				Loading…
+			</div>
 		);
 	}
 	if (error || !asset) {
 		return (
 			<div className="flex-1 p-12">
-				<div className="alert alert-error max-w-xl mx-auto">
+				<div className="alert alert-error max-w-xl mx-auto text-sm">
 					<span>{error ?? "Asset not found"}</span>
 				</div>
 				<div className="text-center mt-4">
@@ -115,9 +117,7 @@ export function AssetDetailPage() {
 		try {
 			await openPath(absPath);
 		} catch (e) {
-			const msg = `openPath failed: ${String(e)}`;
-			console.error(msg);
-			setOpenerError(msg);
+			setOpenerError(`openPath failed: ${String(e)}`);
 		}
 	};
 	const handleRevealInDir = async () => {
@@ -125,187 +125,204 @@ export function AssetDetailPage() {
 		try {
 			await revealItemInDir(absPath);
 		} catch (e) {
-			const msg = `revealItemInDir failed: ${String(e)}`;
-			console.error(msg);
-			setOpenerError(msg);
+			setOpenerError(`revealItemInDir failed: ${String(e)}`);
 		}
 	};
 
 	return (
-		<div className="flex-1 overflow-auto">
-			<div className="max-w-5xl mx-auto p-6 space-y-4">
-				<div className="flex items-center gap-3">
-					<button
-						type="button"
-						className="btn btn-sm btn-ghost"
-						onClick={() => navigate(-1)}
+		<motion.div
+			initial={{ opacity: 0 }}
+			animate={{ opacity: 1 }}
+			transition={{ duration: 0.22, ease: "easeOut" }}
+			className="flex-1 min-h-0 flex flex-col"
+		>
+			<header className="px-4 py-2.5 border-b border-base-300 bg-base-100 flex items-center gap-2 shrink-0">
+				<button
+					type="button"
+					className="btn btn-xs btn-ghost"
+					onClick={() => navigate(-1)}
+				>
+					<HiArrowLeft className="size-3.5" />
+					Back
+				</button>
+				<div className="min-w-0 flex-1 px-1">
+					<h1 className="text-sm font-semibold truncate leading-tight">
+						{basename(asset.relative_path)}
+					</h1>
+					<div
+						className="text-[11px] text-base-content/55 font-mono truncate"
+						title={absPath}
 					>
-						<HiArrowLeft className="size-4" />
-						Back
-					</button>
-					<div className="min-w-0 flex-1">
-						<h1 className="text-xl font-semibold truncate">
-							{basename(asset.relative_path)}
-						</h1>
-						<div
-							className="text-xs text-base-content/60 font-mono truncate"
-							title={absPathFor(asset)}
-						>
-							{abbreviatePath(asset.root_path)} / {asset.relative_path}
-						</div>
+						{abbreviatePath(asset.root_path)} / {asset.relative_path}
 					</div>
-					<button
-						type="button"
-						className="btn btn-sm"
-						onClick={handleOpenExternally}
-						title="Open in the system default application"
-					>
-						<HiArrowTopRightOnSquare className="size-4" />
-						Open externally
-					</button>
-					<button
-						type="button"
-						className="btn btn-sm btn-ghost"
-						onClick={handleRevealInDir}
-						title="Reveal in file manager"
-					>
-						<HiFolderOpen className="size-4" />
-					</button>
-					<button
-						type="button"
-						className={`btn btn-sm ${diagnosticOpen ? "btn-warning" : "btn-ghost"}`}
-						onClick={() => setDiagnosticOpen((v) => !v)}
-						title="Toggle media diagnostic panel"
-					>
-						Diagnose
-					</button>
+				</div>
+				<button
+					type="button"
+					className="btn btn-xs"
+					onClick={handleOpenExternally}
+					title="Open in the system default application"
+				>
+					<HiArrowTopRightOnSquare className="size-3.5" />
+					Open externally
+				</button>
+				<button
+					type="button"
+					className="btn btn-xs btn-ghost"
+					onClick={handleRevealInDir}
+					title="Reveal in file manager"
+				>
+					<HiFolderOpen className="size-3.5" />
+				</button>
+				<button
+					type="button"
+					className={`btn btn-xs ${diagnosticOpen ? "btn-warning" : "btn-ghost"}`}
+					onClick={() => setDiagnosticOpen((v) => !v)}
+					title="Toggle media diagnostic panel"
+				>
+					Diagnose
+				</button>
+			</header>
+
+			{openerError && (
+				<div className="mx-4 mt-3 alert alert-error text-xs">
+					<span className="font-mono break-all">{openerError}</span>
+				</div>
+			)}
+
+			<div className="flex-1 min-h-0 flex">
+				<div className="flex-1 min-w-0 flex items-center justify-center bg-base-300/30 p-4">
+					{mediaError ? (
+						<MediaErrorPanel
+							kind={isVideo ? "video" : isAudio ? "audio" : "image"}
+							url={livePath}
+							absPath={absPath}
+							message={mediaError}
+						/>
+					) : isVideo ? (
+						// biome-ignore lint/a11y/useMediaCaption: source content has no caption track
+						<video
+							src={livePath}
+							controls
+							onError={(e) => {
+								const err = e.currentTarget.error;
+								const code = err
+									? `MediaError code ${err.code}${err.message ? ": " + err.message : ""}`
+									: "no error object";
+								setMediaError(
+									`The webview rejected this video (${code}). Diagnostic panel below — click Run fetches to probe the asset protocol.`,
+								);
+								setDiagnosticOpen(true);
+							}}
+							className="max-w-full max-h-full object-contain bg-black rounded"
+						/>
+					) : isAudio ? (
+						// biome-ignore lint/a11y/useMediaCaption: source content has no caption track
+						<audio
+							src={livePath}
+							controls
+							onError={(e) => {
+								const err = e.currentTarget.error;
+								const code = err
+									? `MediaError code ${err.code}${err.message ? ": " + err.message : ""}`
+									: "no error object";
+								setMediaError(`The webview rejected this audio file (${code}).`);
+								setDiagnosticOpen(true);
+							}}
+							className="w-3/4"
+						/>
+					) : isImage ? (
+						<img
+							src={livePath}
+							alt={asset.relative_path}
+							onError={() =>
+								setMediaError(
+									"Couldn't load the image — the asset protocol may not be reaching this path. Check that the file is inside HOME / DOCUMENT / DOWNLOAD / DESKTOP.",
+								)
+							}
+							className="max-w-full max-h-full object-contain"
+						/>
+					) : (
+						<div className="text-base-content/50 text-sm">
+							No inline preview for this format.
+						</div>
+					)}
 				</div>
 
-				{openerError && (
-					<div className="alert alert-error text-xs">
-						<span className="font-mono break-all">{openerError}</span>
-					</div>
-				)}
+				<aside className="w-72 shrink-0 border-l border-base-300 bg-base-100 overflow-y-auto">
+					<DetailSection title="Details">
+						<KV label="Format" value={asset.format ?? "—"} />
+						<KV label="Size" value={formatSize(asset.size)} />
+						<KV label="Modified" value={formatTime(asset.mtime)} />
+						<KV label="Source" value={asset.root_path} mono />
+						<KV label="Path" value={asset.relative_path} mono />
+					</DetailSection>
 
-				<div className="card bg-base-100 border border-base-300 overflow-hidden">
-					<div className="aspect-video bg-base-200 flex items-center justify-center">
-						{mediaError ? (
-							<MediaErrorPanel
-								kind={isVideo ? "video" : isAudio ? "audio" : "image"}
-								url={livePath}
-								absPath={absPathFor(asset)}
-								message={mediaError}
-							/>
-						) : isVideo ? (
-							// biome-ignore lint/a11y/useMediaCaption: source content has no caption track
-							<video
-								src={livePath}
-								controls
-								onError={(e) => {
-									const v = e.currentTarget;
-									const err = v.error;
-									const code = err
-										? `MediaError code ${err.code}${err.message ? ": " + err.message : ""}`
-										: "no error object";
-									setMediaError(
-										`The webview rejected this video (${code}). Diagnostic panel below — click Run fetches to probe the asset protocol.`,
-									);
-									setDiagnosticOpen(true);
-								}}
-								className="w-full h-full object-contain bg-black"
-							/>
-						) : isAudio ? (
-							// biome-ignore lint/a11y/useMediaCaption: source content has no caption track
-							<audio
-								src={livePath}
-								controls
-								onError={(e) => {
-									const a = e.currentTarget;
-									const err = a.error;
-									const code = err
-										? `MediaError code ${err.code}${err.message ? ": " + err.message : ""}`
-										: "no error object";
-									setMediaError(`The webview rejected this audio file (${code}).`);
-									setDiagnosticOpen(true);
-								}}
-								className="w-3/4"
-							/>
-						) : isImage ? (
-							<img
-								src={livePath}
-								alt={asset.relative_path}
-								onError={() =>
-									setMediaError(
-										"Couldn't load the image — the asset protocol may not be reaching this path. Check that the file is inside HOME / DOCUMENT / DOWNLOAD / DESKTOP.",
-									)
-								}
-								className="w-full h-full object-contain"
-							/>
-						) : (
-							<div className="text-base-content/50">
-								No inline preview for this format.
+					<DetailSection title="Tags">
+						<TagEditor assetId={asset.id} />
+					</DetailSection>
+
+					<DetailSection title="Metadata" last>
+						{metadata.length === 0 ? (
+							<div className="text-xs text-base-content/50">
+								No metadata extracted.
 							</div>
+						) : (
+							<dl className="space-y-1 text-xs">
+								{metadata.map((m) => (
+									<div
+										key={`${m.key}-${m.value}`}
+										className="grid grid-cols-[1fr_auto] gap-2"
+									>
+										<dt
+											className="font-mono text-[11px] text-base-content/55 truncate"
+											title={m.key}
+										>
+											{m.key}
+										</dt>
+										<dd className="font-mono text-[11px] truncate" title={m.value}>
+											{m.value}
+										</dd>
+									</div>
+								))}
+							</dl>
 						)}
-					</div>
-				</div>
-
-				<div className="grid md:grid-cols-3 gap-4">
-					<div className="card bg-base-100 border border-base-300 md:col-span-1">
-						<div className="card-body p-4 text-sm space-y-2">
-							<h2 className="card-title text-base">Details</h2>
-							<KV label="Format" value={asset.format ?? "—"} />
-							<KV label="Size" value={formatSize(asset.size)} />
-							<KV label="Modified" value={formatTime(asset.mtime)} />
-							<KV label="Source" value={asset.root_path} mono />
-							<KV label="Path" value={asset.relative_path} mono />
-						</div>
-					</div>
-
-					<div className="card bg-base-100 border border-base-300 md:col-span-2">
-						<div className="card-body p-4">
-							<h2 className="card-title text-base">Tags</h2>
-							<TagEditor assetId={asset.id} />
-
-							<h2 className="card-title text-base mt-4">Metadata</h2>
-							{metadata.length === 0 ? (
-								<div className="text-xs text-base-content/50">
-									No metadata extracted.
-								</div>
-							) : (
-								<table className="table table-xs">
-									<tbody>
-										{metadata.map((m) => (
-											<tr key={`${m.key}-${m.value}`}>
-												<td className="font-mono text-xs text-base-content/60">
-													{m.key}
-												</td>
-												<td className="font-mono text-xs">{m.value}</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
-							)}
-						</div>
-					</div>
-				</div>
-
-				{diagnosticOpen && (
-					<MediaDiagnostic url={livePath} absPath={absPath} autoRun />
-				)}
-
-				<div className="text-[10px] text-base-content/40 font-mono break-all">
-					{absPathFor(asset)}
-				</div>
+					</DetailSection>
+				</aside>
 			</div>
-		</div>
+
+			{diagnosticOpen && (
+				<div className="border-t border-warning/40 bg-base-100 max-h-72 overflow-y-auto p-4">
+					<MediaDiagnostic url={livePath} absPath={absPath} autoRun />
+				</div>
+			)}
+		</motion.div>
+	);
+}
+
+function DetailSection({
+	title,
+	children,
+	last,
+}: {
+	title: string;
+	children: React.ReactNode;
+	last?: boolean;
+}) {
+	return (
+		<section className={`px-4 py-3 ${last ? "" : "border-b border-base-300"}`}>
+			<div className="text-[10px] uppercase tracking-wider text-base-content/45 font-semibold mb-2">
+				{title}
+			</div>
+			{children}
+		</section>
 	);
 }
 
 function KV({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
 	return (
-		<div className="grid grid-cols-[80px_1fr] gap-2 text-xs">
-			<dt className="text-base-content/60">{label}</dt>
-			<dd className={`truncate ${mono ? "font-mono" : ""}`} title={value}>
+		<div className="grid grid-cols-[64px_1fr] gap-2 text-xs py-0.5">
+			<dt className="text-base-content/55">{label}</dt>
+			<dd className={`truncate ${mono ? "font-mono text-[11px]" : ""}`} title={value}>
 				{value}
 			</dd>
 		</div>

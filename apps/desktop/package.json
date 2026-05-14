@@ -19,6 +19,7 @@
 		"@tauri-apps/plugin-dialog": "^2.0.0",
 		"@tauri-apps/plugin-fs": "^2.0.0",
 		"@tauri-apps/plugin-opener": "2.5.3",
+		"motion": "^12.0.0",
 		"react": "^19.1.0",
 		"react-dom": "^19.1.0",
 		"react-icons": "^5.4.0",

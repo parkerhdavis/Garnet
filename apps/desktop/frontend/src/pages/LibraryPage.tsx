@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect } from "react";
+import { motion } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
 import { HiFolderPlus } from "react-icons/hi2";
 import { AssetGrid } from "@/components/AssetGrid";
@@ -47,11 +48,16 @@ export function LibraryPage() {
 		// CSS gives every flex item) forces it as tall as its content — the
 		// asset grid stretches it past the viewport, the sidebar/footer get
 		// clipped, and nothing scrolls. `flex-1` alone isn't enough.
-		<div className="flex-1 min-h-0 flex flex-col min-w-0">
+		<motion.div
+			initial={{ opacity: 0 }}
+			animate={{ opacity: 1 }}
+			transition={{ duration: 0.2, ease: "easeOut" }}
+			className="flex-1 min-h-0 flex flex-col min-w-0"
+		>
 			<FilterBar />
 
 			{error && (
-				<div className="alert alert-error mx-6 mt-4">
+				<div className="alert alert-error mx-6 mt-4 text-sm">
 					<span>{error}</span>
 				</div>
 			)}
@@ -60,7 +66,7 @@ export function LibraryPage() {
 				{noRoots ? (
 					<EmptyNoRoots />
 				) : loading && assets.length === 0 ? (
-					<div className="p-12 text-center text-base-content/60">Loading…</div>
+					<div className="p-12 text-center text-base-content/60 text-sm">Loading…</div>
 				) : assets.length === 0 ? (
 					<EmptyNoMatches />
 				) : viewMode === "grid" ? (
@@ -77,7 +83,7 @@ export function LibraryPage() {
 			</div>
 
 			<Pagination page={page} pageSize={PAGE_SIZE} total={total} onPage={setPage} />
-		</div>
+		</motion.div>
 	);
 }
 
