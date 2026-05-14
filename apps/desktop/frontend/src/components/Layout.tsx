@@ -9,7 +9,12 @@ const NAV_ITEMS = [
 
 export function Layout() {
 	return (
-		<div className="h-full flex">
+		// `fixed inset-0` anchors the whole layout to the viewport regardless
+		// of what wraps the routes (SplashGate, ErrorBoundary, etc.) — every
+		// time I've tried to rely on a percent-height chain through those
+		// wrappers, something further down stops being able to compute a
+		// definite height and the inner overflow-auto pane breaks.
+		<div className="fixed inset-0 flex">
 			<aside className="w-56 shrink-0 bg-base-100 border-r border-base-300 flex flex-col">
 				<div className="px-4 py-4 border-b border-base-300">
 					<div className="text-lg font-semibold tracking-tight">Garnet</div>
