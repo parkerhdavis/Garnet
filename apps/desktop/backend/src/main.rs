@@ -24,8 +24,14 @@ use tags::{
 };
 use thumbnails::get_thumbnail;
 use std::sync::Mutex;
+use std::time::Duration;
 use tauri::Manager;
 use tracing_subscriber::EnvFilter;
+
+// Hard ceiling on how long the splash window can sit before we show the main
+// window anyway — keeps a frontend crash or stuck query from leaving the user
+// staring at a splash forever.
+const SPLASH_SAFETY_TIMEOUT_SECS: u64 = 15;
 
 pub struct AppState {
 	pub db: Mutex<rusqlite::Connection>,
@@ -35,6 +41,22 @@ pub struct AppState {
 #[tauri::command]
 fn get_media_port(state: tauri::State<AppState>) -> u16 {
 	state.media_port
+}
+
+/// Called by the React app once its first library/assets queries have landed
+/// (plus a minimum dwell time so the splash never flashes out instantly).
+/// Closes the splash window and shows the main one. Bundling both side effects
+/// in a single Rust command keeps the frontend free of `core:window:*`
+/// capability scopes.
+#[tauri::command]
+fn frontend_ready(app: tauri::AppHandle) {
+	if let Some(splash) = app.get_webview_window("splash") {
+		let _ = splash.close();
+	}
+	if let Some(main) = app.get_webview_window("main") {
+		let _ = main.show();
+		let _ = main.set_focus();
+	}
 }
 
 fn init_logging() {
@@ -95,9 +117,34 @@ fn main() {
 					}
 				}
 			}
+
+			// Safety: dismiss the splash and show the main window after a hard
+			// ceiling even if the frontend never calls `frontend_ready`.
+			let handle = app.handle().clone();
+			tauri::async_runtime::spawn(async move {
+				tokio::time::sleep(Duration::from_secs(SPLASH_SAFETY_TIMEOUT_SECS)).await;
+				if let Some(main) = handle.get_webview_window("main") {
+					if !main.is_visible().unwrap_or(true) {
+						tracing::warn!(
+							"splash safety timeout fired — showing main window without frontend_ready"
+						);
+						let _ = main.show();
+						let _ = main.set_focus();
+					}
+				}
+				if let Some(splash) = handle.get_webview_window("splash") {
+					let _ = splash.close();
+				}
+			});
+
 			Ok(())
 		})
 		.on_window_event(|window, event| {
+			// Only persist the main window's dimensions — the splash window's
+			// fixed 420×320 isn't worth restoring on next launch.
+			if window.label() != "main" {
+				return;
+			}
 			if let tauri::WindowEvent::CloseRequested { .. } = event {
 				if let Ok(size) = window.inner_size() {
 					if let Ok(scale) = window.scale_factor() {
@@ -132,6 +179,7 @@ fn main() {
 			list_asset_tags,
 			list_modules,
 			get_media_port,
+			frontend_ready,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");

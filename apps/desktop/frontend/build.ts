@@ -66,12 +66,13 @@ if (!mainResult.success) {
 }
 
 // ---------------------------------------------------------------------------
-// Static assets — public/ → dist/, index.html → dist/
+// Static assets — public/ → dist/, index.html + splash.html → dist/
 // ---------------------------------------------------------------------------
 console.log("  -> Copying static assets...");
 if (existsSync("public")) {
 	await cp("public", DIST, { recursive: true });
 }
 await cp("index.html", `${DIST}/index.html`);
+await cp("splash.html", `${DIST}/splash.html`);
 
 console.log("  -> Frontend build complete!");

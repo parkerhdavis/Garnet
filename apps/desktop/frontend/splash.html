@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Garnet</title>
+		<style>
+			/*
+			 * Pure static splash served in a separate Tauri window. No React,
+			 * no bundler, no Tailwind — the splash should show before the
+			 * main bundle has even started loading.
+			 *
+			 * Palette anchored on #560000 (the brand accent) over a dark
+			 * neutral, matching the dark daisyUI theme defined in
+			 * src/styles/index.css.
+			 */
+			html, body {
+				height: 100%;
+				margin: 0;
+				background: oklch(0.175 0.012 22);
+				color: oklch(0.890 0.006 60);
+				font-family: system-ui, -apple-system, sans-serif;
+				overflow: hidden;
+			}
+
+			.splash {
+				height: 100%;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				gap: 1.25rem;
+				user-select: none;
+				-webkit-user-select: none;
+				-webkit-app-region: drag; /* lets the user drag the splash by its body */
+			}
+
+			.icon {
+				width: 9rem;
+				height: 9rem;
+				animation: splash-icon-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+			}
+
+			.wordmark {
+				font-size: 2.5rem;
+				font-weight: 700;
+				letter-spacing: -0.02em;
+				animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.55s both;
+			}
+
+			@keyframes splash-icon-in {
+				0%   { opacity: 0; transform: scale(0.72); }
+				100% { opacity: 1; transform: scale(1); }
+			}
+
+			@keyframes fade-in-up {
+				0%   { opacity: 0; transform: translateY(12px); }
+				100% { opacity: 1; transform: translateY(0); }
+			}
+		</style>
+	</head>
+	<body>
+		<div class="splash">
+			<img class="icon" src="/garnet-splash-dark.png" alt="Garnet" />
+			<div class="wordmark">Garnet</div>
+		</div>
+	</body>
+</html>
