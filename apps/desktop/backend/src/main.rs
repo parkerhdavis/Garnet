@@ -8,8 +8,8 @@ mod db;
 mod indexer;
 mod library;
 mod media_server;
-mod modules;
 mod pinned_sources;
+mod plugins;
 mod settings;
 mod tags;
 mod thumbnails;
@@ -20,7 +20,7 @@ use assets::{get_asset, list_asset_formats, list_assets};
 use library::{
 	list_library_roots, register_library_root, remove_library_root, scan_library_root,
 };
-use modules::list_modules;
+use plugins::list_plugins;
 use pinned_sources::{list_pinned_sources, pin_source, unpin_source};
 use settings::{load_settings, save_settings};
 use tags::{
@@ -197,7 +197,7 @@ fn main() {
 			list_pinned_sources,
 			pin_source,
 			unpin_source,
-			list_modules,
+			list_plugins,
 			get_media_port,
 		])
 		.run(tauri::generate_context!())

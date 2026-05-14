@@ -10,7 +10,7 @@
 //! - **Sources** — pinned source folders (any library root or subfolder
 //!   thereof). User-driven via the "Pin source" button at the bottom of the
 //!   section.
-//! - **Functions** — Modules manager + Automations.
+//! - **Functions** — Plugins manager + Automations.
 //! - **Settings** — split into subsections (Library Roots, Appearance,
 //!   About). The existing roots-management UX lives under Library Roots.
 //!
@@ -177,8 +177,8 @@ export function Sidebar() {
 				</NavSection>
 
 				<NavSection title="Functions">
-					<NavItem to="/functions/modules" icon={HiPuzzlePiece}>
-						Modules
+					<NavItem to="/functions/plugins" icon={HiPuzzlePiece}>
+						Plugins
 					</NavItem>
 					<NavItem to="/functions/automations" icon={HiBolt}>
 						Automations

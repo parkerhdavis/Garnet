@@ -1,0 +1,15 @@
+{
+	"$schema": "https://garnet.dev/schemas/plugin-manifest-v0.json",
+	"identity": "com.parkerhdavis.garnet.example",
+	"version": "0.0.0",
+	"name": "Example Plugin",
+	"description": "Shape sketch of a Garnet plugin manifest. Not a runtime artifact — the loader and the plugin API don't exist yet. See the Plugin System doc in the project wiki.",
+	"contributions": {
+		"formats": [],
+		"previewers": [],
+		"operations": [],
+		"pipelines": [],
+		"search_facets": [],
+		"settings": []
+	}
+}

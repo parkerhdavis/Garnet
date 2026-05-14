@@ -13,7 +13,7 @@ import { LibraryPage } from "@/pages/LibraryPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import {
 	AutomationsPage,
-	ModulesPage,
+	PluginsPage,
 	SettingsAboutPage,
 	SettingsAppearancePage,
 	SettingsGeneralPage,
@@ -52,7 +52,7 @@ export default function App() {
 						    component swap. */}
 						<Route path="sources/:id" element={<LibraryPage />} />
 
-						<Route path="functions/modules" element={<ModulesPage />} />
+						<Route path="functions/plugins" element={<PluginsPage />} />
 						<Route path="functions/automations" element={<AutomationsPage />} />
 
 						<Route path="settings" element={<SettingsPage />} />
