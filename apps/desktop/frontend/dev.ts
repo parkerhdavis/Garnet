@@ -43,10 +43,12 @@ async function copyAssets() {
 	if (existsSync("public")) {
 		await cp("public", DIST, { recursive: true });
 	}
-	let html = await Bun.file("index.html").text();
 	const reloadScript = `<script>new WebSocket("ws://localhost:${DEV_PORT}/__reload").onmessage=()=>location.reload()</script>`;
-	html = html.replace("</body>", `${reloadScript}\n</body>`);
-	await Bun.write(`${DIST}/index.html`, html);
+	for (const name of ["index.html", "splash.html"]) {
+		let html = await Bun.file(name).text();
+		html = html.replace("</body>", `${reloadScript}\n</body>`);
+		await Bun.write(`${DIST}/${name}`, html);
+	}
 }
 
 async function buildAll() {
@@ -100,3 +102,4 @@ function scheduleRebuild() {
 
 watch("src", { recursive: true }, scheduleRebuild);
 watch("index.html", scheduleRebuild);
+watch("splash.html", scheduleRebuild);
