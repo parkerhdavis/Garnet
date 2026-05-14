@@ -14,6 +14,7 @@
 //! The frontend listens for these to refresh its views when new content lands.
 
 use crate::indexer;
+use crate::watcher::WatcherState;
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -39,7 +40,11 @@ fn stringify<E: std::fmt::Display>(e: E) -> String {
 }
 
 #[tauri::command]
-pub fn register_library_root(state: State<AppState>, path: String) -> Result<LibraryRoot, String> {
+pub fn register_library_root(
+	state: State<AppState>,
+	watcher: State<WatcherState>,
+	path: String,
+) -> Result<LibraryRoot, String> {
 	let canonical = Path::new(&path)
 		.canonicalize()
 		.map_err(|e| format!("could not resolve {path:?}: {e}"))?;
@@ -70,6 +75,14 @@ pub fn register_library_root(state: State<AppState>, path: String) -> Result<Lib
 		)
 		.map_err(stringify)?;
 
+	// Hook the new root into the live-watcher so changes under it produce
+	// debounced rescans without requiring an app restart.
+	if let Ok(mut w) = watcher.0.lock() {
+		if let Err(e) = w.watch(row.id, &canonical) {
+			tracing::warn!("watcher: failed to watch new root_id={}: {}", row.id, e);
+		}
+	}
+
 	tracing::info!("registered library root id={} path={}", row.id, row.path);
 	Ok(row)
 }
@@ -95,10 +108,17 @@ pub fn list_library_roots(state: State<AppState>) -> Result<Vec<LibraryRoot>, St
 }
 
 #[tauri::command]
-pub fn remove_library_root(state: State<AppState>, id: i64) -> Result<(), String> {
+pub fn remove_library_root(
+	state: State<AppState>,
+	watcher: State<WatcherState>,
+	id: i64,
+) -> Result<(), String> {
 	let conn = state.db.lock().map_err(stringify)?;
 	conn.execute("DELETE FROM library_roots WHERE id = ?1", [id])
 		.map_err(stringify)?;
+	if let Ok(mut w) = watcher.0.lock() {
+		let _ = w.unwatch_root(id);
+	}
 	tracing::info!("removed library root id={id}");
 	Ok(())
 }
