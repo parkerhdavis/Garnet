@@ -109,6 +109,10 @@ export type AssetOpResult = {
 	relative_path: string;
 	abs_path: string;
 	previous_abs_path: string;
+	/** False if the move dropped the asset from the library (destination
+	 *  was outside every registered root). True for in-library moves and
+	 *  every rename. */
+	still_in_library: boolean;
 };
 
 export type TrashResult = {
@@ -148,6 +152,8 @@ export const api = {
 		invoke<AssetOpResult>("rename_asset", { assetId, newName }),
 	moveAsset: (assetId: number, destDir: string) =>
 		invoke<AssetOpResult>("move_asset", { assetId, destDir }),
+	moveFile: (fromAbsPath: string, destDir: string) =>
+		invoke<string>("move_file", { fromAbsPath, destDir }),
 	trashAsset: (assetId: number) => invoke<TrashResult>("trash_asset", { assetId }),
 	restoreFromTrash: (trashPath: string, destinationAbsPath: string) =>
 		invoke<void>("restore_from_trash", { trashPath, destinationAbsPath }),

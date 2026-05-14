@@ -15,7 +15,7 @@ mod tags;
 mod thumbnails;
 mod watcher;
 
-use asset_ops::{move_asset, rename_asset, restore_from_trash, trash_asset};
+use asset_ops::{move_asset, move_file, rename_asset, restore_from_trash, trash_asset};
 use assets::{get_asset, list_asset_formats, list_assets};
 use library::{
 	list_library_roots, register_library_root, remove_library_root, scan_library_root,
@@ -183,6 +183,7 @@ fn main() {
 			list_asset_formats,
 			rename_asset,
 			move_asset,
+			move_file,
 			trash_asset,
 			restore_from_trash,
 			list_asset_metadata,

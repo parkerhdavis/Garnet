@@ -58,6 +58,16 @@ pub struct AssetOpResult {
 	pub abs_path: String,
 	/// Where the file lived before the op. Useful for undo.
 	pub previous_abs_path: String,
+	/// True if the asset's row is still in `assets` after the op (rename
+	/// always, move into any registered root). False when the asset moved
+	/// outside every registered library root and the row was deleted —
+	/// the file is still on disk but Garnet no longer tracks it.
+	#[serde(default = "default_true")]
+	pub still_in_library: bool,
+}
+
+fn default_true() -> bool {
+	true
 }
 
 /// Look up `(root_path, relative_path)` for an asset id.
@@ -133,13 +143,15 @@ pub fn rename_asset(
 		relative_path: new_relative,
 		abs_path: new_abs.to_string_lossy().to_string(),
 		previous_abs_path: old_abs.to_string_lossy().to_string(),
+		still_in_library: true,
 	})
 }
 
-/// Move an asset into a different directory. The destination directory must
-/// be inside the same library root as the asset (cross-root moves would
-/// require re-keying the row to a different root_id; deferred until there's
-/// a user need). The filename is preserved.
+/// Move an asset's file into a different directory. The filename is
+/// preserved. The destination may be inside any registered library root
+/// (re-keys `root_id` if it crosses) or outside every root entirely — in
+/// which case the file still moves, but the asset row is deleted because
+/// the file is no longer in the library.
 #[tauri::command]
 pub fn move_asset(
 	state: State<AppState>,
@@ -148,37 +160,22 @@ pub fn move_asset(
 ) -> Result<AssetOpResult, String> {
 	tracing::info!("move_asset request: asset_id={} dest_dir={:?}", asset_id, dest_dir);
 	let conn = state.db.lock().map_err(stringify)?;
-	let (root_id, root_path, relative_path) = lookup_asset(&conn, asset_id).map_err(stringify)?;
+	let (_old_root_id, root_path, relative_path) =
+		lookup_asset(&conn, asset_id).map_err(stringify)?;
 	let old_abs = join_abs(&root_path, &relative_path);
 
-	let dest_dir_path = PathBuf::from(&dest_dir);
-	let dest_canonical = dest_dir_path
+	let dest_canonical = PathBuf::from(&dest_dir)
 		.canonicalize()
 		.map_err(|e| format!("could not resolve destination {dest_dir:?}: {e}"))?;
 	if !dest_canonical.is_dir() {
 		return Err(format!("{dest_canonical:?} is not a directory"));
 	}
 
-	let root_canonical = Path::new(&root_path)
-		.canonicalize()
-		.map_err(|e| format!("could not resolve library root: {e}"))?;
-	let new_rel_under_root = dest_canonical.strip_prefix(&root_canonical).map_err(|_| {
-		format!(
-			"destination {dest_canonical:?} is not inside the asset's library root ({root_canonical:?})"
-		)
-	})?;
-
 	let filename = Path::new(&relative_path)
 		.file_name()
 		.ok_or_else(|| "asset has no filename".to_string())?;
-	let new_relative_pb = if new_rel_under_root.as_os_str().is_empty() {
-		PathBuf::from(filename)
-	} else {
-		new_rel_under_root.join(filename)
-	};
-	let new_relative = new_relative_pb.to_string_lossy().replace('\\', "/");
-	let new_abs = join_abs(&root_path, &new_relative);
 
+	let new_abs = dest_canonical.join(filename);
 	if new_abs == old_abs {
 		return Err("Destination is the asset's current folder".into());
 	}
@@ -189,26 +186,112 @@ pub fn move_asset(
 		));
 	}
 
+	// Decide what should happen to the assets row by checking whether the
+	// destination falls inside any registered library root.
+	let matching_root = find_containing_root(&conn, &dest_canonical).map_err(stringify)?;
+
 	std::fs::rename(&old_abs, &new_abs)
 		.map_err(|e| format!("move failed: {e}"))?;
 
-	conn.execute(
-		"UPDATE assets SET relative_path = ?1 WHERE id = ?2",
-		params![new_relative, asset_id],
-	)
-	.map_err(stringify)?;
-
-	tracing::info!(
-		"moved asset id={} root_id={} {:?} -> {:?}",
-		asset_id, root_id, old_abs, new_abs
-	);
+	let still_in_library = matching_root.is_some();
+	let new_relative: String;
+	if let Some((new_root_id, new_root_canonical)) = matching_root {
+		// Destination is inside a registered root — re-key the row.
+		let rel = new_abs
+			.strip_prefix(&new_root_canonical)
+			.map_err(|e| format!("strip_prefix: {e}"))?
+			.to_string_lossy()
+			.replace('\\', "/");
+		conn.execute(
+			"UPDATE assets SET root_id = ?1, relative_path = ?2 WHERE id = ?3",
+			params![new_root_id, rel, asset_id],
+		)
+		.map_err(stringify)?;
+		new_relative = rel;
+		tracing::info!(
+			"moved asset id={} {:?} -> {:?} (new_root_id={})",
+			asset_id, old_abs, new_abs, new_root_id
+		);
+	} else {
+		// Destination is outside every registered root — the asset leaves
+		// the library. Drop the row; the file is still on disk.
+		conn.execute("DELETE FROM assets WHERE id = ?1", [asset_id])
+			.map_err(stringify)?;
+		new_relative = String::new();
+		tracing::info!(
+			"moved asset id={} {:?} -> {:?} (out of library; row deleted)",
+			asset_id, old_abs, new_abs
+		);
+	}
 
 	Ok(AssetOpResult {
 		asset_id,
 		relative_path: new_relative,
 		abs_path: new_abs.to_string_lossy().to_string(),
 		previous_abs_path: old_abs.to_string_lossy().to_string(),
+		still_in_library,
 	})
+}
+
+/// Pure filesystem move by absolute path — no `assets` row reference.
+/// Used by the undo / redo path for moves that crossed library boundaries
+/// (the row no longer exists, so we can't reference it by id). The
+/// filesystem watcher's debounced rescan reconciles the DB afterward.
+#[tauri::command]
+pub fn move_file(from_abs_path: String, dest_dir: String) -> Result<String, String> {
+	tracing::info!("move_file request: from={:?} dest_dir={:?}", from_abs_path, dest_dir);
+	let from = PathBuf::from(&from_abs_path);
+	if !from.exists() {
+		return Err(format!("source file does not exist: {from:?}"));
+	}
+	let dest = PathBuf::from(&dest_dir).canonicalize().map_err(|e| {
+		format!("could not resolve destination {dest_dir:?}: {e}")
+	})?;
+	if !dest.is_dir() {
+		return Err(format!("{dest:?} is not a directory"));
+	}
+	let filename = from
+		.file_name()
+		.ok_or_else(|| "source has no filename".to_string())?;
+	let to = dest.join(filename);
+	if to == from {
+		return Err("Destination is the file's current folder".into());
+	}
+	if to.exists() {
+		return Err(format!(
+			"A file named “{}” already exists in the destination",
+			filename.to_string_lossy()
+		));
+	}
+	std::fs::rename(&from, &to).map_err(|e| format!("move failed: {e}"))?;
+	tracing::info!("moved file {:?} -> {:?}", from, to);
+	Ok(to.to_string_lossy().to_string())
+}
+
+/// Find which registered library root, if any, contains `path`. Returns
+/// `(root_id, canonical_root_path)` for the longest-prefix match so nested
+/// roots resolve to the most-specific one.
+fn find_containing_root(
+	conn: &rusqlite::Connection,
+	path: &Path,
+) -> rusqlite::Result<Option<(i64, PathBuf)>> {
+	let mut stmt = conn.prepare("SELECT id, path FROM library_roots")?;
+	let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?;
+	let mut best: Option<(i64, PathBuf, usize)> = None;
+	for row in rows {
+		let (id, root_str) = row?;
+		let root_path = match Path::new(&root_str).canonicalize() {
+			Ok(p) => p,
+			Err(_) => continue,
+		};
+		if path.starts_with(&root_path) {
+			let len = root_path.as_os_str().len();
+			if best.as_ref().map(|(_, _, l)| *l).unwrap_or(0) < len {
+				best = Some((id, root_path, len));
+			}
+		}
+	}
+	Ok(best.map(|(id, p, _)| (id, p)))
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

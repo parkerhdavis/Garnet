@@ -121,8 +121,8 @@ async function moveAction(asset: Asset) {
 		showError(`Folder picker failed: ${String(err)}`);
 		return;
 	}
-	console.debug("moveAction: folder picker returned", selected);
 	if (typeof selected !== "string") return;
+	const destDir = selected;
 
 	const filename = basename(asset.relative_path);
 	const originalDir = `${asset.root_path}/${dirname(asset.relative_path)}`.replace(
@@ -130,21 +130,33 @@ async function moveAction(asset: Asset) {
 		"",
 	);
 
+	let result: Awaited<ReturnType<typeof api.moveAsset>>;
 	try {
-		await api.moveAsset(asset.id, selected);
+		result = await api.moveAsset(asset.id, destDir);
 	} catch (err) {
 		showError(`Move failed: ${String(err)}`);
 		return;
 	}
 	refresh();
+
+	// Path-keyed undo/redo: works the same whether the row was re-keyed
+	// (in-library move) or deleted (out-of-library move). The watcher's
+	// rescan re-inserts the row on its own after each replay.
+	const newAbsPath = result.abs_path;
+	if (!result.still_in_library) {
+		useAssetsStore.setState({
+			error: `“${filename}” moved outside the library — Garnet no longer tracks it. Use Ctrl+Z to undo.`,
+		});
+	}
 	useUndoStore.getState().push({
 		description: `Move ${filename}`,
 		undo: async () => {
-			await api.moveAsset(asset.id, originalDir);
+			await api.moveFile(newAbsPath, originalDir);
 			refresh();
 		},
 		redo: async () => {
-			await api.moveAsset(asset.id, selected);
+			const originalAbsPath = `${originalDir}/${filename}`;
+			await api.moveFile(originalAbsPath, destDir);
 			refresh();
 		},
 	});
