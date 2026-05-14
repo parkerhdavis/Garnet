@@ -5,6 +5,16 @@ import { Layout } from "@/components/Layout";
 import { AssetDetailPage } from "@/pages/AssetDetailPage";
 import { LibraryPage } from "@/pages/LibraryPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import {
+	AutomationsPage,
+	ModulesPage,
+	SettingsAboutPage,
+	SettingsAppearancePage,
+	SettingsGeneralPage,
+	SourcesIndexPage,
+	TypePage,
+	WorkspacesPage,
+} from "@/pages/stubs";
 import { useAssetsStore } from "@/stores/assetsStore";
 import { useLibraryStore } from "@/stores/libraryStore";
 
@@ -23,7 +33,22 @@ export default function App() {
 					<Route element={<Layout />}>
 						<Route index element={<LibraryPage />} />
 						<Route path="asset/:id" element={<AssetDetailPage />} />
+
+						<Route path="workspaces" element={<WorkspacesPage />} />
+
+						<Route path="types/:kind" element={<TypePage />} />
+
+						<Route path="sources" element={<SourcesIndexPage />} />
+
+						<Route path="functions/modules" element={<ModulesPage />} />
+						<Route path="functions/automations" element={<AutomationsPage />} />
+
 						<Route path="settings" element={<SettingsPage />} />
+						<Route path="settings/library" element={<SettingsPage />} />
+						<Route path="settings/appearance" element={<SettingsAppearancePage />} />
+						<Route path="settings/general" element={<SettingsGeneralPage />} />
+						<Route path="settings/about" element={<SettingsAboutPage />} />
+
 						<Route path="*" element={<Navigate to="/" replace />} />
 					</Route>
 				</Routes>

@@ -1,14 +1,28 @@
 <!doctype html>
-<html lang="en">
+<!--
+	data-theme="dark" pins the daisyUI theme so our `@plugin "daisyui/theme"`
+	override in styles/index.css wins on specificity against daisyUI's built-in
+	dark theme (which uses `:root:not([data-theme])` and would otherwise beat
+	our `:where(:root)` rule).
+-->
+<html lang="en" data-theme="dark">
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Garnet</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+			rel="stylesheet"
+		/>
 		<link rel="stylesheet" href="/styles.css" />
 		<style>
 			body {
 				margin: 0;
-				font-family: system-ui, -apple-system, sans-serif;
+				font-family: "Inter", system-ui, -apple-system, sans-serif;
+				font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+				font-size: 14px;
 			}
 			.loading-screen {
 				display: flex;
