@@ -11,7 +11,6 @@ import {
 	SettingsAboutPage,
 	SettingsAppearancePage,
 	SettingsGeneralPage,
-	SourcesIndexPage,
 	TypePage,
 	WorkspacesPage,
 } from "@/pages/stubs";
@@ -38,7 +37,12 @@ export default function App() {
 
 						<Route path="types/:kind" element={<TypePage />} />
 
-						<Route path="sources" element={<SourcesIndexPage />} />
+						{/* `/` and `/sources/:id` mount the same LibraryPage; the
+						    page reads useParams to decide whether to apply the
+						    pinned-source filter. This keeps StrictMode from
+						    introducing spurious "clear filter" refreshes on the
+						    component swap. */}
+						<Route path="sources/:id" element={<LibraryPage />} />
 
 						<Route path="functions/modules" element={<ModulesPage />} />
 						<Route path="functions/automations" element={<AutomationsPage />} />

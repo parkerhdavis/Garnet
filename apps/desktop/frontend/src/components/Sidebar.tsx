@@ -7,15 +7,18 @@
 //! - **Types** — one page per media category (Images, Videos, Animations,
 //!   Audio, Models). Each will land as a pre-filtered Library view; V1 stubs
 //!   the destination.
-//! - **Sources** — pinned source folders. V1 ships the section + a "pin
-//!   source" affordance; the pinning model itself comes later.
+//! - **Sources** — pinned source folders (any library root or subfolder
+//!   thereof). User-driven via the "Pin source" button at the bottom of the
+//!   section.
 //! - **Functions** — Modules manager + Automations.
 //! - **Settings** — split into subsections (Library Roots, Appearance,
 //!   About). The existing roots-management UX lives under Library Roots.
 //!
 //! Clicking the Garnet logo/title returns to the all-assets root view.
 
+import { useEffect, useMemo } from "react";
 import { NavLink, Link } from "react-router-dom";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { IconType } from "react-icons";
 import {
 	HiBolt,
@@ -23,7 +26,9 @@ import {
 	HiCube,
 	HiFilm,
 	HiFolder,
+	HiFolderOpen,
 	HiFolderPlus,
+	HiGlobeAlt,
 	HiInformationCircle,
 	HiMusicalNote,
 	HiPhoto,
@@ -33,8 +38,35 @@ import {
 	HiSquares2X2,
 	HiSwatch,
 } from "react-icons/hi2";
+import { useLibraryStore } from "@/stores/libraryStore";
+import { usePinnedSourcesStore } from "@/stores/pinnedSourcesStore";
 
 export function Sidebar() {
+	const { sources, refresh, pin, error: pinError } = usePinnedSourcesStore();
+	const roots = useLibraryStore((s) => s.roots);
+
+	useEffect(() => {
+		void refresh();
+	}, [refresh]);
+
+	// Pre-pick a sensible starting directory for the folder picker: the most
+	// recently-added library root, if any.
+	const defaultPickerPath = useMemo(() => {
+		if (roots.length === 0) return undefined;
+		return roots[roots.length - 1].path;
+	}, [roots]);
+
+	async function handlePinSource() {
+		const selected = await openDialog({
+			directory: true,
+			multiple: false,
+			defaultPath: defaultPickerPath,
+			title: "Pin a folder inside one of your library roots",
+		});
+		if (typeof selected !== "string") return;
+		await pin(selected);
+	}
+
 	return (
 		<aside className="w-60 shrink-0 bg-base-100 border-r border-base-300 flex flex-col">
 			<Link
@@ -65,6 +97,34 @@ export function Sidebar() {
 					</NavAction>
 				</NavSection>
 
+				<NavSection title="Sources">
+					{/* "All Sources" is the default landing view at /, showing
+					    every asset across every library root. It's deliberately
+					    non-editable — it isn't backed by a pinned_sources row
+					    and there's no unpin affordance on it. */}
+					<NavItem to="/" icon={HiGlobeAlt} end>
+						All Sources
+					</NavItem>
+					{sources.map((s) => (
+						<NavItem
+							key={s.id}
+							to={`/sources/${s.id}`}
+							icon={s.relative_path === "" ? HiFolder : HiFolderOpen}
+							title={s.abs_path}
+						>
+							{s.name}
+						</NavItem>
+					))}
+					<NavAction icon={HiFolderPlus} onClick={handlePinSource}>
+						Pin source
+					</NavAction>
+					{pinError && (
+						<li className="px-2 py-1 text-[10px] text-error/90 break-words">
+							{pinError}
+						</li>
+					)}
+				</NavSection>
+
 				<NavSection title="Types">
 					<NavItem to="/types/images" icon={HiPhoto}>Images</NavItem>
 					<NavItem to="/types/videos" icon={HiFilm}>Videos</NavItem>
@@ -73,12 +133,6 @@ export function Sidebar() {
 					</NavItem>
 					<NavItem to="/types/audio" icon={HiMusicalNote}>Audio</NavItem>
 					<NavItem to="/types/models" icon={HiCube}>Models</NavItem>
-				</NavSection>
-
-				<NavSection title="Sources">
-					<NavAction icon={HiFolderPlus} disabled>
-						Pin source
-					</NavAction>
 				</NavSection>
 
 				<NavSection title="Functions">
@@ -129,15 +183,23 @@ function NavItem({
 	to,
 	icon: Icon,
 	children,
+	title,
+	end,
 }: {
 	to: string;
 	icon: IconType;
 	children: React.ReactNode;
+	title?: string;
+	/** Pass through to NavLink — required when the route is `/` so partial
+	 * prefix matches against deeper routes don't keep the item highlighted. */
+	end?: boolean;
 }) {
 	return (
 		<li>
 			<NavLink
 				to={to}
+				title={title}
+				end={end}
 				className={({ isActive }) =>
 					`flex items-center gap-2 px-2 py-1.5 rounded transition-colors ${
 						isActive

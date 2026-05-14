@@ -8,6 +8,7 @@ mod indexer;
 mod library;
 mod media_server;
 mod modules;
+mod pinned_sources;
 mod settings;
 mod tags;
 mod thumbnails;
@@ -17,6 +18,7 @@ use library::{
 	list_library_roots, register_library_root, remove_library_root, scan_library_root,
 };
 use modules::list_modules;
+use pinned_sources::{list_pinned_sources, pin_source, unpin_source};
 use settings::{load_settings, save_settings};
 use tags::{
 	create_tag, delete_tag, list_asset_metadata, list_asset_tags, list_tags, tag_asset,
@@ -130,6 +132,9 @@ fn main() {
 			tag_asset,
 			untag_asset,
 			list_asset_tags,
+			list_pinned_sources,
+			pin_source,
+			unpin_source,
 			list_modules,
 			get_media_port,
 		])

@@ -16,11 +16,20 @@ export const PAGE_SIZE = 60;
 
 export type ViewMode = "grid" | "list";
 
+// Token for cancelling stale refresh() responses. Each refresh increments the
+// counter and remembers its own value; if the value at response time no
+// longer matches, the response is discarded. Without this, a slow earlier
+// refresh can land *after* a later one and overwrite the filtered results
+// with stale unfiltered ones — the bug we hit when SourcePage and
+// LibraryPage both kicked off refresh on mount.
+let refreshToken = 0;
+
 type AssetsState = {
 	// Query parameters
 	rootId: number | null;
 	formats: string[];
 	tagIds: number[];
+	pinnedSourceId: number | null;
 	pathSearch: string;
 	sizeMin: number | null;
 	sizeMax: number | null;
@@ -43,6 +52,7 @@ type AssetsState = {
 
 	// Actions
 	setRootId: (rootId: number | null) => Promise<void>;
+	setPinnedSourceId: (id: number | null) => Promise<void>;
 	toggleFormat: (format: string) => Promise<void>;
 	clearFormats: () => Promise<void>;
 	toggleTagFilter: (tagId: number) => Promise<void>;
@@ -63,6 +73,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 	rootId: null,
 	formats: [],
 	tagIds: [],
+	pinnedSourceId: null,
 	pathSearch: "",
 	sizeMin: null,
 	sizeMax: null,
@@ -86,6 +97,11 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 
 	setRootId: async (rootId) => {
 		set({ rootId, page: 0 });
+		await get().refresh();
+	},
+
+	setPinnedSourceId: async (id) => {
+		set({ pinnedSourceId: id, page: 0 });
 		await get().refresh();
 	},
 
@@ -169,6 +185,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 	},
 
 	refresh: async () => {
+		const myToken = ++refreshToken;
 		const s = get();
 		set({ loading: true, error: null });
 		try {
@@ -186,10 +203,12 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 					mtime_from: s.mtimeFrom,
 					mtime_to: s.mtimeTo,
 					tag_ids: s.tagIds,
+					pinned_source_id: s.pinnedSourceId,
 				}),
 				api.listAssetFormats(s.rootId),
 				api.listTags(),
 			]);
+			if (myToken !== refreshToken) return; // superseded by a later refresh
 			set({
 				assets: page.assets,
 				total: page.total,
@@ -198,6 +217,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 				loading: false,
 			});
 		} catch (e) {
+			if (myToken !== refreshToken) return;
+			console.error("[assetsStore.refresh] failed", e);
 			set({ error: String(e), loading: false });
 		}
 	},

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect } from "react";
 import { motion } from "motion/react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { HiFolderPlus } from "react-icons/hi2";
 import { AssetGrid } from "@/components/AssetGrid";
 import { AssetList } from "@/components/AssetList";
@@ -23,18 +23,28 @@ export function LibraryPage() {
 		sortDir,
 		setPage,
 		setSort,
-		refresh,
+		setPinnedSourceId,
 	} = useAssetsStore();
 	const { roots, refresh: refreshRoots, loading: rootsLoading } = useLibraryStore();
 	const navigate = useNavigate();
+	const params = useParams<{ id?: string }>();
 
 	useEffect(() => {
 		void refreshRoots();
 	}, [refreshRoots]);
 
+	// Single source of truth for route-derived filters: the LibraryPage reads
+	// the URL params it was mounted at and applies the corresponding store
+	// filter. At `/`, `params.id` is undefined → null → no filter ("All
+	// Sources"). At `/sources/:id`, the route's :id resolves the pinned-source
+	// filter. Same component handles both routes, so navigation between them
+	// doesn't remount and the StrictMode setup/cleanup dance can't introduce
+	// the spurious "clear filter" refresh that the earlier SourcePage wrapper
+	// hit (which left the library briefly filtered then empty).
 	useEffect(() => {
-		void refresh();
-	}, [refresh]);
+		const n = params.id ? Number(params.id) : null;
+		void setPinnedSourceId(Number.isFinite(n) ? n : null);
+	}, [params.id, setPinnedSourceId]);
 
 	const noRoots = !rootsLoading && roots.length === 0;
 
