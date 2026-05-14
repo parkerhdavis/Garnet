@@ -89,6 +89,10 @@ pub struct AssetQuery {
 	pub mtime_from: Option<i64>,
 	#[serde(default)]
 	pub mtime_to: Option<i64>,
+	/// Empty / absent → no tag filter. Otherwise, asset must be tagged with
+	/// **all** listed tag ids (AND semantics).
+	#[serde(default)]
+	pub tag_ids: Vec<i64>,
 }
 
 fn default_limit() -> i64 {
@@ -161,6 +165,26 @@ fn where_clause(q: &AssetQuery) -> (String, Vec<Box<dyn ToSql>>) {
 		sql.push_str(" AND a.mtime <= ?");
 		params.push(Box::new(to));
 	}
+
+	// Tag filter — AND across tags (asset must carry every listed tag). Done
+	// via `NOT EXISTS (... tag_id NOT IN (..) ...)` is fragile under
+	// duplicates; cleanest is a HAVING clause counting matched tag rows.
+	if !q.tag_ids.is_empty() {
+		let placeholders = vec!["?"; q.tag_ids.len()].join(",");
+		sql.push_str(&format!(
+			" AND a.id IN (
+				SELECT asset_id FROM asset_tags
+				WHERE tag_id IN ({placeholders})
+				GROUP BY asset_id
+				HAVING COUNT(DISTINCT tag_id) = ?
+			)"
+		));
+		for tid in &q.tag_ids {
+			params.push(Box::new(*tid));
+		}
+		params.push(Box::new(q.tag_ids.len() as i64));
+	}
+
 	(sql, params)
 }
 
@@ -255,6 +279,29 @@ pub fn list_asset_formats(
 	list_asset_formats_impl(&conn, root_id).map_err(stringify)
 }
 
+#[tauri::command]
+pub fn get_asset(state: State<AppState>, id: i64) -> Result<Asset, String> {
+	let conn = state.db.lock().map_err(stringify)?;
+	conn.query_row(
+		"SELECT a.id, a.root_id, r.path, a.relative_path, a.size, a.mtime, a.format
+		 FROM assets a JOIN library_roots r ON r.id = a.root_id
+		 WHERE a.id = ?1",
+		[id],
+		|r| {
+			Ok(Asset {
+				id: r.get(0)?,
+				root_id: r.get(1)?,
+				root_path: r.get(2)?,
+				relative_path: r.get(3)?,
+				size: r.get(4)?,
+				mtime: r.get(5)?,
+				format: r.get(6)?,
+			})
+		},
+	)
+	.map_err(stringify)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -305,7 +352,55 @@ mod tests {
 			size_max: None,
 			mtime_from: None,
 			mtime_to: None,
+			tag_ids: Vec::new(),
 		}
+	}
+
+	fn fresh_db_with_tags() -> Connection {
+		let conn = fresh_db();
+		conn.execute_batch(
+			"
+			CREATE TABLE tags (
+				id        INTEGER PRIMARY KEY,
+				name      TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+				parent_id INTEGER,
+				created_at INTEGER NOT NULL
+			);
+			CREATE TABLE asset_tags (
+				asset_id INTEGER NOT NULL,
+				tag_id   INTEGER NOT NULL,
+				PRIMARY KEY (asset_id, tag_id)
+			);
+			INSERT INTO tags (id, name, parent_id, created_at) VALUES
+				(1, 'red',    NULL, 0),
+				(2, 'square', NULL, 0);
+			INSERT INTO asset_tags VALUES
+				(1, 1), (1, 2), -- a.png: red + square
+				(2, 1),         -- b.jpg: red
+				(3, 2);         -- sub/c.png: square
+			",
+		)
+		.unwrap();
+		conn
+	}
+
+	#[test]
+	fn tag_filter_single() {
+		let conn = fresh_db_with_tags();
+		let mut q = default_query();
+		q.tag_ids = vec![1]; // red
+		let page = list_assets_impl(&conn, &q).unwrap();
+		assert_eq!(page.total, 2);
+	}
+
+	#[test]
+	fn tag_filter_and() {
+		let conn = fresh_db_with_tags();
+		let mut q = default_query();
+		q.tag_ids = vec![1, 2]; // red AND square → only asset id 1
+		let page = list_assets_impl(&conn, &q).unwrap();
+		assert_eq!(page.total, 1);
+		assert_eq!(page.assets[0].id, 1);
 	}
 
 	#[test]

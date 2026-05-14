@@ -34,15 +34,19 @@ export function FilterBar() {
 	const {
 		rootId,
 		formats,
+		tagIds,
 		pathSearch,
 		sizeMin,
 		sizeMax,
 		mtimeFrom,
 		formatCounts,
+		tagCounts,
 		viewMode,
 		setRootId,
 		toggleFormat,
 		clearFormats,
+		toggleTagFilter,
+		clearTagFilter,
 		setPathSearch,
 		setSizeMin,
 		setSizeMax,
@@ -71,6 +75,7 @@ export function FilterBar() {
 
 	const anyFilterActive =
 		formats.length > 0 ||
+		tagIds.length > 0 ||
 		pathSearch !== "" ||
 		sizeMin !== null ||
 		sizeMax !== null ||
@@ -206,6 +211,34 @@ export function FilterBar() {
 							type="button"
 							className="badge badge-sm badge-outline ml-2"
 							onClick={() => clearFormats()}
+						>
+							Clear ✕
+						</button>
+					)}
+				</div>
+			)}
+
+			{tagCounts.length > 0 && (
+				<div className="flex flex-wrap gap-1.5 items-center">
+					<span className="text-xs text-base-content/60 mr-1">Tags:</span>
+					{tagCounts.slice(0, 20).map((t) => {
+						const active = tagIds.includes(t.id);
+						return (
+							<button
+								key={t.id}
+								type="button"
+								className={`badge badge-sm cursor-pointer ${active ? "badge-accent" : "badge-ghost"}`}
+								onClick={() => toggleTagFilter(t.id)}
+							>
+								{t.name} · {t.count.toLocaleString()}
+							</button>
+						);
+					})}
+					{tagIds.length > 0 && (
+						<button
+							type="button"
+							className="badge badge-sm badge-outline ml-2"
+							onClick={() => clearTagFilter()}
 						>
 							Clear ✕
 						</button>

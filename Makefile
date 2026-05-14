@@ -122,7 +122,7 @@ setup:
 	fi
 ifeq ($(DETECTED_OS),linux)
 	@echo ""
-	@echo "Checking Linux system dependencies for Tauri..."
+	@echo "Checking Linux system dependencies for Tauri (build)..."
 	@MISSING=""; \
 	for p in libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev; do \
 		if ! dpkg-query -W -f='$${Status}' "$$p" 2>/dev/null | grep -q "install ok installed"; then \
@@ -130,13 +130,43 @@ ifeq ($(DETECTED_OS),linux)
 		fi; \
 	done; \
 	if [ -n "$$MISSING" ]; then \
-		echo "Missing system packages:$$MISSING"; \
+		echo "Missing build packages:$$MISSING"; \
 		echo ""; \
 		echo "Install with: sudo apt install$$MISSING"; \
 		echo ""; \
 		echo "Continuing with JS install anyway — Tauri build will fail until these land."; \
 	else \
-		echo "All required system packages present."; \
+		echo "All required build packages present."; \
+	fi
+	@echo ""
+	@echo "Checking Linux GStreamer codecs (webview media playback)..."
+	@MISSING_MEDIA=""; \
+	for p in gstreamer1.0-libav gstreamer1.0-plugins-good gstreamer1.0-plugins-bad; do \
+		if ! dpkg-query -W -f='$${Status}' "$$p" 2>/dev/null | grep -q "install ok installed"; then \
+			MISSING_MEDIA="$$MISSING_MEDIA $$p"; \
+		fi; \
+	done; \
+	if [ -n "$$MISSING_MEDIA" ]; then \
+		echo "Missing media codecs:$$MISSING_MEDIA"; \
+		echo ""; \
+		echo "Install with: sudo apt install$$MISSING_MEDIA"; \
+		echo ""; \
+		echo "Garnet will build and run without these, but video/audio playback in"; \
+		echo "the asset detail view (MP4/H.264, MP3, AAC, etc.) will fail silently"; \
+		echo "until they land."; \
+	else \
+		echo "All recommended media codecs present."; \
+	fi
+	@echo ""
+	@echo "Checking ffmpeg (video thumbnail extraction)..."
+	@if ! command -v ffmpeg >/dev/null 2>&1; then \
+		echo "ffmpeg not on PATH."; \
+		echo ""; \
+		echo "Install with: sudo apt install ffmpeg"; \
+		echo ""; \
+		echo "Without it, video tiles in the library view fall back to the film icon."; \
+	else \
+		echo "ffmpeg: $$(ffmpeg -version | head -1)"; \
 	fi
 else ifeq ($(DETECTED_OS),macos)
 	@echo ""

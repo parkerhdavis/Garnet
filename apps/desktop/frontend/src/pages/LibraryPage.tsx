@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { HiFolderPlus } from "react-icons/hi2";
 import { AssetGrid } from "@/components/AssetGrid";
 import { AssetList } from "@/components/AssetList";
 import { FilterBar } from "@/components/FilterBar";
 import { Pagination } from "@/components/Pagination";
+import type { Asset } from "@/lib/tauri";
 import { useAssetsStore, PAGE_SIZE } from "@/stores/assetsStore";
 import { useLibraryStore } from "@/stores/libraryStore";
 
@@ -24,6 +25,7 @@ export function LibraryPage() {
 		refresh,
 	} = useAssetsStore();
 	const { roots, refresh: refreshRoots, loading: rootsLoading } = useLibraryStore();
+	const navigate = useNavigate();
 
 	useEffect(() => {
 		void refreshRoots();
@@ -35,8 +37,17 @@ export function LibraryPage() {
 
 	const noRoots = !rootsLoading && roots.length === 0;
 
+	function openAsset(asset: Asset) {
+		navigate(`/asset/${asset.id}`);
+	}
+
 	return (
-		<div className="flex-1 flex flex-col min-w-0">
+		// `min-h-0` is what allows the inner `overflow-auto` pane to actually
+		// scroll. Without it, this div's implicit `min-height: auto` (which
+		// CSS gives every flex item) forces it as tall as its content — the
+		// asset grid stretches it past the viewport, the sidebar/footer get
+		// clipped, and nothing scrolls. `flex-1` alone isn't enough.
+		<div className="flex-1 min-h-0 flex flex-col min-w-0">
 			<FilterBar />
 
 			{error && (
@@ -53,13 +64,14 @@ export function LibraryPage() {
 				) : assets.length === 0 ? (
 					<EmptyNoMatches />
 				) : viewMode === "grid" ? (
-					<AssetGrid assets={assets} />
+					<AssetGrid assets={assets} onOpen={openAsset} />
 				) : (
 					<AssetList
 						assets={assets}
 						sortBy={sortBy}
 						sortDir={sortDir}
 						onSort={setSort}
+						onOpen={openAsset}
 					/>
 				)}
 			</div>

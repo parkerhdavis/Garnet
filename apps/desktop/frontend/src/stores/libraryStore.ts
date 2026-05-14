@@ -16,7 +16,11 @@ type LibraryState = {
 export const useLibraryStore = create<LibraryState>((set, get) => ({
 	roots: [],
 	lastScan: null,
-	loading: false,
+	// Start as `true` — the empty roots list combined with `loading: false`
+	// otherwise reads as "0 roots" on the very first render, before any
+	// `refresh()` has had a chance to run, and the LibraryPage briefly shows
+	// the "No library roots yet" empty state even when roots are configured.
+	loading: true,
 	error: null,
 
 	refresh: async () => {

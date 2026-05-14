@@ -60,7 +60,7 @@ fn apply_migrations(conn: &Connection) -> Result<()> {
 
 /// Ordered list of migrations. Each entry is `(version, sql)`. Versions must be
 /// strictly increasing; never edit or remove an entry once it has shipped.
-static MIGRATIONS: &[(i64, &str)] = &[
+pub static MIGRATIONS: &[(i64, &str)] = &[
 	(
 		1,
 		"
@@ -84,4 +84,108 @@ static MIGRATIONS: &[(i64, &str)] = &[
 		CREATE INDEX assets_by_format ON assets(format);
 		",
 	),
+	(
+		2,
+		"
+		-- Content hashing for rename/deletion detection. Populated by the indexer
+		-- lazily: a row's content_hash is filled when (size, mtime) changes or
+		-- when the row is newly inserted. Nullable so existing rows don't all
+		-- need to be re-hashed up front.
+		ALTER TABLE assets ADD COLUMN content_hash TEXT;
+		CREATE INDEX assets_by_hash ON assets(content_hash) WHERE content_hash IS NOT NULL;
+
+		-- Flexible per-asset key/value store. Format-specific metadata (image
+		-- dimensions, EXIF date/camera, ID3 title, etc.) lives here so adding a
+		-- new format extractor doesn't require schema changes. Repeat keys
+		-- allowed for multi-valued metadata (e.g., multiple genre tags).
+		CREATE TABLE asset_metadata (
+			id       INTEGER PRIMARY KEY,
+			asset_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+			key      TEXT    NOT NULL,
+			value    TEXT    NOT NULL
+		);
+		CREATE INDEX asset_metadata_by_asset ON asset_metadata(asset_id);
+		CREATE INDEX asset_metadata_by_key   ON asset_metadata(key);
+
+		-- Tags: flat for V1 (parent_id reserved for a future hierarchy migration).
+		CREATE TABLE tags (
+			id        INTEGER PRIMARY KEY,
+			name      TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+			parent_id INTEGER REFERENCES tags(id) ON DELETE SET NULL,
+			created_at INTEGER NOT NULL
+		);
+
+		CREATE TABLE asset_tags (
+			asset_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+			tag_id   INTEGER NOT NULL REFERENCES tags(id)   ON DELETE CASCADE,
+			PRIMARY KEY (asset_id, tag_id)
+		);
+		CREATE INDEX asset_tags_by_tag ON asset_tags(tag_id);
+
+		-- Collections: manual for V1 (smart collections will store a query JSON
+		-- in `query_json` when added in a future migration; left null for now).
+		CREATE TABLE collections (
+			id         INTEGER PRIMARY KEY,
+			name       TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+			kind       TEXT    NOT NULL DEFAULT 'manual',
+			query_json TEXT,
+			created_at INTEGER NOT NULL
+		);
+
+		CREATE TABLE collection_assets (
+			collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+			asset_id      INTEGER NOT NULL REFERENCES assets(id)      ON DELETE CASCADE,
+			added_at      INTEGER NOT NULL,
+			PRIMARY KEY (collection_id, asset_id)
+		);
+		CREATE INDEX collection_assets_by_asset ON collection_assets(asset_id);
+		",
+	),
 ];
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn migrations_apply_idempotently() {
+		let conn = Connection::open_in_memory().unwrap();
+		apply_migrations(&conn).unwrap();
+		// Re-applying is a no-op.
+		apply_migrations(&conn).unwrap();
+		let count: i64 = conn
+			.query_row("SELECT COUNT(*) FROM migrations", [], |r| r.get(0))
+			.unwrap();
+		assert_eq!(count as usize, MIGRATIONS.len());
+	}
+
+	#[test]
+	fn v2_tables_exist() {
+		let conn = Connection::open_in_memory().unwrap();
+		apply_migrations(&conn).unwrap();
+		for table in [
+			"library_roots",
+			"assets",
+			"asset_metadata",
+			"tags",
+			"asset_tags",
+			"collections",
+			"collection_assets",
+		] {
+			conn.query_row(
+				"SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?1",
+				[table],
+				|r| r.get::<_, i64>(0),
+			)
+			.unwrap_or_else(|_| panic!("missing table {table}"));
+		}
+		// content_hash column exists on assets
+		let mut stmt = conn.prepare("PRAGMA table_info(assets)").unwrap();
+		let cols: Vec<String> = stmt
+			.query_map([], |r| r.get::<_, String>(1))
+			.unwrap()
+			.collect::<Result<_, _>>()
+			.unwrap();
+		assert!(cols.contains(&"content_hash".to_string()));
+	}
+}

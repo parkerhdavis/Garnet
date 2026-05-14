@@ -25,6 +25,15 @@
 		],
 		"security": {
 			"csp": null,
+			"assetProtocol": {
+				"enable": true,
+				"scope": [
+					"$DOWNLOAD/**",
+					"$DOCUMENT/**",
+					"$DESKTOP/**",
+					"$HOME/**"
+				]
+			},
 			"capabilities": [
 				{
 					"identifier": "main-capability",
@@ -51,7 +60,15 @@
 						},
 						"core:path:allow-resolve-directory",
 						"core:event:allow-listen",
-						"opener:allow-open-url"
+						"opener:allow-open-url",
+						{
+							"identifier": "opener:allow-open-path",
+							"allow": [{ "path": "**" }]
+						},
+						{
+							"identifier": "opener:allow-reveal-item-in-dir",
+							"allow": [{ "path": "**" }]
+						}
 					]
 				}
 			]

@@ -9,7 +9,12 @@ const NAV_ITEMS = [
 
 export function Layout() {
 	return (
-		<div className="min-h-screen flex">
+		// `h-screen` (exactly viewport-tall, not min-h-screen) anchors the
+		// whole frame so the sidebar / filter bar / pagination stay put and
+		// only the inner overflow-auto pane scrolls. `overflow-hidden` on the
+		// main pane prevents content from growing past the viewport and lets
+		// its child overflow-auto take over the scroll.
+		<div className="h-screen flex overflow-hidden">
 			<aside className="w-56 shrink-0 bg-base-100 border-r border-base-300 flex flex-col">
 				<div className="px-4 py-4 border-b border-base-300">
 					<div className="text-lg font-semibold tracking-tight">Garnet</div>
@@ -35,7 +40,7 @@ export function Layout() {
 					Phase 1 — base toolkit
 				</div>
 			</aside>
-			<div className="flex-1 min-w-0 flex flex-col bg-base-200">
+			<div className="flex-1 min-w-0 flex flex-col bg-base-200 overflow-hidden">
 				<Outlet />
 			</div>
 		</div>

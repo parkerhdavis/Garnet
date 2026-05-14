@@ -4,17 +4,24 @@
 
 mod assets;
 mod db;
+mod indexer;
 mod library;
+mod media_server;
 mod modules;
 mod settings;
+mod tags;
 mod thumbnails;
 
-use assets::{list_asset_formats, list_assets};
+use assets::{get_asset, list_asset_formats, list_assets};
 use library::{
 	list_library_roots, register_library_root, remove_library_root, scan_library_root,
 };
 use modules::list_modules;
 use settings::{load_settings, save_settings};
+use tags::{
+	create_tag, delete_tag, list_asset_metadata, list_asset_tags, list_tags, tag_asset,
+	untag_asset,
+};
 use thumbnails::get_thumbnail;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -22,6 +29,12 @@ use tracing_subscriber::EnvFilter;
 
 pub struct AppState {
 	pub db: Mutex<rusqlite::Connection>,
+	pub media_port: u16,
+}
+
+#[tauri::command]
+fn get_media_port(state: tauri::State<AppState>) -> u16 {
+	state.media_port
 }
 
 fn init_logging() {
@@ -59,11 +72,20 @@ fn main() {
 		}
 	};
 
+	let media_port = match media_server::spawn() {
+		Ok(p) => p,
+		Err(e) => {
+			tracing::error!("Failed to start media server: {e}");
+			eprintln!("Failed to start media server: {e}");
+			std::process::exit(1);
+		}
+	};
+
 	tauri::Builder::default()
 		.plugin(tauri_plugin_dialog::init())
 		.plugin(tauri_plugin_fs::init())
 		.plugin(tauri_plugin_opener::init())
-		.manage(AppState { db: Mutex::new(db) })
+		.manage(AppState { db: Mutex::new(db), media_port })
 		.setup(|app| {
 			if let Ok(settings) = settings::load_settings() {
 				if let (Some(w), Some(h)) = (settings.window_width, settings.window_height) {
@@ -98,9 +120,18 @@ fn main() {
 			remove_library_root,
 			scan_library_root,
 			list_assets,
+			get_asset,
 			list_asset_formats,
+			list_asset_metadata,
 			get_thumbnail,
+			list_tags,
+			create_tag,
+			delete_tag,
+			tag_asset,
+			untag_asset,
+			list_asset_tags,
 			list_modules,
+			get_media_port,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
