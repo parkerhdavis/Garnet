@@ -1,107 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Component, type ReactNode, useEffect, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { Component, type ReactNode } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { AssetDetailPage } from "@/pages/AssetDetailPage";
 import { LibraryPage } from "@/pages/LibraryPage";
 import { SettingsPage } from "@/pages/SettingsPage";
-import { useAssetsStore } from "@/stores/assetsStore";
-import { useLibraryStore } from "@/stores/libraryStore";
-
-const SPLASH_MIN_MS = 1800; // floor so the wordmark is actually readable
 
 export default function App() {
 	return (
 		<ErrorBoundary>
-			<SplashGate>
-				<HashRouter>
-					<Routes>
-						<Route element={<Layout />}>
-							<Route index element={<LibraryPage />} />
-							<Route path="asset/:id" element={<AssetDetailPage />} />
-							<Route path="settings" element={<SettingsPage />} />
-							<Route path="*" element={<Navigate to="/" replace />} />
-						</Route>
-					</Routes>
-				</HashRouter>
-			</SplashGate>
+			<HashRouter>
+				<Routes>
+					<Route element={<Layout />}>
+						<Route index element={<LibraryPage />} />
+						<Route path="asset/:id" element={<AssetDetailPage />} />
+						<Route path="settings" element={<SettingsPage />} />
+						<Route path="*" element={<Navigate to="/" replace />} />
+					</Route>
+				</Routes>
+			</HashRouter>
 		</ErrorBoundary>
-	);
-}
-
-/// Splash gate. The library content is always mounted inside the same
-/// `motion.div` wrapper from the first frame — its remount across phases was
-/// what caused the earlier "library pops in" glitch. The splash itself is
-/// rendered above via AnimatePresence so it can run a real exit animation
-/// (scale + fade) instead of disappearing in one frame.
-///
-/// Timing: the queries kick off on mount; once both stores report not-loading
-/// AND the elapsed time has cleared SPLASH_MIN_MS, the splash unmounts. Motion
-/// handles its exit; AnimatePresence keeps it in the DOM for the animation's
-/// duration.
-function SplashGate({ children }: { children: ReactNode }) {
-	const refreshLibrary = useLibraryStore((s) => s.refresh);
-	const refreshAssets = useAssetsStore((s) => s.refresh);
-	const libraryLoading = useLibraryStore((s) => s.loading);
-	const assetsLoading = useAssetsStore((s) => s.loading);
-
-	const [splashGone, setSplashGone] = useState(false);
-	const [mountedAt] = useState(() => performance.now());
-
-	useEffect(() => {
-		void Promise.all([refreshLibrary(), refreshAssets()]);
-	}, [refreshLibrary, refreshAssets]);
-
-	useEffect(() => {
-		if (libraryLoading || assetsLoading) return;
-		const elapsed = performance.now() - mountedAt;
-		const waitMore = Math.max(0, SPLASH_MIN_MS - elapsed);
-		const t = setTimeout(() => setSplashGone(true), waitMore);
-		return () => clearTimeout(t);
-	}, [libraryLoading, assetsLoading, mountedAt]);
-
-	// No wrapper around `children` — every wrapper I tried (motion.div with
-	// h-full, plain div with h-full + opacity transition) broke Layout's
-	// h-full flex chain in some subtle way and the LibraryPage's overflow-auto
-	// pane either ran past the viewport or stopped scrolling. The splash is a
-	// fixed-position overlay above everything, so its presence never enters
-	// the layout. The children are visible from the first frame but hidden by
-	// the opaque splash; once the splash fades, the library is revealed.
-	return (
-		<>
-			{children}
-
-			<AnimatePresence>
-				{!splashGone && (
-					<motion.div
-						key="splash"
-						initial={{ opacity: 1 }}
-						animate={{ opacity: 1 }}
-						exit={{ opacity: 0, scale: 1.06 }}
-						transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
-						className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-base-200 pointer-events-none"
-					>
-						<motion.img
-							src="/garnet-splash-dark.png"
-							alt="Garnet"
-							className="size-36"
-							initial={{ opacity: 0, scale: 0.72 }}
-							animate={{ opacity: 1, scale: 1 }}
-							transition={{ duration: 0.8, ease: "easeOut" }}
-						/>
-						<motion.span
-							className="text-4xl font-bold tracking-tight"
-							initial={{ opacity: 0, y: 12 }}
-							animate={{ opacity: 1, y: 0 }}
-							transition={{ duration: 0.6, delay: 0.55, ease: "easeOut" }}
-						>
-							Garnet
-						</motion.span>
-					</motion.div>
-				)}
-			</AnimatePresence>
-		</>
 	);
 }
 
