@@ -165,10 +165,14 @@ function useUndoHotkeys() {
 			}
 			const mod = e.ctrlKey || e.metaKey;
 			if (!mod) return;
-			if (e.key === "z" && !e.shiftKey) {
+			// Lowercase `e.key` for the comparison — when Shift is held,
+			// browsers report the shifted character (`Z`, not `z`), so a
+			// case-sensitive compare would miss Ctrl+Shift+Z.
+			const key = e.key.toLowerCase();
+			if (key === "z" && !e.shiftKey) {
 				e.preventDefault();
 				void useUndoStore.getState().undo();
-			} else if ((e.key === "z" && e.shiftKey) || e.key === "y") {
+			} else if ((key === "z" && e.shiftKey) || key === "y") {
 				e.preventDefault();
 				void useUndoStore.getState().redo();
 			}

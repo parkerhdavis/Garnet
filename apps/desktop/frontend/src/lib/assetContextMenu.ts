@@ -24,6 +24,14 @@ function refresh() {
 	void useAssetsStore.getState().refresh();
 }
 
+/// Surface an error to the user via the LibraryPage's inline alert banner.
+/// Webkit2gtk silently drops `window.alert()` in Tauri windows on Linux, so
+/// rolling our own visible channel is the only reliable feedback path.
+function showError(message: string) {
+	useAssetsStore.setState({ error: message });
+	console.error(message);
+}
+
 /// Returns the menu items for right-clicking an asset. The handlers are
 /// imperative: they open dialogs, run the IPC call, and push the inverse
 /// onto the undo stack on success.
@@ -79,8 +87,7 @@ async function renameAction(asset: Asset) {
 	try {
 		await api.renameAsset(asset.id, newName);
 	} catch (err) {
-		console.error("Rename failed:", err);
-		alert(`Rename failed: ${String(err)}`);
+		showError(`Rename failed: ${String(err)}`);
 		return;
 	}
 	refresh();
@@ -102,12 +109,19 @@ async function moveAction(asset: Asset) {
 		/\/$/,
 		"",
 	);
-	const selected = await openDialog({
-		directory: true,
-		multiple: false,
-		defaultPath: defaultDir || asset.root_path,
-		title: `Move “${basename(asset.relative_path)}” to…`,
-	});
+	let selected: string | string[] | null;
+	try {
+		selected = await openDialog({
+			directory: true,
+			multiple: false,
+			defaultPath: defaultDir || asset.root_path,
+			title: `Move “${basename(asset.relative_path)}” to…`,
+		});
+	} catch (err) {
+		showError(`Folder picker failed: ${String(err)}`);
+		return;
+	}
+	console.debug("moveAction: folder picker returned", selected);
 	if (typeof selected !== "string") return;
 
 	const filename = basename(asset.relative_path);
@@ -119,8 +133,7 @@ async function moveAction(asset: Asset) {
 	try {
 		await api.moveAsset(asset.id, selected);
 	} catch (err) {
-		console.error("Move failed:", err);
-		alert(`Move failed: ${String(err)}`);
+		showError(`Move failed: ${String(err)}`);
 		return;
 	}
 	refresh();
@@ -151,8 +164,7 @@ async function trashAction(asset: Asset) {
 	try {
 		result = await api.trashAsset(asset.id);
 	} catch (err) {
-		console.error("Trash failed:", err);
-		alert(`Trash failed: ${String(err)}`);
+		showError(`Trash failed: ${String(err)}`);
 		return;
 	}
 	refresh();

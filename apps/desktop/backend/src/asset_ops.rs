@@ -94,6 +94,7 @@ pub fn rename_asset(
 		return Err("Invalid name".into());
 	}
 
+	tracing::info!("rename_asset request: asset_id={} new_name={:?}", asset_id, new_name);
 	let conn = state.db.lock().map_err(stringify)?;
 	let (root_id, root_path, relative_path) = lookup_asset(&conn, asset_id).map_err(stringify)?;
 	let old_abs = join_abs(&root_path, &relative_path);
@@ -145,6 +146,7 @@ pub fn move_asset(
 	asset_id: i64,
 	dest_dir: String,
 ) -> Result<AssetOpResult, String> {
+	tracing::info!("move_asset request: asset_id={} dest_dir={:?}", asset_id, dest_dir);
 	let conn = state.db.lock().map_err(stringify)?;
 	let (root_id, root_path, relative_path) = lookup_asset(&conn, asset_id).map_err(stringify)?;
 	let old_abs = join_abs(&root_path, &relative_path);
@@ -226,6 +228,7 @@ pub fn trash_asset(
 	state: State<AppState>,
 	asset_id: i64,
 ) -> Result<TrashResult, String> {
+	tracing::info!("trash_asset request: asset_id={}", asset_id);
 	let conn = state.db.lock().map_err(stringify)?;
 	let (_root_id, root_path, relative_path) =
 		lookup_asset(&conn, asset_id).map_err(stringify)?;
