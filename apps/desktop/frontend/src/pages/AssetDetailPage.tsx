@@ -31,6 +31,13 @@ export function AssetDetailPage() {
 	const [mediaError, setMediaError] = useState<string | null>(null);
 	const [openerError, setOpenerError] = useState<string | null>(null);
 	const [diagnosticOpen, setDiagnosticOpen] = useState(false);
+	const [livePath, setLivePath] = useState<string>("");
+
+	const ext = asset?.format?.toLowerCase();
+	const absPath = asset ? absPathFor(asset) : "";
+	const isVideo = !!ext && VIDEO_EXTS.has(ext);
+	const isAudio = !!ext && AUDIO_EXTS.has(ext);
+	const isImage = !!ext && RASTER_EXTS.has(ext);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -59,6 +66,29 @@ export function AssetDetailPage() {
 		};
 	}, [idParam]);
 
+	// Image preview goes through the asset:// protocol (webkit serves it
+	// happily). Video/audio go through the localhost media server because
+	// webkit's media element rejects asset:// — see media_server.rs. All hooks
+	// must run on every render before the early-return branches below, so this
+	// effect lives up here with the other state.
+	useEffect(() => {
+		if (!asset) {
+			setLivePath("");
+			return;
+		}
+		let cancelled = false;
+		if (isVideo || isAudio) {
+			void mediaUrl(absPath).then((u) => {
+				if (!cancelled) setLivePath(u);
+			});
+		} else {
+			setLivePath(convertFileSrc(absPath));
+		}
+		return () => {
+			cancelled = true;
+		};
+	}, [asset, absPath, isVideo, isAudio]);
+
 	if (loading) {
 		return (
 			<div className="flex-1 p-12 text-center text-base-content/60">Loading…</div>
@@ -79,31 +109,6 @@ export function AssetDetailPage() {
 			</div>
 		);
 	}
-
-	const ext = asset.format?.toLowerCase();
-	const absPath = absPathFor(asset);
-
-	const isVideo = !!ext && VIDEO_EXTS.has(ext);
-	const isAudio = !!ext && AUDIO_EXTS.has(ext);
-	const isImage = !!ext && RASTER_EXTS.has(ext);
-
-	// Image preview goes through the asset:// protocol (webkit serves it
-	// happily). Video/audio go through the localhost media server because
-	// webkit's media element rejects asset:// — see media_server.rs.
-	const [livePath, setLivePath] = useState<string>("");
-	useEffect(() => {
-		let cancelled = false;
-		if (isVideo || isAudio) {
-			void mediaUrl(absPath).then((u) => {
-				if (!cancelled) setLivePath(u);
-			});
-		} else {
-			setLivePath(convertFileSrc(absPath));
-		}
-		return () => {
-			cancelled = true;
-		};
-	}, [absPath, isVideo, isAudio]);
 
 	const handleOpenExternally = async () => {
 		setOpenerError(null);
