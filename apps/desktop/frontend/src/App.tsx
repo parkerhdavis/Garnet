@@ -8,42 +8,41 @@ import { SettingsPage } from "@/pages/SettingsPage";
 import { useAssetsStore } from "@/stores/assetsStore";
 import { useLibraryStore } from "@/stores/libraryStore";
 
-// Min dwell before fade-out begins. The fade itself is the difference between
-// these two — keep them in sync with the `transition-opacity duration-*`
-// utility on the splash wrapper below.
+// Min dwell before fade-out begins. The fade itself runs for SPLASH_FADE_MS
+// (must match the `duration-[Nms]` utility on the splash overlay below).
 const SPLASH_MIN_MS = 1800;
-const SPLASH_FADE_MS = 400;
+const SPLASH_FADE_MS = 500;
 
 export default function App() {
 	const { loaded, splashGone } = useSplashTimer();
 
 	return (
 		<ErrorBoundary>
-			{!splashGone ? (
-				<Splash fadeOut={loaded} />
-			) : (
-				<HashRouter>
-					<Routes>
-						<Route element={<Layout />}>
-							<Route index element={<LibraryPage />} />
-							<Route path="asset/:id" element={<AssetDetailPage />} />
-							<Route path="settings" element={<SettingsPage />} />
-							<Route path="*" element={<Navigate to="/" replace />} />
-						</Route>
-					</Routes>
-				</HashRouter>
-			)}
+			<HashRouter>
+				<Routes>
+					<Route element={<Layout />}>
+						<Route index element={<LibraryPage />} />
+						<Route path="asset/:id" element={<AssetDetailPage />} />
+						<Route path="settings" element={<SettingsPage />} />
+						<Route path="*" element={<Navigate to="/" replace />} />
+					</Route>
+				</Routes>
+			</HashRouter>
+
+			{!splashGone && <Splash fadeOut={loaded} />}
 		</ErrorBoundary>
 	);
 }
 
-/// Pre-warms the initial library + assets queries on mount, then arms two
-/// timers once both queries land *and* SPLASH_MIN_MS has elapsed: the first
-/// flips `loaded` (which triggers the opacity transition on the splash), the
-/// second flips `splashGone` (which conditionally swaps the splash out for
-/// the router). The Packi/Lily pattern: conditional swap, not overlay — when
-/// `splashGone` flips, the splash unmounts cleanly and the router mounts
-/// fresh, with no wrapper between them that could disturb the layout chain.
+/// Pre-warms the initial library + assets queries. Once both report
+/// loading=false AND `SPLASH_MIN_MS` has elapsed, `loaded` flips (starts the
+/// fade); SPLASH_FADE_MS later `splashGone` flips (unmounts the splash).
+///
+/// The router is always rendered from the first frame — the splash overlays
+/// it with `fixed inset-0` and a high z-index, so when the splash fades its
+/// opacity transition reveals the (already-rendered, already-laid-out)
+/// library underneath. The min-h-0 fix on LibraryPage means the layout chain
+/// no longer depends on what wraps the router, so this works cleanly.
 function useSplashTimer() {
 	const refreshLibrary = useLibraryStore((s) => s.refresh);
 	const refreshAssets = useAssetsStore((s) => s.refresh);
@@ -57,11 +56,6 @@ function useSplashTimer() {
 		void Promise.all([refreshLibrary(), refreshAssets()]);
 	}, [refreshLibrary, refreshAssets]);
 
-	// Two effects rather than one combined timer block: the previous version
-	// scheduled both timers in a single effect whose dep array included
-	// `loaded`, so when `setLoaded(true)` fired, the cleanup ran and cleared
-	// the still-pending `splashGone` timer before it could trip. The splash
-	// then faded to invisible but never unmounted, leaving a blank screen.
 	useEffect(() => {
 		if (loaded) return;
 		if (libraryLoading || assetsLoading) return;
@@ -83,7 +77,7 @@ function useSplashTimer() {
 function Splash({ fadeOut }: { fadeOut: boolean }) {
 	return (
 		<div
-			className={`flex flex-col items-center justify-center min-h-screen gap-5 bg-base-200 transition-opacity duration-[400ms] ${
+			className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-base-200 pointer-events-none transition-opacity duration-[500ms] ease-out ${
 				fadeOut ? "opacity-0" : "opacity-100"
 			}`}
 		>
