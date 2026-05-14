@@ -16,6 +16,14 @@ export const PAGE_SIZE = 60;
 
 export type ViewMode = "grid" | "list";
 
+// Token for cancelling stale refresh() responses. Each refresh increments the
+// counter and remembers its own value; if the value at response time no
+// longer matches, the response is discarded. Without this, a slow earlier
+// refresh can land *after* a later one and overwrite the filtered results
+// with stale unfiltered ones — the bug we hit when SourcePage and
+// LibraryPage both kicked off refresh on mount.
+let refreshToken = 0;
+
 type AssetsState = {
 	// Query parameters
 	rootId: number | null;
@@ -177,6 +185,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 	},
 
 	refresh: async () => {
+		const myToken = ++refreshToken;
 		const s = get();
 		set({ loading: true, error: null });
 		try {
@@ -199,6 +208,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 				api.listAssetFormats(s.rootId),
 				api.listTags(),
 			]);
+			if (myToken !== refreshToken) return; // a later refresh has superseded this one
 			set({
 				assets: page.assets,
 				total: page.total,
@@ -207,6 +217,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 				loading: false,
 			});
 		} catch (e) {
+			if (myToken !== refreshToken) return;
 			set({ error: String(e), loading: false });
 		}
 	},
