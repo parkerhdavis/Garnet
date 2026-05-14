@@ -8,8 +8,8 @@ import { SettingsPage } from "@/pages/SettingsPage";
 import { useAssetsStore } from "@/stores/assetsStore";
 import { useLibraryStore } from "@/stores/libraryStore";
 
-const SPLASH_MIN_MS = 900; // floor so the splash doesn't pop in/out instantly
-const SPLASH_FADE_MS = 350; // length of the fade-out transition
+const SPLASH_MIN_MS = 1800; // floor — long enough to actually read the wordmark
+const SPLASH_FADE_MS = 700; // matches the splash-out keyframe duration
 
 export default function App() {
 	return (
@@ -65,20 +65,26 @@ function SplashGate({ children }: { children: ReactNode }) {
 
 	if (splashDone) return <>{children}</>;
 
+	// Crossfade phase: render the app underneath the splash so the user sees
+	// the library rise into view as the splash scales up and out. Without
+	// this both elements only swap; with it, the transition feels intentional.
 	return (
-		<div
-			className={`flex flex-col items-center justify-center min-h-screen gap-5 bg-base-200 transition-opacity duration-300 ${
-				fadeOut ? "opacity-0" : "opacity-100"
-			}`}
-		>
-			<img
-				src="/garnet-splash-dark.png"
-				alt="Garnet"
-				className="size-36 animate-splash-icon"
-			/>
-			<span className="text-4xl font-bold tracking-tight animate-fade-in-up">
-				Garnet
-			</span>
+		<div className="relative min-h-screen">
+			{fadeOut && <div className="absolute inset-0 animate-app-in">{children}</div>}
+			<div
+				className={`absolute inset-0 flex flex-col items-center justify-center gap-5 bg-base-200 ${
+					fadeOut ? "animate-splash-out pointer-events-none" : ""
+				}`}
+			>
+				<img
+					src="/garnet-splash-dark.png"
+					alt="Garnet"
+					className="size-36 animate-splash-icon"
+				/>
+				<span className="text-4xl font-bold tracking-tight animate-fade-in-up">
+					Garnet
+				</span>
+			</div>
 		</div>
 	);
 }

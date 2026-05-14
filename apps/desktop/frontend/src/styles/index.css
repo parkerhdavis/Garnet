@@ -94,6 +94,30 @@
 	animation: fade-in-up 0.6s ease-out 0.6s both;
 }
 
+/* ─── Splash → app crossfade ────────────────────────────────────────── */
+/* Splash element scales up slightly as it fades, giving a subtle
+ * "stepping back" feel. The app content layered underneath fades in with
+ * a small upward translate so it feels like it's rising into view rather
+ * than just appearing. */
+
+@keyframes splash-out {
+	0%   { opacity: 1; transform: scale(1); }
+	100% { opacity: 0; transform: scale(1.06); }
+}
+
+.animate-splash-out {
+	animation: splash-out 700ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes app-in {
+	0%   { opacity: 0; transform: translateY(8px); }
+	100% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-app-in {
+	animation: app-in 600ms cubic-bezier(0.16, 1, 0.3, 1) 100ms both;
+}
+
 /* ─── Scrollbar styling ─────────────────────────────────────────────── */
 
 ::-webkit-scrollbar {
