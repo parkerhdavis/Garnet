@@ -42,7 +42,12 @@ export function LibraryPage() {
 	}
 
 	return (
-		<div className="flex-1 flex flex-col min-w-0">
+		// `min-h-0` is what allows the inner `overflow-auto` pane to actually
+		// scroll. Without it, this div's implicit `min-height: auto` (which
+		// CSS gives every flex item) forces it as tall as its content — the
+		// asset grid stretches it past the viewport, the sidebar/footer get
+		// clipped, and nothing scrolls. `flex-1` alone isn't enough.
+		<div className="flex-1 min-h-0 flex flex-col min-w-0">
 			<FilterBar />
 
 			{error && (
