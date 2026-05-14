@@ -1,5 +1,11 @@
 <!doctype html>
-<html lang="en">
+<!--
+	data-theme="dark" pins the daisyUI theme so our `@plugin "daisyui/theme"`
+	override in styles/index.css wins on specificity against daisyUI's built-in
+	dark theme (which uses `:root:not([data-theme])` and would otherwise beat
+	our `:where(:root)` rule).
+-->
+<html lang="en" data-theme="dark">
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
