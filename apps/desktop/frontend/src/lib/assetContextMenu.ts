@@ -143,11 +143,6 @@ async function moveAction(asset: Asset) {
 	// (in-library move) or deleted (out-of-library move). The watcher's
 	// rescan re-inserts the row on its own after each replay.
 	const newAbsPath = result.abs_path;
-	if (!result.still_in_library) {
-		useAssetsStore.setState({
-			error: `“${filename}” moved outside the library — Garnet no longer tracks it. Use Ctrl+Z to undo.`,
-		});
-	}
 	useUndoStore.getState().push({
 		description: `Move ${filename}`,
 		undo: async () => {
