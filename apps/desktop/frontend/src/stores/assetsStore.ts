@@ -208,7 +208,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 				api.listAssetFormats(s.rootId),
 				api.listTags(),
 			]);
-			if (myToken !== refreshToken) return; // a later refresh has superseded this one
+			if (myToken !== refreshToken) return; // superseded by a later refresh
 			set({
 				assets: page.assets,
 				total: page.total,
@@ -218,6 +218,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 			});
 		} catch (e) {
 			if (myToken !== refreshToken) return;
+			console.error("[assetsStore.refresh] failed", e);
 			set({ error: String(e), loading: false });
 		}
 	},

@@ -217,6 +217,10 @@ pub fn list_assets_impl(conn: &Connection, q: &AssetQuery) -> rusqlite::Result<A
 		// the result rather than silently widening.
 		if let Some(rid) = effective.root_id {
 			if rid != root_id {
+				tracing::warn!(
+					"list_assets: root_id={} conflicts with pinned_source root_id={}",
+					rid, root_id
+				);
 				return Ok(AssetPage { assets: Vec::new(), total: 0 });
 			}
 		}
