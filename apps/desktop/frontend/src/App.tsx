@@ -61,16 +61,20 @@ function SplashGate({ children }: { children: ReactNode }) {
 		return () => clearTimeout(t);
 	}, [libraryLoading, assetsLoading, mountedAt]);
 
+	// Children render in normal layout flow inside a plain wrapper so the
+	// `h-full` / flex chain that Layout depends on isn't disturbed by an
+	// extra motion.div in the tree. The splash sits in a `fixed inset-0`
+	// overlay above everything, so its presence (and exit animation) never
+	// affects the underlying layout.
 	return (
-		<div className="relative h-full">
-			<motion.div
-				className="h-full"
-				initial={{ opacity: 0, y: 8 }}
-				animate={splashGone ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-				transition={{ duration: 0.65, delay: splashGone ? 0.15 : 0, ease: [0.16, 1, 0.3, 1] }}
+		<>
+			<div
+				className={`h-full transition-opacity duration-[600ms] ease-out ${
+					splashGone ? "opacity-100 delay-150" : "opacity-0"
+				}`}
 			>
 				{children}
-			</motion.div>
+			</div>
 
 			<AnimatePresence>
 				{!splashGone && (
@@ -80,7 +84,7 @@ function SplashGate({ children }: { children: ReactNode }) {
 						animate={{ opacity: 1 }}
 						exit={{ opacity: 0, scale: 1.06 }}
 						transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
-						className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-base-200 pointer-events-none"
+						className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-base-200 pointer-events-none"
 					>
 						<motion.img
 							src="/garnet-splash-dark.png"
@@ -101,7 +105,7 @@ function SplashGate({ children }: { children: ReactNode }) {
 					</motion.div>
 				)}
 			</AnimatePresence>
-		</div>
+		</>
 	);
 }
 
