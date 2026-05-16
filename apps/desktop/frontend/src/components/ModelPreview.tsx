@@ -23,6 +23,25 @@ type LoadResult = {
 
 type ModelKind = "gltf" | "obj" | "stl" | "ply" | "fbx";
 
+export type ModelStats = {
+	triangles: number;
+	vertices: number;
+	meshes: number;
+	materials: number;
+	textures: number;
+	bones: number;
+	animations: number;
+};
+
+/// Some exporters (Blender, Substance, etc.) emit "animation" tracks on
+/// otherwise-static scenes — a single keyframe per channel or a few frames
+/// that don't actually move anything. Filter those so the timeline / play
+/// controls don't appear for what the user perceives as a static model.
+function isMeaningfulClip(clip: THREE.AnimationClip): boolean {
+	if (clip.duration < 0.1) return false;
+	return clip.tracks.some((t) => t.times.length > 1);
+}
+
 function detectKind(url: string): ModelKind | null {
 	const m = url.toLowerCase().match(/\.(gltf|glb|obj|stl|ply|fbx)(?:$|\?)/);
 	if (!m) return null;
@@ -31,7 +50,15 @@ function detectKind(url: string): ModelKind | null {
 	return ext as ModelKind;
 }
 
-export function ModelPreview({ url, format }: { url: string; format: string | null }) {
+export function ModelPreview({
+	url,
+	format,
+	onStats,
+}: {
+	url: string;
+	format: string | null;
+	onStats?: (stats: ModelStats | null) => void;
+}) {
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const sceneRef = useRef<ModelScene | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -55,15 +82,17 @@ export function ModelPreview({ url, format }: { url: string; format: string | nu
 		setClips([]);
 		setActiveClip(0);
 		setPlaying(true);
+		onStats?.(null);
 
 		const scene = new ModelScene(el);
 		sceneRef.current = scene;
 		let cancelled = false;
 
 		scene.loadModel(url, kind).then(
-			(found) => {
+			(loaded) => {
 				if (cancelled) return;
-				setClips(found);
+				setClips(loaded.clips);
+				onStats?.(loaded.stats);
 				setLoading(false);
 			},
 			(err) => {
@@ -82,7 +111,7 @@ export function ModelPreview({ url, format }: { url: string; format: string | nu
 			scene.dispose();
 			sceneRef.current = null;
 		};
-	}, [url, format]);
+	}, [url, format, onStats]);
 
 	useEffect(() => {
 		sceneRef.current?.setActiveClip(activeClip);
@@ -417,14 +446,25 @@ class ModelScene {
 		this.animate();
 	}
 
-	async loadModel(url: string, kind: ModelKind): Promise<ClipInfo[]> {
+	async loadModel(
+		url: string,
+		kind: ModelKind,
+	): Promise<{ clips: ClipInfo[]; stats: ModelStats }> {
 		const result = await loadByKind(url, kind);
 		if (this.disposed) {
 			disposeObject(result.object);
-			return [];
+			return { clips: [], stats: emptyStats() };
 		}
+		// Filter out "animation" clips that don't actually animate anything —
+		// see isMeaningfulClip for the rationale. The viewer treats the model
+		// as static when nothing meaningful survives.
+		result.animations = result.animations.filter(isMeaningfulClip);
 		this.attachModel(result);
-		return result.animations.map((c, i) => ({ name: c.name, index: i }));
+		const stats = computeModelStats(result.object, result.animations.length);
+		return {
+			clips: result.animations.map((c, i) => ({ name: c.name, index: i })),
+			stats,
+		};
 	}
 
 	setActiveClip(index: number): void {
@@ -643,6 +683,72 @@ async function loadByKind(url: string, kind: ModelKind): Promise<LoadResult> {
 			return { object: new THREE.Mesh(geom, mat), animations: [] };
 		}
 	}
+}
+
+function emptyStats(): ModelStats {
+	return {
+		triangles: 0,
+		vertices: 0,
+		meshes: 0,
+		materials: 0,
+		textures: 0,
+		bones: 0,
+		animations: 0,
+	};
+}
+
+/// Counts triangles/vertices and tallies meshes, unique materials, unique
+/// textures, bones. `animationCount` is passed in because the caller has
+/// already filtered out empty clips via isMeaningfulClip.
+function computeModelStats(root: THREE.Object3D, animationCount: number): ModelStats {
+	let triangles = 0;
+	let vertices = 0;
+	let meshes = 0;
+	let bones = 0;
+	const materials = new Set<THREE.Material>();
+	const textures = new Set<THREE.Texture>();
+
+	const collectMaterial = (mat: THREE.Material) => {
+		if (materials.has(mat)) return;
+		materials.add(mat);
+		for (const value of Object.values(mat as unknown as Record<string, unknown>)) {
+			if (value instanceof THREE.Texture) textures.add(value);
+		}
+	};
+
+	root.traverse((c) => {
+		if (c instanceof THREE.Bone) bones++;
+		const geom = (c as THREE.Mesh | THREE.Points | THREE.LineSegments).geometry as
+			| THREE.BufferGeometry
+			| undefined;
+		if (c instanceof THREE.Mesh && geom) {
+			meshes++;
+			const position = geom.attributes.position;
+			const positionCount = position?.count ?? 0;
+			vertices += positionCount;
+			if (geom.index) {
+				triangles += Math.floor(geom.index.count / 3);
+			} else if (positionCount > 0) {
+				triangles += Math.floor(positionCount / 3);
+			}
+			const mat = c.material;
+			if (Array.isArray(mat)) {
+				for (const m of mat) if (m) collectMaterial(m);
+			} else if (mat) {
+				collectMaterial(mat);
+			}
+		}
+	});
+
+	return {
+		triangles,
+		vertices,
+		meshes,
+		materials: materials.size,
+		textures: textures.size,
+		bones,
+		animations: animationCount,
+	};
 }
 
 function disposeObject(obj: THREE.Object3D): void {
