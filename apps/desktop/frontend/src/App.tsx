@@ -5,6 +5,7 @@ import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { api, type ScanReport } from "@/lib/tauri";
 import { emitThumbnailReady, type ThumbnailReady } from "@/lib/thumbnailBus";
 import { useBgTasksStore } from "@/stores/bgTasksStore";
+import { useBootStore } from "@/stores/bootStore";
 import { ConfirmDialogRoot } from "@/components/ConfirmDialog";
 import { ContextMenuRoot } from "@/components/ContextMenu";
 import { Layout } from "@/components/Layout";
@@ -153,14 +154,16 @@ function useSplashTimer() {
 		return () => clearTimeout(t);
 	}, [loaded, splashGone]);
 
-	// Once the splash is gone, freeze the timing report. We hand the backend
-	// the splash budget (min + fade) so the Stats UI can flag startups that
-	// overshot — the splash dwell itself is intentional time, not work.
+	// Once the splash is gone, freeze the timing report and flip the boot
+	// gate so anything subscribed via `awaitBootReady` starts running. The
+	// gate is what keeps background tasks (e.g. thumbnail generation) from
+	// competing with startup work during the splash window.
 	useEffect(() => {
 		if (!splashGone) return;
 		if (marks.current.finalized) return;
 		marks.current.finalized = true;
 		void api.finalizeStartupTimings(SPLASH_MIN_MS + SPLASH_FADE_MS).catch(() => {});
+		useBootStore.getState().markReady();
 	}, [splashGone]);
 
 	return { loaded, splashGone };

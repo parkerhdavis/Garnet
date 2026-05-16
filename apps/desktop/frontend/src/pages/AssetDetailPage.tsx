@@ -12,6 +12,7 @@ import {
 import { api, mediaUrl, type Asset, type AssetMetadata } from "@/lib/tauri";
 import { MediaDiagnostic } from "@/components/MediaDiagnostic";
 import { GarnetMetadataEditor } from "@/components/GarnetMetadataEditor";
+import { loadModelThumbnailer } from "@/lib/loadModelThumbnailer";
 
 // ModelPreview pulls in three.js + addon loaders. Lazy-loading it keeps the
 // initial bundle small; the detail page is fast on non-3D assets and Three.js
@@ -97,6 +98,26 @@ export function AssetDetailPage() {
 			cancelled = true;
 		};
 	}, [asset, absPath, isVideo, isAudio]);
+
+	// Opening a model's detail page force-regenerates its thumbnail. The
+	// thumbnailer's `thumbnail:ready` event flows back through thumbnailBus,
+	// so any grid tile mounted for this asset picks up the fresh PNG on
+	// return without a full library refresh.
+	useEffect(() => {
+		if (!asset || !isModel) return;
+		const assetMtime = asset.mtime;
+		const assetFormat = asset.format;
+		void (async () => {
+			try {
+				const thumbnailer = await loadModelThumbnailer();
+				await thumbnailer.request(absPath, assetMtime, 240, assetFormat, {
+					force: true,
+				});
+			} catch {
+				/* silent — ModelPreview already surfaces real load errors */
+			}
+		})();
+	}, [asset, absPath, isModel]);
 
 
 	if (loading) {

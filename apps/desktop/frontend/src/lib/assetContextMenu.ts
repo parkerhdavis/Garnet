@@ -8,15 +8,22 @@
 //! history entry.
 
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { HiArrowsRightLeft, HiPencilSquare, HiTrash } from "react-icons/hi2";
+import { HiArrowPath, HiArrowsRightLeft, HiPencilSquare, HiTrash } from "react-icons/hi2";
 import type { Asset } from "@/lib/tauri";
 import { api } from "@/lib/tauri";
-import { basename, dirname } from "@/lib/paths";
+import { absPathFor, basename, dirname } from "@/lib/paths";
 import { confirm } from "@/components/ConfirmDialog";
 import type { ContextMenuItem } from "@/components/ContextMenu";
 import { prompt } from "@/components/PromptDialog";
 import { useAssetsStore } from "@/stores/assetsStore";
 import { useUndoStore } from "@/stores/undoStore";
+import { loadModelThumbnailer } from "@/lib/loadModelThumbnailer";
+
+const RENDERABLE_MODEL_EXTS = new Set(["gltf", "glb", "obj", "stl", "ply", "fbx"]);
+function isRenderableModelAsset(asset: Asset): boolean {
+	const ext = asset.format?.toLowerCase();
+	return !!ext && RENDERABLE_MODEL_EXTS.has(ext);
+}
 
 /// Trigger a refresh of the visible library view + format/tag facets so the
 /// UI reflects whatever just changed on disk.
@@ -36,7 +43,7 @@ function showError(message: string) {
 /// imperative: they open dialogs, run the IPC call, and push the inverse
 /// onto the undo stack on success.
 export function buildAssetContextMenu(asset: Asset): ContextMenuItem[] {
-	return [
+	const items: ContextMenuItem[] = [
 		{
 			label: "Rename…",
 			icon: HiPencilSquare,
@@ -47,14 +54,38 @@ export function buildAssetContextMenu(asset: Asset): ContextMenuItem[] {
 			icon: HiArrowsRightLeft,
 			onClick: () => moveAction(asset),
 		},
-		{ kind: "separator" },
-		{
-			label: "Trash",
-			icon: HiTrash,
-			danger: true,
-			onClick: () => trashAction(asset),
-		},
 	];
+	if (isRenderableModelAsset(asset)) {
+		items.push({
+			label: "Refresh Thumbnail",
+			icon: HiArrowPath,
+			onClick: () => refreshModelThumbnailAction(asset),
+		});
+	}
+	items.push({ kind: "separator" });
+	items.push({
+		label: "Trash",
+		icon: HiTrash,
+		danger: true,
+		onClick: () => trashAction(asset),
+	});
+	return items;
+}
+
+async function refreshModelThumbnailAction(asset: Asset) {
+	try {
+		const thumbnailer = await loadModelThumbnailer();
+		const ok = await thumbnailer.request(
+			absPathFor(asset),
+			asset.mtime,
+			240,
+			asset.format,
+			{ force: true },
+		);
+		if (!ok) showError("Couldn't render a thumbnail for this model.");
+	} catch (err) {
+		showError(`Refresh thumbnail failed: ${String(err)}`);
+	}
 }
 
 async function renameAction(asset: Asset) {
