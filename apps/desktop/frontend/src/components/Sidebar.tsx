@@ -1,18 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Left navigation. Groups the app's pages into five sections:
+//! Left navigation. Two-tier hierarchy:
 //!
 //! - **Workspaces** — user-defined collections (manual + filter-rule based).
 //!   V1 ships with the section structure + a "new workspace" affordance;
 //!   functionality lands in a later phase.
-//! - **Types** — one page per media category (Images, Videos, Animations,
-//!   Audio, Models). Each will land as a pre-filtered Library view; V1 stubs
-//!   the destination.
-//! - **Sources** — pinned source folders (any library root or subfolder
-//!   thereof). User-driven via the "Pin source" button at the bottom of the
-//!   section.
-//! - **Functions** — Plugins manager + Automations.
-//! - **Settings** — split into subsections (Library Roots, Appearance,
-//!   About). The existing roots-management UX lives under Library Roots.
+//! - **Library**
+//!     - **Sources** — pinned source folders (any library root or subfolder
+//!       thereof). User-driven via the "Pin source" button at the bottom of
+//!       the subsection.
+//!     - **Types** — one page per media category (Images, Videos, Animations,
+//!       Audio, Models). Each will land as a pre-filtered Library view; V1
+//!       stubs the destination.
+//! - **Management**
+//!     - **Functions** — Plugins manager + Automations.
+//!     - **Settings** — split into subsections (Library Roots, Appearance,
+//!       General, About). The existing roots-management UX lives under
+//!       Library Roots.
 //!
 //! Clicking the Garnet logo/title returns to the all-assets root view.
 
@@ -131,74 +134,80 @@ export function Sidebar() {
 				</div>
 			</Link>
 
-			<nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
-				<NavSection title="Workspaces">
-					<NavAction icon={HiPlus} disabled>
-						New workspace
-					</NavAction>
-				</NavSection>
+			<nav className="flex-1 overflow-y-auto py-3 px-2 divide-y divide-base-300 [&>*]:py-6 [&>*:first-child]:pt-1 [&>*:last-child]:pb-2">
+				<NavGroup title="Workspaces">
+					<ul className="flex flex-col gap-0.5 pl-1">
+						<NavAction icon={HiPlus} disabled>
+							New workspace
+						</NavAction>
+					</ul>
+				</NavGroup>
 
-				<NavSection title="Sources">
-					{/* "All Sources" is the default landing view at /, showing
-					    every asset across every library root. It's deliberately
-					    non-editable — it isn't backed by a pinned_sources row
-					    and there's no unpin affordance on it. */}
-					<NavItem to="/" icon={HiGlobeAlt} end>
-						All Sources
-					</NavItem>
-					{sources.map((s) => (
-						<NavItem
-							key={s.id}
-							to={`/sources/${s.id}`}
-							icon={s.relative_path === "" ? HiFolder : HiFolderOpen}
-							onContextMenu={(e) => handlePinnedSourceContextMenu(e, s)}
-						>
-							{s.name}
+				<NavGroup title="Library">
+					<NavSection title="Sources">
+						{/* "All Sources" is the default landing view at /,
+						    showing every asset across every library root. It's
+						    deliberately non-editable — it isn't backed by a
+						    pinned_sources row and there's no unpin affordance. */}
+						<NavItem to="/" icon={HiGlobeAlt} end>
+							All Sources
 						</NavItem>
-					))}
-					<NavAction icon={HiFolderPlus} onClick={handlePinSource}>
-						Pin source
-					</NavAction>
-					{pinError && (
-						<li className="px-2 py-1 text-[10px] text-error/90 break-words">
-							{pinError}
-						</li>
-					)}
-				</NavSection>
+						{sources.map((s) => (
+							<NavItem
+								key={s.id}
+								to={`/sources/${s.id}`}
+								icon={s.relative_path === "" ? HiFolder : HiFolderOpen}
+								onContextMenu={(e) => handlePinnedSourceContextMenu(e, s)}
+							>
+								{s.name}
+							</NavItem>
+						))}
+						<NavAction icon={HiFolderPlus} onClick={handlePinSource}>
+							Pin source
+						</NavAction>
+						{pinError && (
+							<li className="px-2 py-1 text-[10px] text-error/90 break-words">
+								{pinError}
+							</li>
+						)}
+					</NavSection>
 
-				<NavSection title="Types">
-					<NavItem to="/types/images" icon={HiPhoto}>Images</NavItem>
-					<NavItem to="/types/videos" icon={HiFilm}>Videos</NavItem>
-					<NavItem to="/types/animations" icon={HiSparkles}>
-						Animations
-					</NavItem>
-					<NavItem to="/types/audio" icon={HiMusicalNote}>Audio</NavItem>
-					<NavItem to="/types/models" icon={HiCube}>Models</NavItem>
-				</NavSection>
+					<NavSection title="Types">
+						<NavItem to="/types/images" icon={HiPhoto}>Images</NavItem>
+						<NavItem to="/types/videos" icon={HiFilm}>Videos</NavItem>
+						<NavItem to="/types/animations" icon={HiSparkles}>
+							Animations
+						</NavItem>
+						<NavItem to="/types/audio" icon={HiMusicalNote}>Audio</NavItem>
+						<NavItem to="/types/models" icon={HiCube}>Models</NavItem>
+					</NavSection>
+				</NavGroup>
 
-				<NavSection title="Functions">
-					<NavItem to="/functions/plugins" icon={HiPuzzlePiece}>
-						Plugins
-					</NavItem>
-					<NavItem to="/functions/automations" icon={HiBolt}>
-						Automations
-					</NavItem>
-				</NavSection>
+				<NavGroup title="Management">
+					<NavSection title="Functions">
+						<NavItem to="/functions/plugins" icon={HiPuzzlePiece}>
+							Plugins
+						</NavItem>
+						<NavItem to="/functions/automations" icon={HiBolt}>
+							Automations
+						</NavItem>
+					</NavSection>
 
-				<NavSection title="Settings">
-					<NavItem to="/settings/library" icon={HiFolder}>
-						Library Roots
-					</NavItem>
-					<NavItem to="/settings/appearance" icon={HiSwatch}>
-						Appearance
-					</NavItem>
-					<NavItem to="/settings/general" icon={HiCog6Tooth}>
-						General
-					</NavItem>
-					<NavItem to="/settings/about" icon={HiInformationCircle}>
-						About
-					</NavItem>
-				</NavSection>
+					<NavSection title="Settings">
+						<NavItem to="/settings/library" icon={HiFolder}>
+							Library Roots
+						</NavItem>
+						<NavItem to="/settings/appearance" icon={HiSwatch}>
+							Appearance
+						</NavItem>
+						<NavItem to="/settings/general" icon={HiCog6Tooth}>
+							General
+						</NavItem>
+						<NavItem to="/settings/about" icon={HiInformationCircle}>
+							About
+						</NavItem>
+					</NavSection>
+				</NavGroup>
 			</nav>
 
 			<footer className="p-3 text-[10px] text-base-content/40 border-t border-base-300 flex items-center justify-between">
@@ -209,13 +218,24 @@ export function Sidebar() {
 	);
 }
 
+function NavGroup({ title, children }: { title: string; children: React.ReactNode }) {
+	return (
+		<div>
+			<div className="text-xs uppercase tracking-wider text-base-content/70 px-2 mb-4 font-bold">
+				{title}
+			</div>
+			<div className="space-y-3">{children}</div>
+		</div>
+	);
+}
+
 function NavSection({ title, children }: { title: string; children: React.ReactNode }) {
 	return (
 		<div>
-			<div className="text-[10px] uppercase tracking-wider text-base-content/40 px-2 mb-1.5 font-semibold">
+			<div className="text-[10px] uppercase tracking-wider text-base-content/40 px-3 mb-1 font-semibold">
 				{title}
 			</div>
-			<ul className="flex flex-col gap-0.5">{children}</ul>
+			<ul className="flex flex-col gap-0.5 pl-1">{children}</ul>
 		</div>
 	);
 }
