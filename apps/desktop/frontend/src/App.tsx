@@ -1,20 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Component, type ReactNode, useEffect, useState } from "react";
+import { Component, type ReactNode, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
-import type { ScanReport } from "@/lib/tauri";
+import { api, type ScanReport } from "@/lib/tauri";
+import { emitThumbnailReady, type ThumbnailReady } from "@/lib/thumbnailBus";
+import { useBgTasksStore } from "@/stores/bgTasksStore";
 import { ConfirmDialogRoot } from "@/components/ConfirmDialog";
 import { ContextMenuRoot } from "@/components/ContextMenu";
 import { Layout } from "@/components/Layout";
 import { PromptDialogRoot } from "@/components/PromptDialog";
 import { useUndoStore } from "@/stores/undoStore";
+import { AppStatsPage } from "@/pages/AppStatsPage";
 import { AssetDetailPage } from "@/pages/AssetDetailPage";
 import { LibraryPage } from "@/pages/LibraryPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import {
+	AppAboutPage,
 	AutomationsPage,
 	PluginsPage,
-	SettingsAboutPage,
 	SettingsAppearancePage,
 	SettingsGeneralPage,
 	WorkspacesPage,
@@ -31,6 +34,7 @@ const SPLASH_FADE_MS = 500;
 export default function App() {
 	const { loaded, splashGone } = useSplashTimer();
 	useScanEventBridge();
+	useThumbnailReadyBridge();
 	useUndoHotkeys();
 	usePrefsRefreshBridge();
 
@@ -60,7 +64,13 @@ export default function App() {
 						<Route path="settings/library" element={<SettingsPage />} />
 						<Route path="settings/appearance" element={<SettingsAppearancePage />} />
 						<Route path="settings/general" element={<SettingsGeneralPage />} />
-						<Route path="settings/about" element={<SettingsAboutPage />} />
+						{/* About moved to /app/about as part of the App sidebar
+						    section. Keep the old URL working in case anything
+						    deep-links to it. */}
+						<Route path="settings/about" element={<Navigate to="/app/about" replace />} />
+
+						<Route path="app/stats" element={<AppStatsPage />} />
+						<Route path="app/about" element={<AppAboutPage />} />
 
 						<Route path="*" element={<Navigate to="/" replace />} />
 					</Route>
@@ -94,8 +104,32 @@ function useSplashTimer() {
 	const [loaded, setLoaded] = useState(false);
 	const [splashGone, setSplashGone] = useState(false);
 
+	// One-shot guards — React StrictMode runs effects twice in dev (mount,
+	// cleanup, remount) which would otherwise duplicate every checkpoint in
+	// the report. Refs survive the strict-mode double-invoke.
+	const marks = useRef({
+		reactMounted: false,
+		dataLoaded: false,
+		splashMin: false,
+		splashGone: false,
+		finalized: false,
+	});
+	const markOnce = (key: keyof typeof marks.current, label: string) => {
+		if (marks.current[key]) return;
+		marks.current[key] = true;
+		void api.markStartupPhase(label).catch(() => {});
+	};
+
+	// Earliest moment React has run its first effect — close enough to "first
+	// paint" for our purposes (the splash overlay is the first thing painted).
 	useEffect(() => {
-		void Promise.all([refreshLibrary(), refreshAssets()]);
+		markOnce("reactMounted", "frontend: React mounted");
+	}, []);
+
+	useEffect(() => {
+		void Promise.all([refreshLibrary(), refreshAssets()]).then(() => {
+			markOnce("dataLoaded", "frontend: initial data loaded");
+		});
 	}, [refreshLibrary, refreshAssets]);
 
 	useEffect(() => {
@@ -103,15 +137,31 @@ function useSplashTimer() {
 		if (libraryLoading || assetsLoading) return;
 		const elapsed = performance.now() - mountedAt;
 		const waitMore = Math.max(0, SPLASH_MIN_MS - elapsed);
-		const t = setTimeout(() => setLoaded(true), waitMore);
+		const t = setTimeout(() => {
+			markOnce("splashMin", "frontend: splash min elapsed (fade starts)");
+			setLoaded(true);
+		}, waitMore);
 		return () => clearTimeout(t);
 	}, [libraryLoading, assetsLoading, mountedAt, loaded]);
 
 	useEffect(() => {
 		if (!loaded || splashGone) return;
-		const t = setTimeout(() => setSplashGone(true), SPLASH_FADE_MS);
+		const t = setTimeout(() => {
+			markOnce("splashGone", "frontend: splash fade complete");
+			setSplashGone(true);
+		}, SPLASH_FADE_MS);
 		return () => clearTimeout(t);
 	}, [loaded, splashGone]);
+
+	// Once the splash is gone, freeze the timing report. We hand the backend
+	// the splash budget (min + fade) so the Stats UI can flag startups that
+	// overshot — the splash dwell itself is intentional time, not work.
+	useEffect(() => {
+		if (!splashGone) return;
+		if (marks.current.finalized) return;
+		marks.current.finalized = true;
+		void api.finalizeStartupTimings(SPLASH_MIN_MS + SPLASH_FADE_MS).catch(() => {});
+	}, [splashGone]);
 
 	return { loaded, splashGone };
 }
@@ -128,24 +178,49 @@ function useScanEventBridge() {
 		const unlistens: Array<() => void> = [];
 		const setError = (msg: string) => useLibraryStore.setState({ error: msg });
 
+		const scanTaskId = (rootId: number) => `scan:${rootId}`;
+
 		void listen<number>("scan:started", (e) => {
 			useLibraryStore.getState()._markScanStarted(e.payload);
+			useBgTasksStore
+				.getState()
+				.add({ id: scanTaskId(e.payload), kind: "scan", label: "Scanning library" });
 		}).then((u) => unlistens.push(u));
 
 		void listen<ScanReport>("scan:completed", (e) => {
 			const report = e.payload;
 			useLibraryStore.getState()._markScanFinished(report.root_id, report);
+			useBgTasksStore.getState().remove(scanTaskId(report.root_id));
 			// New rows may have landed — refresh the visible library view.
 			void useAssetsStore.getState().refresh();
 		}).then((u) => unlistens.push(u));
 
 		void listen<{ root_id: number; error: string }>("scan:failed", (e) => {
 			useLibraryStore.getState()._markScanFinished(e.payload.root_id, null);
+			useBgTasksStore.getState().remove(scanTaskId(e.payload.root_id));
 			setError(`Scan failed: ${e.payload.error}`);
 		}).then((u) => unlistens.push(u));
 
 		return () => {
 			for (const u of unlistens) u();
+		};
+	}, []);
+}
+
+/// Single app-wide subscription to `thumbnail:ready`. Fans the payload out
+/// through `thumbnailBus` so each AssetThumbnail receives only its own key
+/// — 60 listening tiles would otherwise mean 60 separate Tauri listeners
+/// all rejecting 59/60 events apiece.
+function useThumbnailReadyBridge() {
+	useEffect(() => {
+		let unlisten: (() => void) | null = null;
+		void listen<ThumbnailReady>("thumbnail:ready", (e) => {
+			emitThumbnailReady(e.payload);
+		}).then((u) => {
+			unlisten = u;
+		});
+		return () => {
+			unlisten?.();
 		};
 	}, []);
 }

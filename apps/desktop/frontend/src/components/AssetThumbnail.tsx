@@ -3,8 +3,7 @@
 //!
 //! 1. Raster images (png/jpg/gif/bmp/tiff/webp) → `get_thumbnail` Rust command
 //!    (cached on disk at $XDG_CACHE_HOME/garnet/thumbnails/).
-//! 2. Videos → frame extracted via hidden HTML5 video + canvas (see
-//!    lib/videoThumbnail.ts; in-memory cache for the session).
+//! 2. Videos → same `get_thumbnail` command (ffmpeg subprocess for the frame).
 //! 3. Anything else → format-category react-icon (photo/film/music/cube/code/
 //!    document).
 //!
@@ -27,6 +26,8 @@ import {
 } from "react-icons/hi2";
 import { api, mediaUrl, type Asset } from "@/lib/tauri";
 import { absPathFor } from "@/lib/paths";
+import { subscribeThumbnailReady } from "@/lib/thumbnailBus";
+import { useBgTasksStore } from "@/stores/bgTasksStore";
 
 const RASTER_EXTS = new Set([
 	"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp",
@@ -39,7 +40,7 @@ const AUDIO_EXTS = new Set([
 	"mp3", "wav", "flac", "ogg", "aiff", "m4a", "opus",
 ]);
 const MODEL_EXTS = new Set([
-	"fbx", "obj", "gltf", "glb", "usd", "usdz", "stl", "blend", "dae", "3ds",
+	"fbx", "obj", "gltf", "glb", "usd", "usdz", "stl", "blend", "dae", "3ds", "ply",
 ]);
 const CODE_EXTS = new Set([
 	"json", "xml", "yaml", "yml", "toml", "js", "ts", "tsx", "jsx", "py", "rs",
@@ -94,20 +95,60 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 			setFailed(true);
 			return;
 		}
-		// Both image and video thumbnails go through the same Rust command,
-		// which routes by extension (image crate for raster, ffmpeg subprocess
-		// for video) and caches the result on disk.
-		api.getThumbnail(absPathFor(asset), asset.mtime, size)
-			.then((b64) => {
+		const absPath = absPathFor(asset);
+		const taskId = `thumb:${absPath}|${asset.mtime ?? ""}|${size}`;
+		let taskRegistered = false;
+		const registerTask = () => {
+			if (taskRegistered) return;
+			taskRegistered = true;
+			useBgTasksStore.getState().add({ id: taskId, kind: "thumbnail" });
+		};
+		const clearTask = () => {
+			if (!taskRegistered) return;
+			taskRegistered = false;
+			useBgTasksStore.getState().remove(taskId);
+		};
+
+		// Subscribe FIRST so an event that fires between the cache-miss
+		// response and the ensure-thumbnail dispatch isn't lost.
+		const unsubscribe = subscribeThumbnailReady(
+			absPath,
+			asset.mtime,
+			size,
+			(payload) => {
 				if (cancelled) return;
-				if (b64) setSrc(`data:image/png;base64,${b64}`);
-				else setFailed(true);
+				setSrc(convertFileSrc(payload.path));
+				setFailed(false);
+				clearTask();
+			},
+		);
+
+		api.getThumbnail(absPath, asset.mtime, size)
+			.then((path) => {
+				if (cancelled) return;
+				if (path) {
+					// Cache hit. Browser loads the PNG through Tauri's asset
+					// protocol — no base64 round trip, decoding happens off
+					// the JS main thread.
+					setSrc(convertFileSrc(path));
+					return;
+				}
+				// Cache miss. Kick off background generation; the subscriber
+				// above will pick up the result when it lands.
+				registerTask();
+				void api.ensureThumbnail(absPath, asset.mtime, size).catch(() => {
+					if (!cancelled) setFailed(true);
+					clearTask();
+				});
 			})
 			.catch(() => {
 				if (!cancelled) setFailed(true);
 			});
+
 		return () => {
 			cancelled = true;
+			unsubscribe();
+			clearTask();
 		};
 	}, [asset.id, asset.mtime, asset.format, asset.relative_path, asset.root_path, size, isRaster, isVideo]);
 

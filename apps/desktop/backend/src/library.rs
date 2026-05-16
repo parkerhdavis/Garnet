@@ -151,13 +151,97 @@ pub fn scan_library_root(
 	Ok(())
 }
 
+/// Per-root scan slot. We must not let two scans run for the same root
+/// concurrently: each one snapshots `assets WHERE root_id=?` before its
+/// transaction begins (see `indexer::scan_root`), so if two start in parallel
+/// they both see the same pre-state, both INSERT the same rows, and the
+/// second hits `UNIQUE(root_id, relative_path)` when it commits. The three
+/// spawn sites (startup auto-scan, manual Scan button, watcher debounce)
+/// don't coordinate otherwise; this is where we coordinate them.
+///
+/// Coalescing semantics: if a scan is requested while one is already
+/// running for that root, the request is recorded as `pending` (overwriting
+/// any earlier pending). When the running scan finishes, the pending request
+/// is dispatched as a fresh scan. That way no event batch is silently lost —
+/// activity that arrived during a long scan still gets indexed — without
+/// ever letting two scans run in parallel for the same root.
+struct ScanSlot {
+	running: bool,
+	pending: Option<(AppHandle, PathBuf)>,
+}
+
+fn slots() -> &'static std::sync::Mutex<std::collections::HashMap<i64, ScanSlot>> {
+	use std::sync::OnceLock;
+	static MAP: OnceLock<std::sync::Mutex<std::collections::HashMap<i64, ScanSlot>>> =
+		OnceLock::new();
+	MAP.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+/// Try to claim the scan slot for `id`. Returns true if we acquired it
+/// (caller should start running); false if a scan was already in flight (in
+/// which case we recorded the request as pending for after).
+fn claim_or_pending(id: i64, app: AppHandle, root_path: PathBuf) -> bool {
+	let mut map = match slots().lock() {
+		Ok(g) => g,
+		Err(e) => {
+			tracing::error!("scan: slots lock poisoned: {e}");
+			return false;
+		}
+	};
+	let slot = map.entry(id).or_insert(ScanSlot { running: false, pending: None });
+	if slot.running {
+		slot.pending = Some((app, root_path));
+		tracing::debug!("scan: root_id={} already in flight; coalesced as pending follow-up", id);
+		false
+	} else {
+		slot.running = true;
+		true
+	}
+}
+
+/// Mark the running scan for `id` as done and return any pending follow-up
+/// the caller should now dispatch.
+fn finish(id: i64) -> Option<(AppHandle, PathBuf)> {
+	let mut map = match slots().lock() {
+		Ok(g) => g,
+		Err(e) => {
+			tracing::error!("scan: slots lock poisoned on finish: {e}");
+			return None;
+		}
+	};
+	let slot = map.get_mut(&id)?;
+	slot.running = false;
+	let follow_up = slot.pending.take();
+	if follow_up.is_none() {
+		// Slot is fully idle — drop it so the map doesn't accumulate entries
+		// for roots we've stopped watching.
+		map.remove(&id);
+	}
+	follow_up
+}
+
 /// Spawn a background scan task. Opens its own SQLite connection so it
 /// doesn't compete with the shared `AppState.db` mutex for read-side
 /// commands (list_assets, list_library_roots, …) while writing.
+///
+/// At most one scan runs per root at a time; concurrent requests are
+/// coalesced into a single follow-up scan that fires once the current one
+/// finishes.
 pub fn spawn_scan(app: AppHandle, id: i64, root_path: PathBuf) {
+	if !claim_or_pending(id, app.clone(), root_path.clone()) {
+		return;
+	}
+
 	tauri::async_runtime::spawn_blocking(move || {
 		let _ = app.emit("scan:started", id);
-		match run_scan(id, &root_path) {
+		let result = run_scan(id, &root_path);
+
+		// Release the slot before emitting completion so a listener that
+		// immediately requests another scan finds it free. Capture any
+		// pending follow-up that arrived while we were running.
+		let follow_up = finish(id);
+
+		match result {
 			Ok(report) => {
 				tracing::info!(
 					"scan completed: root_id={} seen={} inserted={} updated={} renamed={} deleted={}",
@@ -178,6 +262,11 @@ pub fn spawn_scan(app: AppHandle, id: i64, root_path: PathBuf) {
 					ScanFailedPayload { root_id: id, error: msg },
 				);
 			}
+		}
+
+		if let Some((next_app, next_path)) = follow_up {
+			tracing::debug!("scan: dispatching coalesced follow-up for root_id={}", id);
+			spawn_scan(next_app, id, next_path);
 		}
 	});
 }

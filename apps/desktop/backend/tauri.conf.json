@@ -31,7 +31,10 @@
 					"$DOWNLOAD/**",
 					"$DOCUMENT/**",
 					"$DESKTOP/**",
-					"$HOME/**"
+					"$HOME/**",
+					"$HOME/.cache/garnet/**",
+					"$HOME/.config/garnet/**",
+					"$HOME/.local/share/garnet/**"
 				]
 			},
 			"capabilities": [
