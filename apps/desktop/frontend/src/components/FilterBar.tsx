@@ -3,11 +3,14 @@ import { useEffect, useState } from "react";
 import {
 	HiArrowUturnLeft,
 	HiArrowUturnRight,
+	HiBarsArrowDown,
+	HiBarsArrowUp,
 	HiMagnifyingGlass,
 	HiSquares2X2,
 	HiBars3,
 	HiXMark,
 } from "react-icons/hi2";
+import { GROUP_OPTIONS } from "@/lib/grouping";
 import { useAssetsStore } from "@/stores/assetsStore";
 import { useLibraryStore } from "@/stores/libraryStore";
 import { useUndoStore } from "@/stores/undoStore";
@@ -45,6 +48,8 @@ export function FilterBar() {
 		formatCounts,
 		tagCounts,
 		viewMode,
+		groupBy,
+		groupDir,
 		setRootId,
 		toggleFormat,
 		clearFormats,
@@ -55,6 +60,8 @@ export function FilterBar() {
 		setSizeMax,
 		setMtimeFrom,
 		setViewMode,
+		setGroupBy,
+		setGroupDir,
 		resetFilters,
 	} = useAssetsStore();
 	const { roots } = useLibraryStore();
@@ -157,6 +164,36 @@ export function FilterBar() {
 						</option>
 					))}
 				</select>
+
+				<div className="join">
+					<select
+						className="select select-sm select-bordered join-item"
+						value={groupBy}
+						onChange={(e) => void setGroupBy(e.target.value as typeof groupBy)}
+						aria-label="Group by"
+					>
+						{GROUP_OPTIONS.map((g) => (
+							<option key={g.value} value={g.value}>
+								{g.value === "none" ? g.label : `Group: ${g.label}`}
+							</option>
+						))}
+					</select>
+					{groupBy !== "none" && (
+						<button
+							type="button"
+							className="btn btn-sm join-item"
+							onClick={() => void setGroupDir(groupDir === "asc" ? "desc" : "asc")}
+							aria-label={`Group order ${groupDir === "asc" ? "ascending" : "descending"}`}
+							title={`Group order ${groupDir === "asc" ? "ascending" : "descending"}`}
+						>
+							{groupDir === "asc" ? (
+								<HiBarsArrowUp className="size-4" />
+							) : (
+								<HiBarsArrowDown className="size-4" />
+							)}
+						</button>
+					)}
+				</div>
 
 				<div className="join">
 					<button

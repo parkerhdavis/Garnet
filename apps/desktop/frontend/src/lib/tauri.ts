@@ -83,6 +83,10 @@ export type PinnedSource = {
 
 export type AssetSortBy = "path" | "size" | "mtime" | "format" | "root";
 export type SortDir = "asc" | "desc";
+/** Group key used to keep matching assets contiguous in the result. The
+ *  primary ORDER BY is the group key (in `group_dir`); the secondary sort is
+ *  the regular `sort_by` / `sort_dir`. `none` disables grouping. */
+export type AssetGroupBy = "none" | "root" | "folder" | "format" | "mtime_bucket";
 
 export type AssetQuery = {
 	root_id?: number | null;
@@ -90,6 +94,8 @@ export type AssetQuery = {
 	offset?: number;
 	sort_by?: AssetSortBy;
 	sort_dir?: SortDir;
+	group_by?: AssetGroupBy;
+	group_dir?: SortDir;
 	formats?: string[];
 	formats_exclude?: string[];
 	path_search?: string | null;

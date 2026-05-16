@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { motion } from "motion/react";
 import type { Asset } from "@/lib/tauri";
 import { AssetThumbnail } from "@/components/AssetThumbnail";
 import { openContextMenu } from "@/components/ContextMenu";
 import { buildAssetContextMenu } from "@/lib/assetContextMenu";
+import { groupOf } from "@/lib/grouping";
 import { basename, formatSize } from "@/lib/paths";
+import { useAssetsStore } from "@/stores/assetsStore";
 import { useIsSelected, useSelectionStore } from "@/stores/selectionStore";
 
 type Props = {
@@ -24,21 +26,44 @@ export function AssetGrid({ assets, onOpen }: Props) {
 	// each tile's click handler can reference a stable array without
 	// re-computing per click.
 	const orderedIds = useMemo(() => assets.map((a) => a.id), [assets]);
+	const groupBy = useAssetsStore((s) => s.groupBy);
+
+	let prevKey: string | null = null;
 
 	return (
 		<div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 p-4">
 			{assets.map((asset, i) => {
 				const delay = Math.min(i * STAGGER_PER_INDEX, STAGGER_MAX);
+				const group = groupOf(asset, groupBy);
+				const showHeader = group !== null && group.key !== prevKey;
+				if (group) prevKey = group.key;
 				return (
-					<AssetTile
-						key={asset.id}
-						asset={asset}
-						orderedIds={orderedIds}
-						delay={delay}
-						onOpen={onOpen}
-					/>
+					<Fragment key={asset.id}>
+						{showHeader && group && (
+							<GroupHeader label={group.label} firstInPage={i === 0} />
+						)}
+						<AssetTile
+							asset={asset}
+							orderedIds={orderedIds}
+							delay={delay}
+							onOpen={onOpen}
+						/>
+					</Fragment>
 				);
 			})}
+		</div>
+	);
+}
+
+function GroupHeader({ label, firstInPage }: { label: string; firstInPage: boolean }) {
+	return (
+		<div className={`col-span-full ${firstInPage ? "" : "mt-3"}`}>
+			<div className="flex items-center gap-3">
+				<h2 className="text-sm font-semibold text-base-content/80 whitespace-nowrap">
+					{label}
+				</h2>
+				<div className="flex-1 border-t border-base-300" />
+			</div>
 		</div>
 	);
 }
