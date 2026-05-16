@@ -50,3 +50,5 @@ If you have some cash to spare and are inspired to share, that's very kind. Rath
 Mine is the [GiveWell top charities fund](https://www.givewell.org/top-charities-fund), which does excellent research to figure out which causes can save the most human lives for the money, and puts their funds there.
 
 Their grant to the [Against Malaria Foundation](https://www.againstmalaria.com) was shown to deliver outcomes at a cost of just $1,700 per life saved.
+
+![GiveWell Logo](./.github/assets/givewell_logo.png)
