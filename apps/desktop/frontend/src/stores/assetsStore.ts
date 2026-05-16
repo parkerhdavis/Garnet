@@ -11,6 +11,8 @@ import {
 	type SortDir,
 	type TagWithCount,
 } from "@/lib/tauri";
+import { buildTypeQuery, formatsInKind, type TypeKind } from "@/lib/typeFilters";
+import { usePrefsStore } from "@/stores/prefsStore";
 
 export const PAGE_SIZE = 60;
 
@@ -30,6 +32,9 @@ type AssetsState = {
 	formats: string[];
 	tagIds: number[];
 	pinnedSourceId: number | null;
+	/** Active Types-sidebar filter (Images/Videos/Audio/Models/Animations/Other).
+	 *  Null when not on a /types/:kind route. */
+	typeKind: TypeKind | null;
 	pathSearch: string;
 	sizeMin: number | null;
 	sizeMax: number | null;
@@ -53,6 +58,7 @@ type AssetsState = {
 	// Actions
 	setRootId: (rootId: number | null) => Promise<void>;
 	setPinnedSourceId: (id: number | null) => Promise<void>;
+	setTypeKind: (kind: TypeKind | null) => Promise<void>;
 	toggleFormat: (format: string) => Promise<void>;
 	clearFormats: () => Promise<void>;
 	toggleTagFilter: (tagId: number) => Promise<void>;
@@ -74,6 +80,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 	formats: [],
 	tagIds: [],
 	pinnedSourceId: null,
+	typeKind: null,
 	pathSearch: "",
 	sizeMin: null,
 	sizeMax: null,
@@ -102,6 +109,12 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 
 	setPinnedSourceId: async (id) => {
 		set({ pinnedSourceId: id, page: 0 });
+		await get().refresh();
+	},
+
+	setTypeKind: async (kind) => {
+		if (get().typeKind === kind) return;
+		set({ typeKind: kind, page: 0 });
 		await get().refresh();
 	},
 
@@ -187,6 +200,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 	refresh: async () => {
 		const myToken = ++refreshToken;
 		const s = get();
+		const bucket = usePrefsStore.getState().animatedImagesBucket;
+		const typeQuery = buildTypeQuery(s.typeKind, bucket, s.formats);
 		// Note: don't clear `error` here. It's used for sticky user-facing
 		// messages from asset operations (rename/move/trash failures, "moved
 		// out of library" notices). A background scan-driven refresh
@@ -194,14 +209,15 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 		// banner has its own dismiss button.
 		set({ loading: true });
 		try {
-			const [page, formatCounts, tagCounts] = await Promise.all([
+			const [page, rawFormatCounts, tagCounts] = await Promise.all([
 				api.listAssets({
 					root_id: s.rootId,
 					limit: PAGE_SIZE,
 					offset: s.page * PAGE_SIZE,
 					sort_by: s.sortBy,
 					sort_dir: s.sortDir,
-					formats: s.formats,
+					formats: typeQuery.formats,
+					formats_exclude: typeQuery.formats_exclude,
 					path_search: s.pathSearch.trim() || null,
 					size_min: s.sizeMin,
 					size_max: s.sizeMax,
@@ -214,6 +230,12 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 				api.listTags(),
 			]);
 			if (myToken !== refreshToken) return; // superseded by a later refresh
+			// Scope FilterBar's format chips to the active type: drop counts for
+			// formats that don't belong to the type, so users don't see e.g.
+			// "jpg" while viewing /types/videos.
+			const formatCounts = rawFormatCounts.filter((fc) =>
+				formatsInKind(s.typeKind, bucket, fc.format),
+			);
 			set({
 				assets: page.assets,
 				total: page.total,

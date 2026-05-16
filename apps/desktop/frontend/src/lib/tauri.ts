@@ -85,6 +85,7 @@ export type AssetQuery = {
 	sort_by?: AssetSortBy;
 	sort_dir?: SortDir;
 	formats?: string[];
+	formats_exclude?: string[];
 	path_search?: string | null;
 	size_min?: number | null;
 	size_max?: number | null;
