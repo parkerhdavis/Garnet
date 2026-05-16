@@ -44,6 +44,11 @@ const VIDEO_FORMATS: &[&str] = &["mp4", "mov", "mkv", "avi", "webm", "m4v", "wmv
 /// `get_thumbnail` will return cached PNGs for these extensions even though
 /// the backend never generates them itself.
 const MODEL_FORMATS: &[&str] = &["gltf", "glb", "obj", "stl", "ply", "fbx"];
+/// `.blend` files don't load into Three.js, so we extract the preview
+/// Blender embeds in the header (BGRA pixels in a `TEST` block) and treat
+/// that as the thumbnail. Generation happens here in Rust, not the
+/// frontend — same dispatch path as image/video.
+const BLEND_FORMATS: &[&str] = &["blend"];
 
 /// Cap on concurrent ffmpeg subprocesses. A full grid of 60 video tiles
 /// otherwise spawns 60 ffmpeg processes simultaneously and each decode runs at
@@ -99,15 +104,22 @@ fn ext_lower(path: &Path) -> Option<String> {
 /// are produced by the frontend and arrive here via `save_model_thumbnail`,
 /// but the cache file lives in the same path so cache hits look identical.
 fn is_thumbnailable(ext: &str) -> bool {
-	IMAGE_FORMATS.contains(&ext) || VIDEO_FORMATS.contains(&ext) || MODEL_FORMATS.contains(&ext)
+	IMAGE_FORMATS.contains(&ext)
+		|| VIDEO_FORMATS.contains(&ext)
+		|| MODEL_FORMATS.contains(&ext)
+		|| BLEND_FORMATS.contains(&ext)
 }
 
 fn is_backend_generatable(ext: &str) -> bool {
-	IMAGE_FORMATS.contains(&ext) || VIDEO_FORMATS.contains(&ext)
+	IMAGE_FORMATS.contains(&ext) || VIDEO_FORMATS.contains(&ext) || BLEND_FORMATS.contains(&ext)
 }
 
 fn is_renderable_model(ext: &str) -> bool {
 	MODEL_FORMATS.contains(&ext)
+}
+
+fn is_blend(ext: &str) -> bool {
+	BLEND_FORMATS.contains(&ext)
 }
 
 /// Pure cache lookup. Returns the absolute path of the cached PNG, or `None`
@@ -183,9 +195,12 @@ pub fn ensure_thumbnail(
 
 	let key_for_task = key.clone();
 	let is_image = IMAGE_FORMATS.contains(&ext.as_str());
+	let is_blend_file = is_blend(&ext);
 	tauri::async_runtime::spawn_blocking(move || {
 		let ok = if is_image {
 			extract_image_thumb(&path, size, &cache_file)
+		} else if is_blend_file {
+			extract_blend_thumb(&path, size, &cache_file)
 		} else {
 			extract_video_thumb(&path, size, &cache_file)
 		};
@@ -317,6 +332,39 @@ fn ffmpeg_slot() -> Permit {
 fn image_slot() -> Permit {
 	static AVAILABLE: OnceLock<Mutex<usize>> = OnceLock::new();
 	acquire(AVAILABLE.get_or_init(|| Mutex::new(IMAGE_DECODE_PARALLELISM)))
+}
+
+/// Pulls the embedded preview out of a `.blend` file (Blender writes one
+/// when "Save Preview Images" is enabled, default since 2.83), resizes it
+/// to our usual thumbnail size, and writes the result to the on-disk
+/// cache. Returns false if the file has no embedded preview or the parse
+/// fails — the frontend will fall back to the cube icon in that case.
+fn extract_blend_thumb(path: &Path, size: u32, cache_file: &Path) -> bool {
+	let _permit = image_slot();
+	let (w, h, rgba) = match crate::blend_preview::extract_preview_rgba(path) {
+		Ok(Some(v)) => v,
+		Ok(None) => {
+			tracing::debug!("no embedded preview in .blend file {path:?}");
+			return false;
+		}
+		Err(e) => {
+			tracing::debug!("failed to read .blend file {path:?}: {e}");
+			return false;
+		}
+	};
+	let Some(buf) = image::RgbaImage::from_raw(w, h, rgba) else {
+		return false;
+	};
+	let img = image::DynamicImage::ImageRgba8(buf);
+	let thumb = img.thumbnail(size, size);
+	let mut bytes: Vec<u8> = Vec::new();
+	if thumb
+		.write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
+		.is_err()
+	{
+		return false;
+	}
+	std::fs::write(cache_file, &bytes).is_ok()
 }
 
 fn extract_image_thumb(path: &Path, size: u32, cache_file: &Path) -> bool {

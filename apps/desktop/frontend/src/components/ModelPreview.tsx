@@ -149,6 +149,7 @@ class ModelScene {
 	private clock = new THREE.Clock();
 	private animationId: number | null = null;
 	private root: THREE.Object3D | null = null;
+	private skeletonHelper: THREE.SkeletonHelper | null = null;
 	private mixer: THREE.AnimationMixer | null = null;
 	private clips: THREE.AnimationClip[] = [];
 	private action: THREE.AnimationAction | null = null;
@@ -235,6 +236,11 @@ class ModelScene {
 		this.mixer = null;
 		this.action = null;
 		this.clips = [];
+		if (this.skeletonHelper) {
+			this.scene.remove(this.skeletonHelper);
+			this.skeletonHelper.dispose();
+			this.skeletonHelper = null;
+		}
 		if (this.root) {
 			this.scene.remove(this.root);
 			disposeObject(this.root);
@@ -256,11 +262,48 @@ class ModelScene {
 		this.root = result.object;
 		this.scene.add(this.root);
 
+		// FBX/glTF with skeletons need their bone matrices computed up front,
+		// or the first frame skins to undefined bone positions and the
+		// SkinnedMesh either renders invisibly or lands far off-camera. Also
+		// uses bone positions to frame the camera, since Box3.setFromObject
+		// on a SkinnedMesh uses bind-pose vertex positions × matrixWorld
+		// which can diverge from where the mesh actually renders.
+		this.root.updateMatrixWorld(true);
+		this.root.traverse((c) => {
+			if (c instanceof THREE.SkinnedMesh) {
+				c.skeleton.pose();
+				c.skeleton.update();
+			}
+		});
+
+		// Motion-only FBX files (Mixamo retargeting clips, etc.) have a
+		// skeleton + animation curves but no character mesh. Detect that and
+		// add a SkeletonHelper so the user sees the rig pose animating.
+		let hasRenderable = false;
+		let hasBones = false;
+		this.root.traverse((c) => {
+			if (
+				c instanceof THREE.Mesh ||
+				c instanceof THREE.Points ||
+				c instanceof THREE.LineSegments
+			) {
+				if (c.visible !== false) hasRenderable = true;
+			}
+			if (c instanceof THREE.Bone) hasBones = true;
+		});
+		if (!hasRenderable && hasBones) {
+			this.skeletonHelper = new THREE.SkeletonHelper(this.root);
+			this.scene.add(this.skeletonHelper);
+		}
+
 		this.clips = result.animations;
 		if (this.clips.length > 0) {
 			this.mixer = new THREE.AnimationMixer(this.root);
 			this.action = this.mixer.clipAction(this.clips[0]);
 			this.action.play();
+			// Tick once so the initial frame already reflects time 0 of the
+			// clip — keeps the camera frame computed below honest.
+			this.mixer.update(0);
 		}
 
 		this.frameObject(this.root);
@@ -268,6 +311,13 @@ class ModelScene {
 
 	private frameObject(object: THREE.Object3D): void {
 		const box = new THREE.Box3().setFromObject(object);
+		object.traverse((c) => {
+			if (c instanceof THREE.Bone) {
+				box.expandByPoint(
+					new THREE.Vector3().setFromMatrixPosition(c.matrixWorld),
+				);
+			}
+		});
 		if (!isFinite(box.min.x) || box.isEmpty()) return;
 		const size = box.getSize(new THREE.Vector3());
 		const center = box.getCenter(new THREE.Vector3());

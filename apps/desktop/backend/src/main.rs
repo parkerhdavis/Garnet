@@ -4,6 +4,7 @@
 
 mod asset_ops;
 mod assets;
+mod blend_preview;
 mod db;
 mod garnet_metadata;
 mod indexer;

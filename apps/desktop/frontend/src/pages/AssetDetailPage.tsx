@@ -13,6 +13,7 @@ import { api, mediaUrl, type Asset, type AssetMetadata } from "@/lib/tauri";
 import { MediaDiagnostic } from "@/components/MediaDiagnostic";
 import { GarnetMetadataEditor } from "@/components/GarnetMetadataEditor";
 import { loadModelThumbnailer } from "@/lib/loadModelThumbnailer";
+import { subscribeThumbnailReady } from "@/lib/thumbnailBus";
 
 // ModelPreview pulls in three.js + addon loaders. Lazy-loading it keeps the
 // initial bundle small; the detail page is fast on non-3D assets and Three.js
@@ -34,6 +35,7 @@ const RASTER_EXTS = new Set([
 	"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp", "avif", "svg", "ico",
 ]);
 const MODEL_EXTS = new Set(["gltf", "glb", "obj", "stl", "ply", "fbx"]);
+const BLEND_EXTS = new Set(["blend"]);
 
 export function AssetDetailPage() {
 	const { id: idParam } = useParams();
@@ -53,6 +55,8 @@ export function AssetDetailPage() {
 	const isAudio = !!ext && AUDIO_EXTS.has(ext);
 	const isImage = !!ext && RASTER_EXTS.has(ext);
 	const isModel = !!ext && MODEL_EXTS.has(ext);
+	const isBlend = !!ext && BLEND_EXTS.has(ext);
+	const [blendPreview, setBlendPreview] = useState<string | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -98,6 +102,37 @@ export function AssetDetailPage() {
 			cancelled = true;
 		};
 	}, [asset, absPath, isVideo, isAudio]);
+
+	// `.blend` has no live renderer — Three.js can't load the format and
+	// we don't want a Blender subprocess dependency. The detail-page preview
+	// is the same PNG we cache for the grid thumbnail (extracted from the
+	// file's embedded preview by `extract_blend_thumb`). Look it up; if it
+	// hasn't been generated yet, kick off generation and pick up the result
+	// via the standard thumbnail:ready bus.
+	useEffect(() => {
+		if (!asset || !isBlend) {
+			setBlendPreview(null);
+			return;
+		}
+		let cancelled = false;
+		const assetMtime = asset.mtime;
+		void api.getThumbnail(absPath, assetMtime, 1024).then((path) => {
+			if (cancelled) return;
+			if (path) {
+				setBlendPreview(convertFileSrc(path));
+			} else {
+				void api.ensureThumbnail(absPath, assetMtime, 1024).catch(() => {});
+			}
+		});
+		const unsub = subscribeThumbnailReady(absPath, assetMtime, 1024, (payload) => {
+			if (cancelled) return;
+			setBlendPreview(convertFileSrc(payload.path));
+		});
+		return () => {
+			cancelled = true;
+			unsub();
+		};
+	}, [asset, absPath, isBlend]);
 
 	// Opening a model's detail page force-regenerates its thumbnail. The
 	// thumbnailer's `thumbnail:ready` event flows back through thumbnailBus,
@@ -284,6 +319,22 @@ export function AssetDetailPage() {
 								<ModelPreview url={livePath} format={asset.format} />
 							</Suspense>
 						</div>
+					) : isBlend ? (
+						blendPreview ? (
+							<img
+								src={blendPreview}
+								alt={asset.relative_path}
+								className="max-w-full max-h-full object-contain"
+							/>
+						) : (
+							<div className="text-center text-xs text-base-content/60 max-w-md">
+								<div className="mb-2">No interactive preview for .blend files.</div>
+								<div>
+									Generating embedded thumbnail… Use <strong>Open externally</strong> above
+									to open in Blender.
+								</div>
+							</div>
+						)
 					) : (
 						<div className="text-base-content/50 text-sm">
 							No inline preview for this format.
