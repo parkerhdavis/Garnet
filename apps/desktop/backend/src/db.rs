@@ -209,6 +209,22 @@ pub static MIGRATIONS: &[(i64, &str)] = &[
 		    ON assets(is_motion_only) WHERE is_motion_only IS NOT NULL;
 		",
 	),
+	(
+		6,
+		"
+		-- Does this 3D asset contain a *meaningful* animation clip — one
+		-- with >0.1 s duration and at least one track with more than one
+		-- keyframe (see isMeaningfulClip in ModelPreview.tsx). Set by the
+		-- frontend's modelThumbnailer on render. NULL = unknown (treated
+		-- as 'no' by AssetThumbnail for the hover-preview decision so we
+		-- don't spin up a WebGL context for what's probably a static
+		-- model); the flag is filled in on the next thumbnail render for
+		-- that asset, which the detail page force-triggers on visit.
+		ALTER TABLE assets ADD COLUMN has_animation INTEGER;
+		CREATE INDEX assets_by_has_animation
+		    ON assets(has_animation) WHERE has_animation IS NOT NULL;
+		",
+	),
 ];
 
 #[cfg(test)]

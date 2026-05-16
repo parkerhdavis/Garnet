@@ -49,6 +49,13 @@ export type Asset = {
 	/// mesh (Mixamo retargeting clips). Set by the frontend thumbnailer
 	/// via save_model_thumbnail. null = not yet classified.
 	is_motion_only: boolean | null;
+	/// True for 3D files that carry at least one meaningful animation
+	/// clip (isMeaningfulClip in ModelPreview). Set by the frontend
+	/// thumbnailer via save_model_thumbnail. null = not yet classified
+	/// — AssetThumbnail treats null as "don't bother" for its hover
+	/// preview, so older cached assets need a re-render (which the
+	/// detail page force-triggers on visit) before hover kicks in.
+	has_animation: boolean | null;
 };
 
 export type AssetMetadata = {
@@ -187,6 +194,7 @@ export const api = {
 		size: number,
 		pngBase64: string,
 		motionOnly: boolean,
+		hasAnimation: boolean,
 	) =>
 		invoke<void>("save_model_thumbnail", {
 			assetId,
@@ -195,6 +203,7 @@ export const api = {
 			size,
 			pngBase64,
 			motionOnly,
+			hasAnimation,
 		}),
 	getStartupTimings: () =>
 		invoke<StartupReport | null>("get_startup_timings"),

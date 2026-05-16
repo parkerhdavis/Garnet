@@ -24,6 +24,15 @@ pub struct Asset {
 	/// NULL when classification hasn't run yet for this asset.
 	#[serde(default)]
 	pub is_motion_only: Option<bool>,
+	/// True when the 3D file carries at least one meaningful animation
+	/// clip (see `isMeaningfulClip` in `ModelPreview.tsx`). Set by the
+	/// frontend thumbnailer on render. NULL when classification hasn't
+	/// run yet for this asset; the hover-preview gate in `AssetThumbnail`
+	/// treats NULL as "don't bother" so static models with stale
+	/// thumbnails don't trigger the WebGL swap until the thumbnailer has
+	/// had a chance to re-render them.
+	#[serde(default)]
+	pub has_animation: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
@@ -381,7 +390,7 @@ pub fn list_assets_impl(conn: &Connection, q: &AssetQuery) -> rusqlite::Result<A
 		None => format!("ORDER BY {}", sort_expr(q.sort_by, q.sort_dir)),
 	};
 	let list_sql = format!(
-		"SELECT a.id, a.root_id, r.path, a.relative_path, a.size, a.mtime, a.format, a.is_motion_only
+		"SELECT a.id, a.root_id, r.path, a.relative_path, a.size, a.mtime, a.format, a.is_motion_only, a.has_animation
 		 FROM assets a JOIN library_roots r ON r.id = a.root_id
 		 {where_sql} {order} LIMIT ? OFFSET ?"
 	);
@@ -407,6 +416,9 @@ pub fn list_assets_impl(conn: &Connection, q: &AssetQuery) -> rusqlite::Result<A
 				format: r.get(6)?,
 				is_motion_only: r
 					.get::<_, Option<i64>>(7)?
+					.map(|v| v != 0),
+				has_animation: r
+					.get::<_, Option<i64>>(8)?
 					.map(|v| v != 0),
 			})
 		})?
@@ -468,7 +480,7 @@ pub fn list_asset_formats(
 pub fn get_asset(state: State<AppState>, id: i64) -> Result<Asset, String> {
 	let conn = state.db.lock().map_err(stringify)?;
 	conn.query_row(
-		"SELECT a.id, a.root_id, r.path, a.relative_path, a.size, a.mtime, a.format, a.is_motion_only
+		"SELECT a.id, a.root_id, r.path, a.relative_path, a.size, a.mtime, a.format, a.is_motion_only, a.has_animation
 		 FROM assets a JOIN library_roots r ON r.id = a.root_id
 		 WHERE a.id = ?1",
 		[id],
@@ -483,6 +495,9 @@ pub fn get_asset(state: State<AppState>, id: i64) -> Result<Asset, String> {
 				format: r.get(6)?,
 				is_motion_only: r
 					.get::<_, Option<i64>>(7)?
+					.map(|v| v != 0),
+				has_animation: r
+					.get::<_, Option<i64>>(8)?
 					.map(|v| v != 0),
 			})
 		},
@@ -511,6 +526,7 @@ mod tests {
 				mtime          INTEGER,
 				format         TEXT,
 				is_motion_only INTEGER,
+				has_animation  INTEGER,
 				UNIQUE(root_id, relative_path)
 			);
 			INSERT INTO library_roots (id, path, added_at) VALUES (1, '/tmp/r1', 0);

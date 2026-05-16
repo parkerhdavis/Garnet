@@ -23,6 +23,7 @@ import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { PLYLoader } from "three/addons/loaders/PLYLoader.js";
 import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { isMeaningfulClip } from "@/components/ModelPreview";
 
 const MODEL_KINDS = ["gltf", "glb", "obj", "stl", "ply", "fbx"] as const;
 type ModelKind = (typeof MODEL_KINDS)[number];
@@ -126,7 +127,7 @@ export function Live3DPreview({ absPath, format }: Props) {
 				scene.add(skeletonHelper);
 			}
 
-			const animations = readAnimations(root, kind);
+			const animations = readAnimations(root, kind).filter(isMeaningfulClip);
 			if (animations.length > 0) {
 				mixer = new THREE.AnimationMixer(root);
 				const action = mixer.clipAction(animations[0]);

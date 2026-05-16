@@ -75,12 +75,17 @@ function fallbackIconFor(format: string | null) {
 	return HiOutlineDocument;
 }
 
-function isHoverPlayable(format: string | null): "video" | "image" | "model" | null {
+function isHoverPlayable(asset: Asset): "video" | "image" | "model" | null {
+	const format = asset.format;
 	if (!format) return null;
 	const f = format.toLowerCase();
 	if (VIDEO_EXTS.has(f)) return "video";
 	if (ANIMATED_IMAGE_EXTS.has(f)) return "image";
-	if (RENDERABLE_MODEL_EXTS.has(f)) return "model";
+	// Models only animate if the thumbnailer has confirmed there's a
+	// meaningful clip to play. NULL (= not yet classified) is treated as
+	// "don't bother" so the static thumbnail isn't disrupted by spinning
+	// up a WebGL context that probably won't show anything moving.
+	if (RENDERABLE_MODEL_EXTS.has(f) && asset.has_animation === true) return "model";
 	return null;
 }
 
@@ -216,7 +221,7 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 		isBlend,
 	]);
 
-	const playable = isHoverPlayable(asset.format);
+	const playable = isHoverPlayable(asset);
 	const showLive = liveOnHover && hovering && playable !== null;
 
 	const [liveSrc, setLiveSrc] = useState<string | null>(null);

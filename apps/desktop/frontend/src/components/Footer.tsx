@@ -11,9 +11,19 @@
 //! assetsStore directly so the page itself doesn't need to render its own
 //! pagination strip.
 
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAssetsStore, PAGE_SIZE } from "@/stores/assetsStore";
 import { useBgTasksStore, type BgTaskKind } from "@/stores/bgTasksStore";
+
+/// How long a background task must run before its indicator appears. Quick
+/// scans (cold-cache misses, no-op file-watcher rescans) finish below this
+/// threshold and never show — they're not worth flashing the footer for.
+const SHOW_DELAY_MS = 300;
+/// Once the indicator is showing, keep it visible at least this long after
+/// activity ceases. Smooths out the "scan finishes → next debounced scan
+/// fires 200 ms later" pattern that otherwise toggles the footer rapidly.
+const MIN_VISIBLE_MS = 800;
 
 function useIsLibraryRoute(): boolean {
 	const { pathname } = useLocation();
@@ -25,6 +35,34 @@ function useIsLibraryRoute(): boolean {
 
 function pluralize(n: number, singular: string, plural?: string): string {
 	return n === 1 ? singular : (plural ?? `${singular}s`);
+}
+
+/// Wraps a boolean "something is happening" signal with on-delay and
+/// min-visible duration so the UI doesn't flicker on sub-second tasks.
+function useSmoothedActive(active: boolean): boolean {
+	const [shown, setShown] = useState(false);
+	const shownAtRef = useRef<number | null>(null);
+
+	useEffect(() => {
+		if (active) {
+			if (shown) return;
+			const t = window.setTimeout(() => {
+				setShown(true);
+				shownAtRef.current = performance.now();
+			}, SHOW_DELAY_MS);
+			return () => window.clearTimeout(t);
+		}
+		if (!shown) return;
+		const visibleFor = performance.now() - (shownAtRef.current ?? 0);
+		const remaining = Math.max(0, MIN_VISIBLE_MS - visibleFor);
+		const t = window.setTimeout(() => {
+			setShown(false);
+			shownAtRef.current = null;
+		}, remaining);
+		return () => window.clearTimeout(t);
+	}, [active, shown]);
+
+	return shown;
 }
 
 function summarize(byKind: Map<BgTaskKind, number>): string {
@@ -53,7 +91,12 @@ export function Footer() {
 		byKind.set(t.kind, (byKind.get(t.kind) ?? 0) + 1);
 	}
 	const caption = summarize(byKind);
-	const active = tasks.size > 0;
+	const active = useSmoothedActive(tasks.size > 0);
+	// Hold the last non-empty caption so the label doesn't blank out during
+	// the MIN_VISIBLE_MS coast after the underlying task count hits zero.
+	const lastCaptionRef = useRef("Working…");
+	if (caption) lastCaptionRef.current = caption;
+	const displayedCaption = caption || lastCaptionRef.current;
 
 	const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 	const showPagination = isLibraryRoute && total > PAGE_SIZE;
@@ -69,8 +112,8 @@ export function Footer() {
 							className="loading loading-spinner loading-xs text-primary shrink-0"
 							aria-hidden="true"
 						/>
-						<span className="text-base-content/80 truncate" title={caption}>
-							{caption}
+						<span className="text-base-content/80 truncate" title={displayedCaption}>
+							{displayedCaption}
 						</span>
 					</>
 				) : isLibraryRoute && total > 0 ? (

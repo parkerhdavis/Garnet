@@ -226,10 +226,16 @@ pub fn ensure_thumbnail(
 /// Persists a thumbnail PNG rendered by the frontend (Three.js) into the
 /// same on-disk cache used by image/video thumbnails. The frontend hands us
 /// the absolute path + mtime + size so the cache key matches what
-/// `get_thumbnail` would look up on the next visit, plus a classification
-/// flag (`motion_only`) the thumbnailer derives at render time — true when
-/// the file has a skeleton but no mesh geometry. We persist that to
-/// `assets.is_motion_only` so the Animations type view can pick it up.
+/// `get_thumbnail` would look up on the next visit, plus two classification
+/// flags the thumbnailer derives at render time:
+///   - `motion_only` — true when the file has a skeleton but no mesh
+///     geometry; persisted to `assets.is_motion_only` so the Animations
+///     type view can pick it up.
+///   - `has_animation` — true when at least one meaningful animation clip
+///     survives `isMeaningfulClip`; persisted to `assets.has_animation` so
+///     `AssetThumbnail`'s hover-preview gate can skip Live3DPreview for
+///     models that wouldn't actually animate.
+///
 /// Emits `thumbnail:ready` after a successful write so any AssetThumbnail
 /// subscribed to this key picks up the path via `thumbnailBus` and swaps
 /// in the new image.
@@ -242,6 +248,7 @@ pub fn save_model_thumbnail(
 	size: Option<u32>,
 	png_base64: String,
 	motion_only: bool,
+	has_animation: bool,
 	state: tauri::State<crate::AppState>,
 	app: AppHandle,
 ) -> Result<(), String> {
@@ -259,17 +266,19 @@ pub fn save_model_thumbnail(
 	std::fs::write(&cache_file, &bytes).map_err(|e| e.to_string())?;
 
 	// Record the classification so type-view filters can route motion-only
-	// files to Animations. Best-effort — a DB hiccup shouldn't fail the
-	// thumbnail save (the PNG is already on disk).
+	// files to Animations and the hover-preview can skip static models.
+	// Best-effort — a DB hiccup shouldn't fail the thumbnail save (the PNG
+	// is already on disk).
 	{
 		match state.db.lock() {
 			Ok(conn) => {
-				let value: i64 = if motion_only { 1 } else { 0 };
+				let motion_value: i64 = if motion_only { 1 } else { 0 };
+				let anim_value: i64 = if has_animation { 1 } else { 0 };
 				if let Err(e) = conn.execute(
-					"UPDATE assets SET is_motion_only = ?1 WHERE id = ?2",
-					rusqlite::params![value, asset_id],
+					"UPDATE assets SET is_motion_only = ?1, has_animation = ?2 WHERE id = ?3",
+					rusqlite::params![motion_value, anim_value, asset_id],
 				) {
-					tracing::warn!("save_model_thumbnail: motion_only update failed: {e}");
+					tracing::warn!("save_model_thumbnail: classification update failed: {e}");
 				}
 			}
 			Err(e) => tracing::warn!("save_model_thumbnail: db lock poisoned: {e}"),

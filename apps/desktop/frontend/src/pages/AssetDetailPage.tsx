@@ -10,6 +10,7 @@ import {
 	HiFolderOpen,
 } from "react-icons/hi2";
 import { api, mediaUrl, type Asset, type AssetMetadata } from "@/lib/tauri";
+import type { ModelStats } from "@/components/ModelPreview";
 import { MediaDiagnostic } from "@/components/MediaDiagnostic";
 import { GarnetMetadataEditor } from "@/components/GarnetMetadataEditor";
 import { loadModelThumbnailer } from "@/lib/loadModelThumbnailer";
@@ -48,6 +49,7 @@ export function AssetDetailPage() {
 	const [openerError, setOpenerError] = useState<string | null>(null);
 	const [diagnosticOpen, setDiagnosticOpen] = useState(false);
 	const [livePath, setLivePath] = useState<string>("");
+	const [modelStats, setModelStats] = useState<ModelStats | null>(null);
 
 	const ext = asset?.format?.toLowerCase();
 	const absPath = asset ? absPathFor(asset) : "";
@@ -317,7 +319,11 @@ export function AssetDetailPage() {
 									</div>
 								}
 							>
-								<ModelPreview url={livePath} format={asset.format} />
+								<ModelPreview
+									url={livePath}
+									format={asset.format}
+									onStats={setModelStats}
+								/>
 							</Suspense>
 						</div>
 					) : isBlend ? (
@@ -351,6 +357,27 @@ export function AssetDetailPage() {
 						<KV label="Source" value={asset.root_path} mono />
 						<KV label="Path" value={asset.relative_path} mono />
 					</DetailSection>
+
+					{isModel && modelStats && (
+						<DetailSection title="Model">
+							<KV label="Triangles" value={modelStats.triangles.toLocaleString()} />
+							<KV label="Vertices" value={modelStats.vertices.toLocaleString()} />
+							<KV label="Meshes" value={modelStats.meshes.toLocaleString()} />
+							<KV label="Materials" value={modelStats.materials.toLocaleString()} />
+							{modelStats.textures > 0 && (
+								<KV label="Textures" value={modelStats.textures.toLocaleString()} />
+							)}
+							{modelStats.bones > 0 && (
+								<KV label="Bones" value={modelStats.bones.toLocaleString()} />
+							)}
+							{modelStats.animations > 0 && (
+								<KV
+									label="Animations"
+									value={modelStats.animations.toLocaleString()}
+								/>
+							)}
+						</DetailSection>
+					)}
 
 					<DetailSection title="Native Metadata">
 						{metadata.length === 0 ? (
