@@ -37,7 +37,7 @@ export type ModelStats = {
 /// otherwise-static scenes — a single keyframe per channel or a few frames
 /// that don't actually move anything. Filter those so the timeline / play
 /// controls don't appear for what the user perceives as a static model.
-function isMeaningfulClip(clip: THREE.AnimationClip): boolean {
+export function isMeaningfulClip(clip: THREE.AnimationClip): boolean {
 	if (clip.duration < 0.1) return false;
 	return clip.tracks.some((t) => t.times.length > 1);
 }
