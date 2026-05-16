@@ -225,6 +225,11 @@ export function EditorPage() {
 	const showingOriginal = viewMode === "original";
 	const previewSrc = previewBase64 ? `data:image/png;base64,${previewBase64}` : null;
 	const originalSrc = convertFileSrc(absPath);
+	// With no pending edits, the "edited" view IS the original — render
+	// the source directly via the asset protocol instead of round-tripping
+	// the full image through PNG/base64 just to reproduce the input.
+	const renderOriginal = showingOriginal || pendingOps.length === 0;
+	const canvasSrc = renderOriginal ? originalSrc : previewSrc;
 
 	return (
 		<div className="flex-1 min-h-0 flex flex-col">
@@ -277,22 +282,16 @@ export function EditorPage() {
 
 			<div className="flex-1 min-h-0 flex">
 				<div className="flex-1 min-w-0 flex items-center justify-center bg-base-300/30 p-4 relative">
-					{showingOriginal ? (
+					{canvasSrc ? (
 						<img
-							src={originalSrc}
-							alt="Original"
-							className="max-w-full max-h-full object-contain"
-						/>
-					) : previewSrc ? (
-						<img
-							src={previewSrc}
-							alt="Edited preview"
+							src={canvasSrc}
+							alt={renderOriginal ? "Original" : "Edited preview"}
 							className="max-w-full max-h-full object-contain"
 						/>
 					) : (
-						<div className="text-xs text-base-content/50">Loading preview…</div>
+						<div className="text-xs text-base-content/50">Rendering preview…</div>
 					)}
-					{previewing && !showingOriginal && (
+					{previewing && !renderOriginal && (
 						<div className="absolute top-2 right-2 text-[10px] uppercase tracking-wider text-base-content/55 bg-base-100/80 px-2 py-0.5 rounded">
 							Rendering…
 						</div>

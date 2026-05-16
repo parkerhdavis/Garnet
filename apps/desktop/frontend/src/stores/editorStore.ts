@@ -130,6 +130,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 	refreshPreview: async () => {
 		const { sourcePath, pendingOps } = get();
 		if (!sourcePath) return;
+		// Empty pipeline = "edited" view is the original. The canvas
+		// renders the source directly via the asset protocol in that
+		// case (see EditorPage); no need to round-trip a full decode +
+		// PNG re-encode + base64 transfer just to reproduce the input.
+		if (pendingOps.length === 0) {
+			set({ previewBase64: null, previewing: false });
+			return;
+		}
 		set({ previewing: true });
 		try {
 			const b64 = await invoke<string>("preview_edit", {
