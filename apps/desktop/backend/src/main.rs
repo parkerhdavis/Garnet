@@ -35,7 +35,7 @@ use startup_timing::{
 	StartupTimingsState,
 };
 use std::sync::{Arc, Mutex};
-use thumbnails::{ensure_thumbnail, get_thumbnail};
+use thumbnails::{ensure_thumbnail, get_thumbnail, save_model_thumbnail};
 use tauri::Manager;
 use tracing_subscriber::EnvFilter;
 
@@ -220,6 +220,7 @@ fn main() {
 			list_asset_metadata,
 			get_thumbnail,
 			ensure_thumbnail,
+			save_model_thumbnail,
 			get_startup_timings,
 			mark_startup_phase,
 			finalize_startup_timings,

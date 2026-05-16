@@ -20,8 +20,14 @@
 //!   - Raster image formats (png/jpg/gif/bmp/tiff/webp) → decoded via the
 //!     `image` crate and resized in-process.
 //!   - Video formats → frame extracted by shelling out to `ffmpeg`.
+//!   - 3D model formats (gltf/glb/obj/stl/ply/fbx) → cache lookup only here;
+//!     generation requires WebGL and happens in the frontend (Three.js).
+//!     The frontend posts its rendered PNG back through
+//!     `save_model_thumbnail`, which writes to the same cache path scheme
+//!     and emits the standard `thumbnail:ready` event.
 //!   - Anything else → ignored (frontend shows the format icon fallback).
 
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use image::imageops::FilterType;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -34,6 +40,10 @@ use tauri::{AppHandle, Emitter};
 const DEFAULT_SIZE: u32 = 240;
 const IMAGE_FORMATS: &[&str] = &["png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp"];
 const VIDEO_FORMATS: &[&str] = &["mp4", "mov", "mkv", "avi", "webm", "m4v", "wmv"];
+/// 3D formats the frontend's Three.js thumbnailer can render. Listed here so
+/// `get_thumbnail` will return cached PNGs for these extensions even though
+/// the backend never generates them itself.
+const MODEL_FORMATS: &[&str] = &["gltf", "glb", "obj", "stl", "ply", "fbx"];
 
 /// Cap on concurrent ffmpeg subprocesses. A full grid of 60 video tiles
 /// otherwise spawns 60 ffmpeg processes simultaneously and each decode runs at
@@ -84,8 +94,20 @@ fn ext_lower(path: &Path) -> Option<String> {
 	path.extension().and_then(|s| s.to_str()).map(|s| s.to_ascii_lowercase())
 }
 
-fn supports(ext: &str) -> bool {
+/// Set of formats `get_thumbnail` will resolve out of the cache. Note this
+/// is wider than what `ensure_thumbnail` actually generates — model thumbs
+/// are produced by the frontend and arrive here via `save_model_thumbnail`,
+/// but the cache file lives in the same path so cache hits look identical.
+fn is_thumbnailable(ext: &str) -> bool {
+	IMAGE_FORMATS.contains(&ext) || VIDEO_FORMATS.contains(&ext) || MODEL_FORMATS.contains(&ext)
+}
+
+fn is_backend_generatable(ext: &str) -> bool {
 	IMAGE_FORMATS.contains(&ext) || VIDEO_FORMATS.contains(&ext)
+}
+
+fn is_renderable_model(ext: &str) -> bool {
+	MODEL_FORMATS.contains(&ext)
 }
 
 /// Pure cache lookup. Returns the absolute path of the cached PNG, or `None`
@@ -101,7 +123,7 @@ pub fn get_thumbnail(
 	let size = size.unwrap_or(DEFAULT_SIZE).clamp(32, 1024);
 	let path = PathBuf::from(&abs_path);
 	let Some(ext) = ext_lower(&path) else { return Ok(None) };
-	if !supports(&ext) {
+	if !is_thumbnailable(&ext) {
 		return Ok(None);
 	}
 	let key = cache_key(&abs_path, mtime, size);
@@ -127,7 +149,10 @@ pub fn ensure_thumbnail(
 	let size = size.unwrap_or(DEFAULT_SIZE).clamp(32, 1024);
 	let path = PathBuf::from(&abs_path);
 	let Some(ext) = ext_lower(&path) else { return Ok(()) };
-	if !supports(&ext) {
+	if !is_backend_generatable(&ext) {
+		// Model formats need WebGL — generation is the frontend's job. Don't
+		// error or warn; the frontend's modelThumbnailer takes over via
+		// save_model_thumbnail.
 		return Ok(());
 	}
 	let key = cache_key(&abs_path, mtime, size);
@@ -180,6 +205,45 @@ pub fn ensure_thumbnail(
 		}
 	});
 
+	Ok(())
+}
+
+/// Persists a thumbnail PNG rendered by the frontend (Three.js) into the
+/// same on-disk cache used by image/video thumbnails. The frontend hands us
+/// the absolute path + mtime + size so the cache key matches what
+/// `get_thumbnail` would look up on the next visit. Emits `thumbnail:ready`
+/// after a successful write so any AssetThumbnail subscribed to this key
+/// picks up the path via `thumbnailBus` and swaps in the new image.
+#[tauri::command]
+pub fn save_model_thumbnail(
+	abs_path: String,
+	mtime: Option<i64>,
+	size: Option<u32>,
+	png_base64: String,
+	app: AppHandle,
+) -> Result<(), String> {
+	let size = size.unwrap_or(DEFAULT_SIZE).clamp(32, 1024);
+	let path = PathBuf::from(&abs_path);
+	let ext = ext_lower(&path).ok_or_else(|| "missing extension".to_string())?;
+	if !is_renderable_model(&ext) {
+		return Err(format!("save_model_thumbnail: {ext} is not a renderable model format"));
+	}
+	let bytes = BASE64
+		.decode(png_base64.as_bytes())
+		.map_err(|e| format!("invalid base64 PNG: {e}"))?;
+	let key = cache_key(&abs_path, mtime, size);
+	let cache_file = cache_dir()?.join(format!("{key}.png"));
+	std::fs::write(&cache_file, &bytes).map_err(|e| e.to_string())?;
+
+	let _ = app.emit(
+		"thumbnail:ready",
+		ThumbnailReady {
+			abs_path,
+			mtime,
+			size,
+			path: cache_file.to_string_lossy().into_owned(),
+		},
+	);
 	Ok(())
 }
 

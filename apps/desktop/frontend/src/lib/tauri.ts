@@ -159,6 +159,17 @@ export const api = {
 	/// emits a `thumbnail:ready` event when done.
 	ensureThumbnail: (absPath: string, mtime: number | null, size?: number) =>
 		invoke<void>("ensure_thumbnail", { absPath, mtime, size }),
+	/// Persist a model thumbnail rendered in the frontend (Three.js). The
+	/// backend writes it to the same cache path get_thumbnail looks up and
+	/// emits `thumbnail:ready`, so the rest of the pipeline is identical to
+	/// the image/video flow.
+	saveModelThumbnail: (
+		absPath: string,
+		mtime: number | null,
+		size: number,
+		pngBase64: string,
+	) =>
+		invoke<void>("save_model_thumbnail", { absPath, mtime, size, pngBase64 }),
 	getStartupTimings: () =>
 		invoke<StartupReport | null>("get_startup_timings"),
 	markStartupPhase: (name: string, note: string | null = null) =>

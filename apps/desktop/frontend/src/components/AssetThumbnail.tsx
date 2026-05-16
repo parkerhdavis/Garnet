@@ -26,8 +26,10 @@ import {
 } from "react-icons/hi2";
 import { api, mediaUrl, type Asset } from "@/lib/tauri";
 import { absPathFor } from "@/lib/paths";
+import { loadModelThumbnailer } from "@/lib/loadModelThumbnailer";
 import { subscribeThumbnailReady } from "@/lib/thumbnailBus";
 import { useBgTasksStore } from "@/stores/bgTasksStore";
+import { awaitBootReady } from "@/stores/bootStore";
 
 const RASTER_EXTS = new Set([
 	"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp",
@@ -42,6 +44,9 @@ const AUDIO_EXTS = new Set([
 const MODEL_EXTS = new Set([
 	"fbx", "obj", "gltf", "glb", "usd", "usdz", "stl", "blend", "dae", "3ds", "ply",
 ]);
+/// Subset the frontend's Three.js thumbnailer can render. Other model
+/// formats stay on the cube-icon fallback.
+const RENDERABLE_MODEL_EXTS = new Set(["gltf", "glb", "obj", "stl", "ply", "fbx"]);
 const CODE_EXTS = new Set([
 	"json", "xml", "yaml", "yml", "toml", "js", "ts", "tsx", "jsx", "py", "rs",
 	"go", "java", "cs", "cpp", "c", "h", "sh", "html", "css", "md",
@@ -86,22 +91,24 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 	const ext = asset.format?.toLowerCase();
 	const isRaster = !!ext && RASTER_EXTS.has(ext);
 	const isVideo = !!ext && VIDEO_EXTS.has(ext);
+	const isRenderableModel = !!ext && RENDERABLE_MODEL_EXTS.has(ext);
 
 	useEffect(() => {
 		let cancelled = false;
 		setSrc(null);
 		setFailed(false);
-		if (!isRaster && !isVideo) {
+		if (!isRaster && !isVideo && !isRenderableModel) {
 			setFailed(true);
 			return;
 		}
 		const absPath = absPathFor(asset);
 		const taskId = `thumb:${absPath}|${asset.mtime ?? ""}|${size}`;
+		const taskKind = isRenderableModel ? "model-thumbnail" : "thumbnail";
 		let taskRegistered = false;
 		const registerTask = () => {
 			if (taskRegistered) return;
 			taskRegistered = true;
-			useBgTasksStore.getState().add({ id: taskId, kind: "thumbnail" });
+			useBgTasksStore.getState().add({ id: taskId, kind: taskKind });
 		};
 		const clearTask = () => {
 			if (!taskRegistered) return;
@@ -110,7 +117,7 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 		};
 
 		// Subscribe FIRST so an event that fires between the cache-miss
-		// response and the ensure-thumbnail dispatch isn't lost.
+		// response and the generation dispatch isn't lost.
 		const unsubscribe = subscribeThumbnailReady(
 			absPath,
 			asset.mtime,
@@ -124,7 +131,7 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 		);
 
 		api.getThumbnail(absPath, asset.mtime, size)
-			.then((path) => {
+			.then(async (path) => {
 				if (cancelled) return;
 				if (path) {
 					// Cache hit. Browser loads the PNG through Tauri's asset
@@ -133,13 +140,46 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 					setSrc(convertFileSrc(path));
 					return;
 				}
-				// Cache miss. Kick off background generation; the subscriber
-				// above will pick up the result when it lands.
+				// Cache miss. Generation is a *background* task — wait until
+				// the splash has finished and the app is settled before
+				// firing, so we don't compete with startup work. Detail-page
+				// regen and right-click Refresh still bypass this gate.
+				await awaitBootReady();
+				if (cancelled) return;
+				// Image/video go to the Rust async generator; renderable
+				// models go to the frontend's Three.js thumbnailer
+				// (idle-scheduled, concurrency 1). Both surface their result
+				// through `thumbnail:ready` so the subscriber above handles
+				// the UI update either way.
 				registerTask();
-				void api.ensureThumbnail(absPath, asset.mtime, size).catch(() => {
-					if (!cancelled) setFailed(true);
-					clearTask();
-				});
+				if (isRenderableModel) {
+					try {
+						const thumbnailer = await loadModelThumbnailer();
+						const ok = await thumbnailer.request(
+							absPath,
+							asset.mtime,
+							size,
+							asset.format,
+						);
+						if (cancelled) return;
+						if (!ok) {
+							setFailed(true);
+							clearTask();
+						}
+						// On success, the subscriber above already handled
+						// setSrc + clearTask via the thumbnail:ready event.
+					} catch {
+						if (!cancelled) {
+							setFailed(true);
+							clearTask();
+						}
+					}
+				} else {
+					void api.ensureThumbnail(absPath, asset.mtime, size).catch(() => {
+						if (!cancelled) setFailed(true);
+						clearTask();
+					});
+				}
 			})
 			.catch(() => {
 				if (!cancelled) setFailed(true);
@@ -150,7 +190,17 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 			unsubscribe();
 			clearTask();
 		};
-	}, [asset.id, asset.mtime, asset.format, asset.relative_path, asset.root_path, size, isRaster, isVideo]);
+	}, [
+		asset.id,
+		asset.mtime,
+		asset.format,
+		asset.relative_path,
+		asset.root_path,
+		size,
+		isRaster,
+		isVideo,
+		isRenderableModel,
+	]);
 
 	const playable = isHoverPlayable(asset.format);
 	const showLive = liveOnHover && hovering && playable !== null;
