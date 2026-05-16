@@ -6,6 +6,7 @@ mod asset_ops;
 mod assets;
 mod blend_preview;
 mod db;
+mod editor;
 mod garnet_metadata;
 mod indexer;
 mod library;
@@ -20,6 +21,7 @@ mod watcher;
 
 use asset_ops::{move_asset, move_file, rename_asset, restore_from_trash, trash_asset};
 use assets::{get_asset, list_asset_formats, list_assets};
+use editor::{commit_edit, preview_edit};
 use garnet_metadata::{
 	add_garnet_metadata_value, list_garnet_metadata, list_garnet_metadata_values_for_key,
 	remove_garnet_metadata_key, remove_garnet_metadata_value, set_garnet_metadata_key,
@@ -236,6 +238,8 @@ fn main() {
 			unpin_source,
 			list_plugins,
 			get_media_port,
+			preview_edit,
+			commit_edit,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
