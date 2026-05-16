@@ -46,6 +46,7 @@ type ModelKind = (typeof MODEL_KINDS)[number];
 
 type Job = {
 	key: string;
+	assetId: number;
 	absPath: string;
 	mtime: number | null;
 	size: number;
@@ -109,6 +110,7 @@ class Thumbnailer {
 	/// is in flight return the same promise. `force: true` bypasses the
 	/// dedup (used for refresh actions).
 	request(
+		assetId: number,
 		absPath: string,
 		mtime: number | null,
 		size: number,
@@ -123,7 +125,7 @@ class Thumbnailer {
 			if (existing) return existing;
 		}
 		const promise = new Promise<boolean>((resolve) => {
-			this.queue.push({ key, absPath, mtime, size, kind, resolve });
+			this.queue.push({ key, assetId, absPath, mtime, size, kind, resolve });
 		});
 		this.inFlight.set(key, promise);
 		this.scheduleNext();
@@ -176,8 +178,12 @@ class Thumbnailer {
 		// Motion-only FBX files (Mixamo retargeting clips, etc.) contain a
 		// skeleton + animation curves but no character mesh — there's
 		// nothing renderable to draw. Detect that case and add a
-		// SkeletonHelper so we have something visible to thumbnail.
+		// SkeletonHelper so we have something visible to thumbnail. The
+		// helper's presence is also the signal we forward to the backend as
+		// `motion_only=true`, which routes the asset to the Animations type
+		// view rather than Models.
 		const helper = addSkeletonHelperIfMotionOnly(object, scene);
+		const motionOnly = helper !== null;
 		try {
 			settleSkinnedMeshes(object);
 			frameObjectInCamera(object, camera);
@@ -186,7 +192,14 @@ class Thumbnailer {
 			if (!dataUrl) return false;
 			const b64 = dataUrl.replace(/^data:image\/png;base64,/, "");
 			try {
-				await api.saveModelThumbnail(job.absPath, job.mtime, job.size, b64);
+				await api.saveModelThumbnail(
+					job.assetId,
+					job.absPath,
+					job.mtime,
+					job.size,
+					b64,
+					motionOnly,
+				);
 				return true;
 			} catch (e) {
 				console.warn("[modelThumbnailer] saveModelThumbnail failed", e);

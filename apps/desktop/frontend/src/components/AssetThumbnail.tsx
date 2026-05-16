@@ -168,6 +168,7 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 					try {
 						const thumbnailer = await loadModelThumbnailer();
 						const ok = await thumbnailer.request(
+							asset.id,
 							absPath,
 							asset.mtime,
 							size,

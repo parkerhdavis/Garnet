@@ -393,12 +393,13 @@ mod tests {
 				added_at INTEGER NOT NULL
 			);
 			CREATE TABLE assets (
-				id            INTEGER PRIMARY KEY,
-				root_id       INTEGER NOT NULL REFERENCES library_roots(id) ON DELETE CASCADE,
-				relative_path TEXT    NOT NULL,
-				size          INTEGER,
-				mtime         INTEGER,
-				format        TEXT,
+				id             INTEGER PRIMARY KEY,
+				root_id        INTEGER NOT NULL REFERENCES library_roots(id) ON DELETE CASCADE,
+				relative_path  TEXT    NOT NULL,
+				size           INTEGER,
+				mtime          INTEGER,
+				format         TEXT,
+				is_motion_only INTEGER,
 				UNIQUE(root_id, relative_path)
 			);
 			",

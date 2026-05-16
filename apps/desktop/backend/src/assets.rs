@@ -18,6 +18,12 @@ pub struct Asset {
 	pub size: Option<i64>,
 	pub mtime: Option<i64>,
 	pub format: Option<String>,
+	/// True for 3D files that have a skeleton + animation curves but no
+	/// mesh geometry (e.g. Mixamo retargeting clips). Detected by the
+	/// frontend thumbnailer and persisted via `save_model_thumbnail`.
+	/// NULL when classification hasn't run yet for this asset.
+	#[serde(default)]
+	pub is_motion_only: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
@@ -105,6 +111,17 @@ pub struct AssetQuery {
 	/// root_id must match the pin's root_id or the query returns nothing).
 	#[serde(default)]
 	pub pinned_source_id: Option<i64>,
+	/// When true, AND filter out assets with is_motion_only = 1. Used by
+	/// the Models type view to exclude mesh-less motion files that
+	/// belong under Animations instead.
+	#[serde(default)]
+	pub exclude_motion_only: bool,
+	/// When non-empty, OR additionally include assets whose format is in
+	/// this list AND is_motion_only = 1. Used by the Animations type
+	/// view to pick up motion-only model files that wouldn't match the
+	/// vanilla animation-format set.
+	#[serde(default)]
+	pub motion_only_overlay: Vec<String>,
 }
 
 fn default_limit() -> i64 {
@@ -156,12 +173,34 @@ fn where_clause(
 		params.push(Box::new(prefix.to_string()));
 	}
 
-	if !q.formats.is_empty() {
-		let placeholders = vec!["?"; q.formats.len()].join(",");
-		sql.push_str(&format!(" AND a.format IN ({placeholders})"));
-		for f in &q.formats {
-			params.push(Box::new(f.to_ascii_lowercase()));
+	// Combined format filter: `formats` is the base allow-list; if
+	// `motion_only_overlay` is also non-empty we OR-in a clause for
+	// motion-only assets whose format is in the overlay list. Used by the
+	// Animations type view to pull motion-only models in alongside the
+	// vanilla animation formats.
+	if !q.formats.is_empty() || !q.motion_only_overlay.is_empty() {
+		let mut parts: Vec<String> = Vec::new();
+		if !q.formats.is_empty() {
+			let placeholders = vec!["?"; q.formats.len()].join(",");
+			parts.push(format!("a.format IN ({placeholders})"));
+			for f in &q.formats {
+				params.push(Box::new(f.to_ascii_lowercase()));
+			}
 		}
+		if !q.motion_only_overlay.is_empty() {
+			let placeholders = vec!["?"; q.motion_only_overlay.len()].join(",");
+			parts.push(format!(
+				"(a.format IN ({placeholders}) AND a.is_motion_only = 1)"
+			));
+			for f in &q.motion_only_overlay {
+				params.push(Box::new(f.to_ascii_lowercase()));
+			}
+		}
+		sql.push_str(&format!(" AND ({})", parts.join(" OR ")));
+	}
+
+	if q.exclude_motion_only {
+		sql.push_str(" AND (a.is_motion_only IS NULL OR a.is_motion_only = 0)");
 	}
 
 	if !q.formats_exclude.is_empty() {
@@ -263,7 +302,7 @@ pub fn list_assets_impl(conn: &Connection, q: &AssetQuery) -> rusqlite::Result<A
 	};
 
 	let list_sql = format!(
-		"SELECT a.id, a.root_id, r.path, a.relative_path, a.size, a.mtime, a.format
+		"SELECT a.id, a.root_id, r.path, a.relative_path, a.size, a.mtime, a.format, a.is_motion_only
 		 FROM assets a JOIN library_roots r ON r.id = a.root_id
 		 {where_sql} {order} LIMIT ? OFFSET ?",
 		order = order_clause(q.sort_by, q.sort_dir)
@@ -283,6 +322,9 @@ pub fn list_assets_impl(conn: &Connection, q: &AssetQuery) -> rusqlite::Result<A
 				size: r.get(4)?,
 				mtime: r.get(5)?,
 				format: r.get(6)?,
+				is_motion_only: r
+					.get::<_, Option<i64>>(7)?
+					.map(|v| v != 0),
 			})
 		})?
 		.collect::<rusqlite::Result<Vec<_>>>()?;
@@ -343,7 +385,7 @@ pub fn list_asset_formats(
 pub fn get_asset(state: State<AppState>, id: i64) -> Result<Asset, String> {
 	let conn = state.db.lock().map_err(stringify)?;
 	conn.query_row(
-		"SELECT a.id, a.root_id, r.path, a.relative_path, a.size, a.mtime, a.format
+		"SELECT a.id, a.root_id, r.path, a.relative_path, a.size, a.mtime, a.format, a.is_motion_only
 		 FROM assets a JOIN library_roots r ON r.id = a.root_id
 		 WHERE a.id = ?1",
 		[id],
@@ -356,6 +398,9 @@ pub fn get_asset(state: State<AppState>, id: i64) -> Result<Asset, String> {
 				size: r.get(4)?,
 				mtime: r.get(5)?,
 				format: r.get(6)?,
+				is_motion_only: r
+					.get::<_, Option<i64>>(7)?
+					.map(|v| v != 0),
 			})
 		},
 	)
@@ -376,12 +421,13 @@ mod tests {
 				added_at INTEGER NOT NULL
 			);
 			CREATE TABLE assets (
-				id            INTEGER PRIMARY KEY,
-				root_id       INTEGER NOT NULL REFERENCES library_roots(id) ON DELETE CASCADE,
-				relative_path TEXT    NOT NULL,
-				size          INTEGER,
-				mtime         INTEGER,
-				format        TEXT,
+				id             INTEGER PRIMARY KEY,
+				root_id        INTEGER NOT NULL REFERENCES library_roots(id) ON DELETE CASCADE,
+				relative_path  TEXT    NOT NULL,
+				size           INTEGER,
+				mtime          INTEGER,
+				format         TEXT,
+				is_motion_only INTEGER,
 				UNIQUE(root_id, relative_path)
 			);
 			INSERT INTO library_roots (id, path, added_at) VALUES (1, '/tmp/r1', 0);
@@ -415,6 +461,8 @@ mod tests {
 			mtime_to: None,
 			tag_names: Vec::new(),
 			pinned_source_id: None,
+			exclude_motion_only: false,
+			motion_only_overlay: Vec::new(),
 		}
 	}
 

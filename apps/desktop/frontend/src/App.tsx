@@ -12,6 +12,7 @@ import { Layout } from "@/components/Layout";
 import { PromptDialogRoot } from "@/components/PromptDialog";
 import { useSelectionStore } from "@/stores/selectionStore";
 import { useUndoStore } from "@/stores/undoStore";
+import { AppKeybindsPage } from "@/pages/AppKeybindsPage";
 import { AppStatsPage } from "@/pages/AppStatsPage";
 import { AssetDetailPage } from "@/pages/AssetDetailPage";
 import { LibraryPage } from "@/pages/LibraryPage";
@@ -37,7 +38,7 @@ export default function App() {
 	const { loaded, splashGone } = useSplashTimer();
 	useScanEventBridge();
 	useThumbnailReadyBridge();
-	useUndoHotkeys();
+	useGlobalHotkeys();
 	usePrefsRefreshBridge();
 
 	return (
@@ -72,6 +73,7 @@ export default function App() {
 						<Route path="settings/about" element={<Navigate to="/app/about" replace />} />
 
 						<Route path="app/stats" element={<AppStatsPage />} />
+						<Route path="app/keybinds" element={<AppKeybindsPage />} />
 						<Route path="app/about" element={<AppAboutPage />} />
 
 						<Route path="*" element={<Navigate to="/" replace />} />
@@ -229,32 +231,84 @@ function useThumbnailReadyBridge() {
 	}, []);
 }
 
-/// Global Ctrl+Z / Ctrl+Shift+Z (and Cmd-equivalents) handler. Lives at the
-/// App level so any focused page can trigger undo. Skips when an editable
-/// element (input, textarea, contenteditable) currently owns focus, so
-/// typing into a text field doesn't unexpectedly fire app-wide undo.
-function useUndoHotkeys() {
+/// App-wide keyboard shortcuts. Lives at the App level so any focused
+/// page sees them — skips when an editable element currently owns focus
+/// so typing into a text field doesn't unexpectedly trigger.
+///
+/// Reads the current route via `window.location.hash` (HashRouter's source
+/// of truth) and navigates via `window.history.back/forward` directly,
+/// which sidesteps the need to live inside the HashRouter context.
+function useGlobalHotkeys() {
 	useEffect(() => {
+		function isEditable(target: EventTarget | null): boolean {
+			const el = target as HTMLElement | null;
+			if (!el) return false;
+			const tag = el.tagName;
+			if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+			if (el.isContentEditable) return true;
+			return false;
+		}
+
+		function onAssetDetailPage(): boolean {
+			// HashRouter stores the route in the URL fragment as `#/asset/123`.
+			return window.location.hash.startsWith("#/asset/");
+		}
+
 		function onKey(e: KeyboardEvent) {
-			const target = e.target as HTMLElement | null;
-			if (target) {
-				const tag = target.tagName;
-				if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) {
+			if (isEditable(e.target)) return;
+
+			// ---- Navigation: Alt+Left/Right + macOS Cmd+[/Cmd+]. ----
+			if (e.altKey && !e.ctrlKey && !e.metaKey) {
+				if (e.key === "ArrowLeft") {
+					e.preventDefault();
+					window.history.back();
+					return;
+				}
+				if (e.key === "ArrowRight") {
+					e.preventDefault();
+					window.history.forward();
 					return;
 				}
 			}
-			// Escape clears the asset selection. No modifier required —
-			// matches Finder/Files convention.
+			if (e.metaKey && !e.ctrlKey && !e.altKey) {
+				if (e.key === "[") {
+					e.preventDefault();
+					window.history.back();
+					return;
+				}
+				if (e.key === "]") {
+					e.preventDefault();
+					window.history.forward();
+					return;
+				}
+			}
+
+			// ---- Escape: context-aware. On a detail page it closes back
+			// to the library; otherwise it clears selection.
 			if (e.key === "Escape") {
-				useSelectionStore.getState().clear();
+				if (onAssetDetailPage()) {
+					window.history.back();
+				} else {
+					useSelectionStore.getState().clear();
+				}
 				return;
 			}
+
 			const mod = e.ctrlKey || e.metaKey;
 			if (!mod) return;
 			// Lowercase `e.key` for the comparison — when Shift is held,
 			// browsers report the shifted character (`Z`, not `z`), so a
 			// case-sensitive compare would miss Ctrl+Shift+Z.
 			const key = e.key.toLowerCase();
+
+			// ---- Ctrl/Cmd+D deselects all (in addition to Esc above). ----
+			if (key === "d" && !e.shiftKey && !e.altKey) {
+				e.preventDefault();
+				useSelectionStore.getState().clear();
+				return;
+			}
+
+			// ---- Undo / redo. ----
 			if (key === "z" && !e.shiftKey) {
 				e.preventDefault();
 				void useUndoStore.getState().undo();

@@ -226,15 +226,23 @@ pub fn ensure_thumbnail(
 /// Persists a thumbnail PNG rendered by the frontend (Three.js) into the
 /// same on-disk cache used by image/video thumbnails. The frontend hands us
 /// the absolute path + mtime + size so the cache key matches what
-/// `get_thumbnail` would look up on the next visit. Emits `thumbnail:ready`
-/// after a successful write so any AssetThumbnail subscribed to this key
-/// picks up the path via `thumbnailBus` and swaps in the new image.
+/// `get_thumbnail` would look up on the next visit, plus a classification
+/// flag (`motion_only`) the thumbnailer derives at render time — true when
+/// the file has a skeleton but no mesh geometry. We persist that to
+/// `assets.is_motion_only` so the Animations type view can pick it up.
+/// Emits `thumbnail:ready` after a successful write so any AssetThumbnail
+/// subscribed to this key picks up the path via `thumbnailBus` and swaps
+/// in the new image.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn save_model_thumbnail(
+	asset_id: i64,
 	abs_path: String,
 	mtime: Option<i64>,
 	size: Option<u32>,
 	png_base64: String,
+	motion_only: bool,
+	state: tauri::State<crate::AppState>,
 	app: AppHandle,
 ) -> Result<(), String> {
 	let size = size.unwrap_or(DEFAULT_SIZE).clamp(32, 1024);
@@ -249,6 +257,24 @@ pub fn save_model_thumbnail(
 	let key = cache_key(&abs_path, mtime, size);
 	let cache_file = cache_dir()?.join(format!("{key}.png"));
 	std::fs::write(&cache_file, &bytes).map_err(|e| e.to_string())?;
+
+	// Record the classification so type-view filters can route motion-only
+	// files to Animations. Best-effort — a DB hiccup shouldn't fail the
+	// thumbnail save (the PNG is already on disk).
+	{
+		match state.db.lock() {
+			Ok(conn) => {
+				let value: i64 = if motion_only { 1 } else { 0 };
+				if let Err(e) = conn.execute(
+					"UPDATE assets SET is_motion_only = ?1 WHERE id = ?2",
+					rusqlite::params![value, asset_id],
+				) {
+					tracing::warn!("save_model_thumbnail: motion_only update failed: {e}");
+				}
+			}
+			Err(e) => tracing::warn!("save_model_thumbnail: db lock poisoned: {e}"),
+		}
+	}
 
 	let _ = app.emit(
 		"thumbnail:ready",
