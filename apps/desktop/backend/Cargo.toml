@@ -35,5 +35,11 @@ tower-http = { version = "0.6", features = ["fs", "cors"] }
 notify = "8"
 notify-debouncer-mini = "0.6"
 
+# Cross-platform user-extended-attribute mirror for garnet_metadata. The
+# `xattr` crate supports Linux/macOS/FreeBSD; Windows uses NTFS alternate
+# data streams via plain std::fs OpenOptions (see garnet_metadata::mirror).
+[target.'cfg(unix)'.dependencies]
+xattr = "1.3"
+
 [dev-dependencies]
 tempfile = "3"

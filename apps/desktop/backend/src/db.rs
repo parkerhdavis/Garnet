@@ -160,6 +160,40 @@ pub static MIGRATIONS: &[(i64, &str)] = &[
 		CREATE INDEX pinned_sources_by_root ON pinned_sources(root_id);
 		",
 	),
+	(
+		4,
+		"
+		-- User-editable metadata, distinct from `asset_metadata` (which holds
+		-- format-extracted 'native' metadata produced by the indexer). One row
+		-- per (asset, key, value); a key with multiple values produces multiple
+		-- rows. `tags` is just a well-known key here — drop the dedicated tag
+		-- tables in favor of this single store.
+		CREATE TABLE garnet_metadata (
+			id         INTEGER PRIMARY KEY,
+			asset_id   INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+			key        TEXT    NOT NULL,
+			value      TEXT    NOT NULL,
+			position   INTEGER NOT NULL DEFAULT 0,
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL,
+			UNIQUE(asset_id, key, value)
+		);
+		CREATE INDEX garnet_metadata_by_asset_key ON garnet_metadata(asset_id, key);
+		CREATE INDEX garnet_metadata_by_key_value ON garnet_metadata(key, value);
+
+		-- Backfill existing tag relationships into garnet_metadata under the
+		-- well-known 'tags' key, preserving each tag's existing created_at.
+		INSERT OR IGNORE INTO garnet_metadata
+			(asset_id, key, value, position, created_at, updated_at)
+		SELECT at.asset_id, 'tags', t.name, 0, t.created_at, t.created_at
+		FROM asset_tags at
+		JOIN tags t ON t.id = at.tag_id;
+
+		-- The dedicated tag tables are now redundant.
+		DROP TABLE asset_tags;
+		DROP TABLE tags;
+		",
+	),
 ];
 
 #[cfg(test)]
@@ -179,6 +213,59 @@ mod tests {
 	}
 
 	#[test]
+	fn tag_backfill_into_garnet_metadata() {
+		// Apply migrations 1..=3 manually, seed legacy tag data, then run the
+		// remaining migrations and check that tags now live in garnet_metadata.
+		let conn = Connection::open_in_memory().unwrap();
+		conn.execute_batch(
+			"CREATE TABLE migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL);",
+		)
+		.unwrap();
+		for &(v, sql) in MIGRATIONS.iter().take(3) {
+			let tx = conn.unchecked_transaction().unwrap();
+			tx.execute_batch(sql).unwrap();
+			tx.execute(
+				"INSERT INTO migrations (version, applied_at) VALUES (?1, 0)",
+				[v],
+			)
+			.unwrap();
+			tx.commit().unwrap();
+		}
+		conn.execute_batch(
+			"INSERT INTO library_roots (id, path, added_at) VALUES (1, '/tmp/r1', 0);
+			 INSERT INTO assets (id, root_id, relative_path) VALUES (1, 1, 'a.png');
+			 INSERT INTO assets (id, root_id, relative_path) VALUES (2, 1, 'b.jpg');
+			 INSERT INTO tags (id, name, parent_id, created_at) VALUES (1, 'sunset', NULL, 100);
+			 INSERT INTO tags (id, name, parent_id, created_at) VALUES (2, 'travel', NULL, 200);
+			 INSERT INTO asset_tags VALUES (1, 1), (1, 2), (2, 1);",
+		)
+		.unwrap();
+
+		// Apply migration 4
+		apply_migrations(&conn).unwrap();
+
+		let mut stmt = conn
+			.prepare(
+				"SELECT asset_id, value FROM garnet_metadata WHERE key='tags'
+				 ORDER BY asset_id, value",
+			)
+			.unwrap();
+		let rows: Vec<(i64, String)> = stmt
+			.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+			.unwrap()
+			.collect::<Result<_, _>>()
+			.unwrap();
+		assert_eq!(
+			rows,
+			vec![
+				(1, "sunset".to_string()),
+				(1, "travel".to_string()),
+				(2, "sunset".to_string()),
+			]
+		);
+	}
+
+	#[test]
 	fn v2_tables_exist() {
 		let conn = Connection::open_in_memory().unwrap();
 		apply_migrations(&conn).unwrap();
@@ -186,8 +273,7 @@ mod tests {
 			"library_roots",
 			"assets",
 			"asset_metadata",
-			"tags",
-			"asset_tags",
+			"garnet_metadata",
 			"collections",
 			"collection_assets",
 			"pinned_sources",
@@ -198,6 +284,17 @@ mod tests {
 				|r| r.get::<_, i64>(0),
 			)
 			.unwrap_or_else(|_| panic!("missing table {table}"));
+		}
+		// Tag tables should be dropped by migration 4.
+		for dropped in ["tags", "asset_tags"] {
+			let exists: i64 = conn
+				.query_row(
+					"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?1",
+					[dropped],
+					|r| r.get(0),
+				)
+				.unwrap();
+			assert_eq!(exists, 0, "table {dropped} should have been dropped");
 		}
 		// content_hash column exists on assets
 		let mut stmt = conn.prepare("PRAGMA table_info(assets)").unwrap();

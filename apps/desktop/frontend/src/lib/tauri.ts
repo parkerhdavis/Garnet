@@ -47,22 +47,24 @@ export type Asset = {
 	format: string | null;
 };
 
-export type Tag = {
-	id: number;
-	name: string;
-	parent_id: number | null;
-	created_at: number;
-};
-
-export type TagWithCount = {
-	id: number;
-	name: string;
-	count: number;
-};
-
 export type AssetMetadata = {
 	key: string;
 	value: string;
+};
+
+/** A single user-editable metadata entry: one key plus an ordered list of
+ *  values. Tags are not a separate type — they're just an entry whose key is
+ *  the string `"tags"`. */
+export type GarnetMetadataEntry = {
+	key: string;
+	values: string[];
+};
+
+/** Distinct value across the library with the number of assets carrying it.
+ *  Used for filter chips (e.g., the tag chip row in FilterBar). */
+export type ValueCount = {
+	value: string;
+	count: number;
 };
 
 export type PinnedSource = {
@@ -91,7 +93,7 @@ export type AssetQuery = {
 	size_max?: number | null;
 	mtime_from?: number | null;
 	mtime_to?: number | null;
-	tag_ids?: number[];
+	tag_names?: string[];
 	pinned_source_id?: number | null;
 };
 
@@ -135,14 +137,18 @@ export const api = {
 		invoke<AssetMetadata[]>("list_asset_metadata", { assetId }),
 	getThumbnail: (absPath: string, mtime: number | null, size?: number) =>
 		invoke<string | null>("get_thumbnail", { absPath, mtime, size }),
-	listTags: () => invoke<TagWithCount[]>("list_tags"),
-	createTag: (name: string) => invoke<Tag>("create_tag", { name }),
-	deleteTag: (id: number) => invoke<void>("delete_tag", { id }),
-	tagAsset: (assetId: number, tagId: number) =>
-		invoke<void>("tag_asset", { assetId, tagId }),
-	untagAsset: (assetId: number, tagId: number) =>
-		invoke<void>("untag_asset", { assetId, tagId }),
-	listAssetTags: (assetId: number) => invoke<Tag[]>("list_asset_tags", { assetId }),
+	listGarnetMetadata: (assetId: number) =>
+		invoke<GarnetMetadataEntry[]>("list_garnet_metadata", { assetId }),
+	setGarnetMetadataKey: (assetId: number, key: string, values: string[]) =>
+		invoke<void>("set_garnet_metadata_key", { assetId, key, values }),
+	addGarnetMetadataValue: (assetId: number, key: string, value: string) =>
+		invoke<void>("add_garnet_metadata_value", { assetId, key, value }),
+	removeGarnetMetadataValue: (assetId: number, key: string, value: string) =>
+		invoke<void>("remove_garnet_metadata_value", { assetId, key, value }),
+	removeGarnetMetadataKey: (assetId: number, key: string) =>
+		invoke<void>("remove_garnet_metadata_key", { assetId, key }),
+	listGarnetMetadataValuesForKey: (key: string) =>
+		invoke<ValueCount[]>("list_garnet_metadata_values_for_key", { key }),
 	listPinnedSources: () => invoke<PinnedSource[]>("list_pinned_sources"),
 	pinSource: (absPath: string, name?: string | null) =>
 		invoke<PinnedSource>("pin_source", { absPath, name: name ?? null }),

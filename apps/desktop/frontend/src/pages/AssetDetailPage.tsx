@@ -11,7 +11,7 @@ import {
 } from "react-icons/hi2";
 import { api, mediaUrl, type Asset, type AssetMetadata } from "@/lib/tauri";
 import { MediaDiagnostic } from "@/components/MediaDiagnostic";
-import { TagEditor } from "@/components/TagEditor";
+import { GarnetMetadataEditor } from "@/components/GarnetMetadataEditor";
 import {
 	absPathFor,
 	abbreviatePath,
@@ -257,14 +257,10 @@ export function AssetDetailPage() {
 						<KV label="Path" value={asset.relative_path} mono />
 					</DetailSection>
 
-					<DetailSection title="Tags">
-						<TagEditor assetId={asset.id} />
-					</DetailSection>
-
-					<DetailSection title="Metadata" last>
+					<DetailSection title="Native Metadata">
 						{metadata.length === 0 ? (
 							<div className="text-xs text-base-content/50">
-								No metadata extracted.
+								No metadata extracted for this format.
 							</div>
 						) : (
 							<dl className="space-y-1 text-xs">
@@ -286,6 +282,10 @@ export function AssetDetailPage() {
 								))}
 							</dl>
 						)}
+					</DetailSection>
+
+					<DetailSection title="Garnet Metadata" last>
+						<GarnetMetadataEditor assetId={asset.id} />
 					</DetailSection>
 				</aside>
 			</div>
