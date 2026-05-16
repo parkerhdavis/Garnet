@@ -10,6 +10,7 @@ import { ConfirmDialogRoot } from "@/components/ConfirmDialog";
 import { ContextMenuRoot } from "@/components/ContextMenu";
 import { Layout } from "@/components/Layout";
 import { PromptDialogRoot } from "@/components/PromptDialog";
+import { useSelectionStore } from "@/stores/selectionStore";
 import { useUndoStore } from "@/stores/undoStore";
 import { AppStatsPage } from "@/pages/AppStatsPage";
 import { AssetDetailPage } from "@/pages/AssetDetailPage";
@@ -241,6 +242,12 @@ function useUndoHotkeys() {
 				if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) {
 					return;
 				}
+			}
+			// Escape clears the asset selection. No modifier required —
+			// matches Finder/Files convention.
+			if (e.key === "Escape") {
+				useSelectionStore.getState().clear();
+				return;
 			}
 			const mod = e.ctrlKey || e.metaKey;
 			if (!mod) return;
