@@ -218,6 +218,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 					sort_dir: s.sortDir,
 					formats: typeQuery.formats,
 					formats_exclude: typeQuery.formats_exclude,
+					exclude_motion_only: typeQuery.exclude_motion_only,
+					motion_only_overlay: typeQuery.motion_only_overlay,
 					path_search: s.pathSearch.trim() || null,
 					size_min: s.sizeMin,
 					size_max: s.sizeMax,

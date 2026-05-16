@@ -99,11 +99,22 @@ export function allCategorizedFormats(bucket: AnimatedImagesBucket): string[] {
 ///   categorized (typically yields 0 matches — unusual, but correct).
 /// - kind=any other: intersect user formats with the kind's formats. Empty
 ///   user selection means "use the kind's full set".
+export type TypeQuery = {
+	formats: string[];
+	formats_exclude: string[];
+	/// Set on the Models view so motion-only files (mesh-less FBX rigs,
+	/// etc.) are skipped here and surface under Animations instead.
+	exclude_motion_only?: boolean;
+	/// Set on the Animations view to additionally include motion-only
+	/// model files alongside the vanilla animation formats.
+	motion_only_overlay?: string[];
+};
+
 export function buildTypeQuery(
 	kind: TypeKind | null,
 	bucket: AnimatedImagesBucket,
 	userFormats: string[],
-): { formats: string[]; formats_exclude: string[] } {
+): TypeQuery {
 	if (kind === null) {
 		return { formats: userFormats, formats_exclude: [] };
 	}
@@ -116,11 +127,29 @@ export function buildTypeQuery(
 		return { formats: userFormats.filter((f) => !set.has(f)), formats_exclude: [] };
 	}
 	const kindFormats = formatsForKind(kind, bucket);
-	if (userFormats.length === 0) {
-		return { formats: kindFormats, formats_exclude: [] };
+	const baseFormats =
+		userFormats.length === 0
+			? kindFormats
+			: userFormats.filter((f) => new Set(kindFormats).has(f));
+
+	// Animations also pulls in motion-only model files (Mixamo-style
+	// retargeting clips). Models view conversely drops them. The flag
+	// lives at the SQL level so totals + pagination stay accurate.
+	if (kind === "animations") {
+		return {
+			formats: baseFormats,
+			formats_exclude: [],
+			motion_only_overlay: MODEL_FORMATS,
+		};
 	}
-	const set = new Set(kindFormats);
-	return { formats: userFormats.filter((f) => set.has(f)), formats_exclude: [] };
+	if (kind === "models") {
+		return {
+			formats: baseFormats,
+			formats_exclude: [],
+			exclude_motion_only: true,
+		};
+	}
+	return { formats: baseFormats, formats_exclude: [] };
 }
 
 /// Filter a list of format counts down to the ones relevant to the current

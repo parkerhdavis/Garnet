@@ -76,6 +76,7 @@ async function refreshModelThumbnailAction(asset: Asset) {
 	try {
 		const thumbnailer = await loadModelThumbnailer();
 		const ok = await thumbnailer.request(
+			asset.id,
 			absPathFor(asset),
 			asset.mtime,
 			240,

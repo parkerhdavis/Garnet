@@ -45,6 +45,10 @@ export type Asset = {
 	size: number | null;
 	mtime: number | null;
 	format: string | null;
+	/// True for 3D files that have a skeleton + animation curves but no
+	/// mesh (Mixamo retargeting clips). Set by the frontend thumbnailer
+	/// via save_model_thumbnail. null = not yet classified.
+	is_motion_only: boolean | null;
 };
 
 export type AssetMetadata = {
@@ -95,6 +99,13 @@ export type AssetQuery = {
 	mtime_to?: number | null;
 	tag_names?: string[];
 	pinned_source_id?: number | null;
+	/// Drop motion-only assets from the result (used by the Models type
+	/// view so they end up in Animations instead).
+	exclude_motion_only?: boolean;
+	/// Additionally include assets whose format is in this list AND
+	/// is_motion_only = 1 (used by the Animations type view to bring in
+	/// motion-only model files alongside the vanilla animation formats).
+	motion_only_overlay?: string[];
 };
 
 export type AssetPage = {
@@ -164,12 +175,21 @@ export const api = {
 	/// emits `thumbnail:ready`, so the rest of the pipeline is identical to
 	/// the image/video flow.
 	saveModelThumbnail: (
+		assetId: number,
 		absPath: string,
 		mtime: number | null,
 		size: number,
 		pngBase64: string,
+		motionOnly: boolean,
 	) =>
-		invoke<void>("save_model_thumbnail", { absPath, mtime, size, pngBase64 }),
+		invoke<void>("save_model_thumbnail", {
+			assetId,
+			absPath,
+			mtime,
+			size,
+			pngBase64,
+			motionOnly,
+		}),
 	getStartupTimings: () =>
 		invoke<StartupReport | null>("get_startup_timings"),
 	markStartupPhase: (name: string, note: string | null = null) =>

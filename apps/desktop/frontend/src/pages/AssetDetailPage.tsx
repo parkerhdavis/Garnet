@@ -140,12 +140,13 @@ export function AssetDetailPage() {
 	// return without a full library refresh.
 	useEffect(() => {
 		if (!asset || !isModel) return;
+		const assetId = asset.id;
 		const assetMtime = asset.mtime;
 		const assetFormat = asset.format;
 		void (async () => {
 			try {
 				const thumbnailer = await loadModelThumbnailer();
-				await thumbnailer.request(absPath, assetMtime, 240, assetFormat, {
+				await thumbnailer.request(assetId, absPath, assetMtime, 240, assetFormat, {
 					force: true,
 				});
 			} catch {

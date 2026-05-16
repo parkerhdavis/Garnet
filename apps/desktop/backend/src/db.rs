@@ -194,6 +194,21 @@ pub static MIGRATIONS: &[(i64, &str)] = &[
 		DROP TABLE tags;
 		",
 	),
+	(
+		5,
+		"
+		-- Motion-only flag for 3D assets that have a skeleton + animation
+		-- curves but no actual mesh geometry (Mixamo retargeting clips,
+		-- etc.). NULL = unknown (assume mesh-bearing); 1 = motion-only.
+		-- Set by the frontend's modelThumbnailer when it detects 'bones
+		-- but no mesh' on render, via save_model_thumbnail's motion_only
+		-- parameter. typeFilters uses this to route motion-only files to
+		-- the Animations bucket instead of Models.
+		ALTER TABLE assets ADD COLUMN is_motion_only INTEGER;
+		CREATE INDEX assets_by_motion_only
+		    ON assets(is_motion_only) WHERE is_motion_only IS NOT NULL;
+		",
+	),
 ];
 
 #[cfg(test)]
