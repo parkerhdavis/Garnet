@@ -158,9 +158,61 @@ function AnimationControls({
 	// dragging, the rAF loop reads from the scene but doesn't update the
 	// progress indicator — the pointer handler owns the position.
 	const draggingRef = useRef(false);
-	// Playing-state to restore on pointer-up. Captured at pointer-down so
-	// users can scrub through a paused animation and have it stay paused.
-	const playingBeforeDragRef = useRef(playing);
+
+	// Space toggles play/pause; "," / "." step one reference frame and
+	// pause (matches the standard NLE / video player convention). Only
+	// active while AnimationControls is mounted — i.e. only when a clip is
+	// actually loaded — so the hotkeys don't interfere with the library
+	// view or detail views for non-animated assets.
+	useEffect(() => {
+		function isEditable(target: EventTarget | null): boolean {
+			const el = target as HTMLElement | null;
+			if (!el) return false;
+			const tag = el.tagName;
+			if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+			return el.isContentEditable;
+		}
+		const writeLabelsForCurrent = () => {
+			const p = sceneRef.current?.getProgress();
+			if (!p || p.duration <= 0) return;
+			const fraction = p.time / p.duration;
+			if (fillRef.current) fillRef.current.style.width = `${fraction * 100}%`;
+			if (handleRef.current) handleRef.current.style.left = `${fraction * 100}%`;
+			if (timeLabelRef.current) {
+				timeLabelRef.current.textContent = `${formatTime(p.time)} / ${formatTime(p.duration)}`;
+			}
+			if (frameLabelRef.current) {
+				frameLabelRef.current.textContent = `f${Math.floor(p.time * ASSUMED_FPS)} / f${Math.floor(p.duration * ASSUMED_FPS)}`;
+			}
+		};
+		function onKey(e: KeyboardEvent) {
+			if (isEditable(e.target)) return;
+			if (e.ctrlKey || e.metaKey || e.altKey) return;
+			if (e.key === " " || e.code === "Space") {
+				e.preventDefault();
+				setPlaying(!playing);
+				return;
+			}
+			if (e.key === ",") {
+				e.preventDefault();
+				sceneRef.current?.stepFrames(-1, ASSUMED_FPS);
+				// Frame-step pauses on the scene side; flip React state
+				// to match so the play/pause icon updates.
+				setPlaying(false);
+				writeLabelsForCurrent();
+				return;
+			}
+			if (e.key === ".") {
+				e.preventDefault();
+				sceneRef.current?.stepFrames(1, ASSUMED_FPS);
+				setPlaying(false);
+				writeLabelsForCurrent();
+				return;
+			}
+		}
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [playing, setPlaying, sceneRef]);
 
 	// Per-frame: read the scene's current animation time and project onto
 	// the track. Refs only — no setState in the loop.
@@ -204,12 +256,10 @@ function AnimationControls({
 	const beginScrub = (e: React.PointerEvent) => {
 		e.currentTarget.setPointerCapture(e.pointerId);
 		draggingRef.current = true;
-		playingBeforeDragRef.current = playing;
-		// Pause for the duration of the scrub so the indicator doesn't
-		// fight the rAF advance. We don't go through setPlaying here so we
-		// don't surface the transient pause as state to the rest of the
-		// component.
-		sceneRef.current?.setPlaying(false);
+		// Pause both the scene and the React state so the play/pause icon
+		// flips and playback stays paused after release — matches the
+		// "clicking the timeline pauses playback" convention.
+		setPlaying(false);
 		applyScrub(e.clientX);
 	};
 	const applyScrub = (clientX: number) => {
@@ -235,7 +285,8 @@ function AnimationControls({
 		} catch {
 			/* pointer may already be released by the browser */
 		}
-		sceneRef.current?.setPlaying(playingBeforeDragRef.current);
+		// Stay paused — scrub explicitly halts playback per the keybinds
+		// spec. The user resumes with Space or the play button.
 	};
 
 	return (
@@ -410,6 +461,18 @@ class ModelScene {
 		if (duration <= 0) return;
 		const clamped = Math.max(0, Math.min(1, fraction));
 		this.action.time = clamped * duration;
+		this.mixer.update(0);
+	}
+
+	/// Advance the action by `delta` frames at the assumed reference FPS,
+	/// pausing playback as a side effect. Used by the `,` / `.` hotkeys.
+	stepFrames(delta: number, fps: number): void {
+		if (!this.action || !this.mixer) return;
+		const duration = this.action.getClip().duration;
+		if (duration <= 0) return;
+		this.action.paused = true;
+		const dt = delta / fps;
+		this.action.time = Math.max(0, Math.min(duration, this.action.time + dt));
 		this.mixer.update(0);
 	}
 

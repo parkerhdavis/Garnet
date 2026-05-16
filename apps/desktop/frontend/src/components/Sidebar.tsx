@@ -15,9 +15,9 @@
 //!     - **Functions** — Plugins manager + Automations.
 //!     - **Settings** — split into subsections (Library Roots, Appearance,
 //!       General). The existing roots-management UX lives under Library Roots.
-//!     - **App** — Stats (startup-time breakdown and other diagnostics) and
-//!       About. These describe the running app itself, separate from
-//!       user-configurable Settings.
+//!     - **App** — Stats (startup-time breakdown and other diagnostics),
+//!       Keybinds (keyboard-shortcut reference), and About. These describe
+//!       the running app itself, separate from user-configurable Settings.
 //!
 //! Clicking the Garnet logo/title returns to the all-assets root view.
 
@@ -30,6 +30,7 @@ import {
 	HiBolt,
 	HiChartBar,
 	HiCog6Tooth,
+	HiCommandLine,
 	HiCube,
 	HiEllipsisHorizontalCircle,
 	HiFilm,
@@ -215,6 +216,9 @@ export function Sidebar() {
 					<NavSection title="App">
 						<NavItem to="/app/stats" icon={HiChartBar}>
 							Stats
+						</NavItem>
+						<NavItem to="/app/keybinds" icon={HiCommandLine}>
+							Keybinds
 						</NavItem>
 						<NavItem to="/app/about" icon={HiInformationCircle}>
 							About
