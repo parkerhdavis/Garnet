@@ -47,6 +47,10 @@ const MODEL_EXTS = new Set([
 /// Subset the frontend's Three.js thumbnailer can render. Other model
 /// formats stay on the cube-icon fallback.
 const RENDERABLE_MODEL_EXTS = new Set(["gltf", "glb", "obj", "stl", "ply", "fbx"]);
+/// `.blend` doesn't render in Three.js, but the backend extracts the
+/// preview Blender saves into the file header. From the AssetThumbnail's
+/// perspective it's just another backend-thumbnail format like images.
+const BLEND_EXTS = new Set(["blend"]);
 const CODE_EXTS = new Set([
 	"json", "xml", "yaml", "yml", "toml", "js", "ts", "tsx", "jsx", "py", "rs",
 	"go", "java", "cs", "cpp", "c", "h", "sh", "html", "css", "md",
@@ -92,12 +96,13 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 	const isRaster = !!ext && RASTER_EXTS.has(ext);
 	const isVideo = !!ext && VIDEO_EXTS.has(ext);
 	const isRenderableModel = !!ext && RENDERABLE_MODEL_EXTS.has(ext);
+	const isBlend = !!ext && BLEND_EXTS.has(ext);
 
 	useEffect(() => {
 		let cancelled = false;
 		setSrc(null);
 		setFailed(false);
-		if (!isRaster && !isVideo && !isRenderableModel) {
+		if (!isRaster && !isVideo && !isRenderableModel && !isBlend) {
 			setFailed(true);
 			return;
 		}
@@ -200,6 +205,7 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 		isRaster,
 		isVideo,
 		isRenderableModel,
+		isBlend,
 	]);
 
 	const playable = isHoverPlayable(asset.format);

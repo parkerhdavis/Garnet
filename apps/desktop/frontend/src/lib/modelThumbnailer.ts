@@ -173,8 +173,15 @@ class Thumbnailer {
 		const renderer = this.renderer!;
 
 		scene.add(object);
+		// Motion-only FBX files (Mixamo retargeting clips, etc.) contain a
+		// skeleton + animation curves but no character mesh — there's
+		// nothing renderable to draw. Detect that case and add a
+		// SkeletonHelper so we have something visible to thumbnail.
+		const helper = addSkeletonHelperIfMotionOnly(object, scene);
 		try {
+			settleSkinnedMeshes(object);
 			frameObjectInCamera(object, camera);
+			logDiagnostics(job, object, camera);
 			const dataUrl = this.renderToDataUrl(scene, camera, job.size);
 			if (!dataUrl) return false;
 			const b64 = dataUrl.replace(/^data:image\/png;base64,/, "");
@@ -186,6 +193,10 @@ class Thumbnailer {
 				return false;
 			}
 		} finally {
+			if (helper) {
+				scene.remove(helper);
+				helper.dispose();
+			}
 			scene.remove(object);
 			disposeObject(object);
 		}
@@ -362,8 +373,124 @@ class Thumbnailer {
 	}
 }
 
-function frameObjectInCamera(object: THREE.Object3D, camera: THREE.PerspectiveCamera): void {
+/// Returns true if `object` contains any renderable geometry (Mesh,
+/// SkinnedMesh, Points, LineSegments). Used to decide whether a loaded
+/// file actually has something to draw, or whether we need to add a
+/// stand-in visualization like SkeletonHelper.
+function hasRenderableGeometry(object: THREE.Object3D): boolean {
+	let found = false;
+	object.traverse((c) => {
+		if (found) return;
+		if (
+			c instanceof THREE.Mesh ||
+			c instanceof THREE.Points ||
+			c instanceof THREE.LineSegments
+		) {
+			if (c.visible !== false) found = true;
+		}
+	});
+	return found;
+}
+
+/// If the loaded object is "motion-only" — has bones but no renderable
+/// geometry, like a Mixamo retargeting clip — add a SkeletonHelper so we
+/// have visible line segments tracing the bone hierarchy. The helper's
+/// LineSegments contribute to `Box3.setFromObject`, so the framing logic
+/// works without changes. Returns the helper (caller should remove +
+/// dispose after render) or null if no helper was needed.
+function addSkeletonHelperIfMotionOnly(
+	object: THREE.Object3D,
+	scene: THREE.Scene,
+): THREE.SkeletonHelper | null {
+	if (hasRenderableGeometry(object)) return null;
+	let hasBones = false;
+	object.traverse((c) => {
+		if (c instanceof THREE.Bone) hasBones = true;
+	});
+	if (!hasBones) return null;
+	const helper = new THREE.SkeletonHelper(object);
+	scene.add(helper);
+	return helper;
+}
+
+/// Dev-console diagnostic: counts of meshes/skinned-meshes/bones, the
+/// resolved bounding box, and the camera position after framing. Helps
+/// pinpoint why a specific file renders blank — typical culprits are
+/// invisible meshes, NaN-filled bone matrices, or a bbox that put the
+/// camera inside the model.
+function logDiagnostics(
+	job: { absPath: string; kind: string },
+	object: THREE.Object3D,
+	camera: THREE.PerspectiveCamera,
+): void {
+	let meshes = 0;
+	let skinnedMeshes = 0;
+	let bones = 0;
+	let nanBones = 0;
+	const v = new THREE.Vector3();
+	object.traverse((c) => {
+		if (c instanceof THREE.SkinnedMesh) {
+			skinnedMeshes++;
+		} else if (c instanceof THREE.Mesh) {
+			meshes++;
+		}
+		if (c instanceof THREE.Bone) {
+			bones++;
+			v.setFromMatrixPosition(c.matrixWorld);
+			if (!Number.isFinite(v.x) || !Number.isFinite(v.y) || !Number.isFinite(v.z)) {
+				nanBones++;
+			}
+		}
+	});
 	const box = new THREE.Box3().setFromObject(object);
+	console.warn(
+		`[modelThumbnailer] ${job.kind} ${job.absPath}\n` +
+			`  meshes=${meshes} skinned=${skinnedMeshes} bones=${bones} nanBones=${nanBones}\n` +
+			`  bbox.min=(${box.min.x.toFixed(3)}, ${box.min.y.toFixed(3)}, ${box.min.z.toFixed(3)})\n` +
+			`  bbox.max=(${box.max.x.toFixed(3)}, ${box.max.y.toFixed(3)}, ${box.max.z.toFixed(3)})\n` +
+			`  camera=(${camera.position.x.toFixed(3)}, ${camera.position.y.toFixed(3)}, ${camera.position.z.toFixed(3)}) near=${camera.near} far=${camera.far}`,
+	);
+}
+
+/// Walk the object and ensure any SkinnedMesh has up-to-date bone matrices
+/// before the first render. For FBX files in particular, the loader leaves
+/// the skeleton in a "needs first update" state — without this, the
+/// SkinnedMesh's vertex shader skins to undefined positions and the model
+/// either disappears or ends up far off-camera.
+function settleSkinnedMeshes(object: THREE.Object3D): void {
+	object.updateMatrixWorld(true);
+	object.traverse((child) => {
+		if (child instanceof THREE.SkinnedMesh) {
+			// `pose()` resets bones to their bind-pose transforms. That's
+			// the right starting state for a static thumbnail of an
+			// animated character (no "frame zero of a flailing run cycle"
+			// surprises).
+			child.skeleton.pose();
+			child.skeleton.update();
+			for (const bone of child.skeleton.bones) {
+				bone.updateMatrixWorld(true);
+			}
+		}
+	});
+}
+
+function frameObjectInCamera(object: THREE.Object3D, camera: THREE.PerspectiveCamera): void {
+	// For meshes, Box3.setFromObject works fine. For skinned content, the
+	// box is computed from bind-pose vertex positions and can disagree
+	// dramatically with where the model actually renders. Union with bone
+	// world positions to recover a sane frame — but guard against bones
+	// with NaN matrices (poorly-initialized rigs), since a single NaN point
+	// poisons the entire box and the camera ends up at NaN coordinates.
+	const box = new THREE.Box3().setFromObject(object);
+	object.traverse((c) => {
+		if (c instanceof THREE.Bone) {
+			const p = new THREE.Vector3().setFromMatrixPosition(c.matrixWorld);
+			if (Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)) {
+				box.expandByPoint(p);
+			}
+		}
+	});
+
 	if (!Number.isFinite(box.min.x) || box.isEmpty()) {
 		camera.position.set(0, 0.5, 2);
 		camera.lookAt(0, 0, 0);
