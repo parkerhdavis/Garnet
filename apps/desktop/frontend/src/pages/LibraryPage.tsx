@@ -8,6 +8,7 @@ import { AssetList } from "@/components/AssetList";
 import { FilterBar } from "@/components/FilterBar";
 import { Pagination } from "@/components/Pagination";
 import type { Asset } from "@/lib/tauri";
+import { parseTypeKind } from "@/lib/typeFilters";
 import { useAssetsStore, PAGE_SIZE } from "@/stores/assetsStore";
 import { useLibraryStore } from "@/stores/libraryStore";
 
@@ -24,10 +25,11 @@ export function LibraryPage() {
 		setPage,
 		setSort,
 		setPinnedSourceId,
+		setTypeKind,
 	} = useAssetsStore();
 	const { roots, refresh: refreshRoots, loading: rootsLoading } = useLibraryStore();
 	const navigate = useNavigate();
-	const params = useParams<{ id?: string }>();
+	const params = useParams<{ id?: string; kind?: string }>();
 
 	useEffect(() => {
 		void refreshRoots();
@@ -45,6 +47,13 @@ export function LibraryPage() {
 		const n = params.id ? Number(params.id) : null;
 		void setPinnedSourceId(Number.isFinite(n) ? n : null);
 	}, [params.id, setPinnedSourceId]);
+
+	// `/types/:kind` mounts the same LibraryPage; the kind URL param selects
+	// the active type filter (Images/Videos/Audio/Models/Animations/Other).
+	// When :kind is absent (`/` or `/sources/:id`), the type filter clears.
+	useEffect(() => {
+		void setTypeKind(parseTypeKind(params.kind));
+	}, [params.kind, setTypeKind]);
 
 	const noRoots = !rootsLoading && roots.length === 0;
 

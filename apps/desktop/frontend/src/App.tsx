@@ -17,11 +17,11 @@ import {
 	SettingsAboutPage,
 	SettingsAppearancePage,
 	SettingsGeneralPage,
-	TypePage,
 	WorkspacesPage,
 } from "@/pages/stubs";
 import { useAssetsStore } from "@/stores/assetsStore";
 import { useLibraryStore } from "@/stores/libraryStore";
+import { usePrefsStore } from "@/stores/prefsStore";
 
 // Min dwell before fade-out begins. The fade itself runs for SPLASH_FADE_MS
 // (must match the `duration-[Nms]` utility on the splash overlay below).
@@ -32,6 +32,7 @@ export default function App() {
 	const { loaded, splashGone } = useSplashTimer();
 	useScanEventBridge();
 	useUndoHotkeys();
+	usePrefsRefreshBridge();
 
 	return (
 		<ErrorBoundary>
@@ -43,7 +44,7 @@ export default function App() {
 
 						<Route path="workspaces" element={<WorkspacesPage />} />
 
-						<Route path="types/:kind" element={<TypePage />} />
+						<Route path="types/:kind" element={<LibraryPage />} />
 
 						{/* `/` and `/sources/:id` mount the same LibraryPage; the
 						    page reads useParams to decide whether to apply the
@@ -180,6 +181,22 @@ function useUndoHotkeys() {
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
 	}, []);
+}
+
+/// Re-runs the assets query whenever the user toggles a preference that
+/// changes filter semantics. Currently just the GIF-bucket toggle (which
+/// shifts whether GIF/APNG/animated WebP belong to Images or Animations).
+/// Skips the initial mount — the first refresh is driven by useSplashTimer.
+function usePrefsRefreshBridge() {
+	const bucket = usePrefsStore((s) => s.animatedImagesBucket);
+	const [first, setFirst] = useState(true);
+	useEffect(() => {
+		if (first) {
+			setFirst(false);
+			return;
+		}
+		void useAssetsStore.getState().refresh();
+	}, [bucket, first]);
 }
 
 function Splash({ fadeOut }: { fadeOut: boolean }) {

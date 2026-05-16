@@ -28,6 +28,7 @@ import {
 	HiBolt,
 	HiCog6Tooth,
 	HiCube,
+	HiEllipsisHorizontalCircle,
 	HiFilm,
 	HiFolder,
 	HiFolderOpen,
@@ -175,11 +176,14 @@ export function Sidebar() {
 					<NavSection title="Types">
 						<NavItem to="/types/images" icon={HiPhoto}>Images</NavItem>
 						<NavItem to="/types/videos" icon={HiFilm}>Videos</NavItem>
+						<NavItem to="/types/audio" icon={HiMusicalNote}>Audio</NavItem>
+						<NavItem to="/types/models" icon={HiCube}>Models</NavItem>
 						<NavItem to="/types/animations" icon={HiSparkles}>
 							Animations
 						</NavItem>
-						<NavItem to="/types/audio" icon={HiMusicalNote}>Audio</NavItem>
-						<NavItem to="/types/models" icon={HiCube}>Models</NavItem>
+						<NavItem to="/types/other" icon={HiEllipsisHorizontalCircle}>
+							Other
+						</NavItem>
 					</NavSection>
 				</NavGroup>
 

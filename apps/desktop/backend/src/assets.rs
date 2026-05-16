@@ -79,6 +79,11 @@ pub struct AssetQuery {
 	/// match one of the lowercased entries.
 	#[serde(default)]
 	pub formats: Vec<String>,
+	/// Empty vec / absent → no exclusion. Otherwise, asset's `format` must
+	/// be NULL or not in the lowercased entries. Used by the "Other" type
+	/// view, which catches everything that isn't already categorized.
+	#[serde(default)]
+	pub formats_exclude: Vec<String>,
 	#[serde(default)]
 	pub path_search: Option<String>,
 	#[serde(default)]
@@ -154,6 +159,19 @@ fn where_clause(
 		let placeholders = vec!["?"; q.formats.len()].join(",");
 		sql.push_str(&format!(" AND a.format IN ({placeholders})"));
 		for f in &q.formats {
+			params.push(Box::new(f.to_ascii_lowercase()));
+		}
+	}
+
+	if !q.formats_exclude.is_empty() {
+		// Include NULL-format assets in the "not in" set — they're the
+		// extensionless files that belong to "Other" alongside any
+		// unrecognized extensions.
+		let placeholders = vec!["?"; q.formats_exclude.len()].join(",");
+		sql.push_str(&format!(
+			" AND (a.format IS NULL OR a.format NOT IN ({placeholders}))"
+		));
+		for f in &q.formats_exclude {
 			params.push(Box::new(f.to_ascii_lowercase()));
 		}
 	}
@@ -388,6 +406,7 @@ mod tests {
 			sort_by: AssetSortBy::Path,
 			sort_dir: SortDir::Asc,
 			formats: Vec::new(),
+			formats_exclude: Vec::new(),
 			path_search: None,
 			size_min: None,
 			size_max: None,
@@ -512,6 +531,32 @@ mod tests {
 			.assets
 			.iter()
 			.all(|a| a.format.as_deref() == Some("png") || a.format.as_deref() == Some("jpg")));
+	}
+
+	#[test]
+	fn format_exclude_filter_includes_null_format() {
+		// "Other" semantics: everything not in the categorized set, plus
+		// assets with no extension (format IS NULL). The fixture has png/jpg/
+		// txt/NULL across six rows; excluding png+jpg should yield txt + NULL.
+		let conn = fresh_db();
+		let mut q = default_query();
+		q.formats_exclude = vec!["png".into(), "jpg".into()];
+		let page = list_assets_impl(&conn, &q).unwrap();
+		assert_eq!(page.total, 2);
+		let formats: Vec<_> = page.assets.iter().map(|a| a.format.clone()).collect();
+		assert!(formats.contains(&Some("txt".into())));
+		assert!(formats.contains(&None));
+	}
+
+	#[test]
+	fn format_exclude_is_case_insensitive() {
+		let conn = fresh_db();
+		let mut q = default_query();
+		q.formats_exclude = vec!["PNG".into(), "JPG".into(), "TXT".into()];
+		let page = list_assets_impl(&conn, &q).unwrap();
+		// Only the NULL-format row should remain.
+		assert_eq!(page.total, 1);
+		assert!(page.assets[0].format.is_none());
 	}
 
 	#[test]
