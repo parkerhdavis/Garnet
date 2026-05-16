@@ -137,7 +137,7 @@ export function SettingsGeneralPage() {
 	);
 }
 
-export function SettingsAboutPage() {
+export function AppAboutPage() {
 	return (
 		<StubPage
 			title={`Garnet v${__APP_VERSION__}`}

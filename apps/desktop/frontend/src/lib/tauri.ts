@@ -118,6 +118,20 @@ export type AssetOpResult = {
 	still_in_library: boolean;
 };
 
+export type StartupPhase = {
+	name: string;
+	start_offset_ms: number;
+	duration_ms: number;
+	note: string | null;
+};
+
+export type StartupReport = {
+	recorded_at_unix_ms: number;
+	total_ms: number;
+	splash_budget_ms: number | null;
+	phases: StartupPhase[];
+};
+
 export type TrashResult = {
 	trash_path: string;
 	original_abs_path: string;
@@ -135,8 +149,22 @@ export const api = {
 		invoke<FormatCount[]>("list_asset_formats", { rootId }),
 	listAssetMetadata: (assetId: number) =>
 		invoke<AssetMetadata[]>("list_asset_metadata", { assetId }),
+	/// Pure cache lookup — returns the absolute path of a cached thumbnail
+	/// PNG, or null if none exists yet. Never generates; call ensureThumbnail
+	/// for that.
 	getThumbnail: (absPath: string, mtime: number | null, size?: number) =>
 		invoke<string | null>("get_thumbnail", { absPath, mtime, size }),
+	/// Fire-and-forget generation request. Resolves as soon as the IPC is
+	/// accepted; the actual work happens on the backend's blocking pool and
+	/// emits a `thumbnail:ready` event when done.
+	ensureThumbnail: (absPath: string, mtime: number | null, size?: number) =>
+		invoke<void>("ensure_thumbnail", { absPath, mtime, size }),
+	getStartupTimings: () =>
+		invoke<StartupReport | null>("get_startup_timings"),
+	markStartupPhase: (name: string, note: string | null = null) =>
+		invoke<void>("mark_startup_phase", { name, note }),
+	finalizeStartupTimings: (splashBudgetMs: number | null = null) =>
+		invoke<void>("finalize_startup_timings", { splashBudgetMs }),
 	listGarnetMetadata: (assetId: number) =>
 		invoke<GarnetMetadataEntry[]>("list_garnet_metadata", { assetId }),
 	setGarnetMetadataKey: (assetId: number, key: string, values: string[]) =>

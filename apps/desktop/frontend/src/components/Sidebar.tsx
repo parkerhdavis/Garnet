@@ -14,8 +14,10 @@
 //! - **Management**
 //!     - **Functions** — Plugins manager + Automations.
 //!     - **Settings** — split into subsections (Library Roots, Appearance,
-//!       General, About). The existing roots-management UX lives under
-//!       Library Roots.
+//!       General). The existing roots-management UX lives under Library Roots.
+//!     - **App** — Stats (startup-time breakdown and other diagnostics) and
+//!       About. These describe the running app itself, separate from
+//!       user-configurable Settings.
 //!
 //! Clicking the Garnet logo/title returns to the all-assets root view.
 
@@ -26,6 +28,7 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import type { IconType } from "react-icons";
 import {
 	HiBolt,
+	HiChartBar,
 	HiCog6Tooth,
 	HiCube,
 	HiEllipsisHorizontalCircle,
@@ -207,7 +210,13 @@ export function Sidebar() {
 						<NavItem to="/settings/general" icon={HiCog6Tooth}>
 							General
 						</NavItem>
-						<NavItem to="/settings/about" icon={HiInformationCircle}>
+					</NavSection>
+
+					<NavSection title="App">
+						<NavItem to="/app/stats" icon={HiChartBar}>
+							Stats
+						</NavItem>
+						<NavItem to="/app/about" icon={HiInformationCircle}>
 							About
 						</NavItem>
 					</NavSection>

@@ -6,10 +6,9 @@ import { HiFolderPlus, HiXMark } from "react-icons/hi2";
 import { AssetGrid } from "@/components/AssetGrid";
 import { AssetList } from "@/components/AssetList";
 import { FilterBar } from "@/components/FilterBar";
-import { Pagination } from "@/components/Pagination";
 import type { Asset } from "@/lib/tauri";
 import { parseTypeKind } from "@/lib/typeFilters";
-import { useAssetsStore, PAGE_SIZE } from "@/stores/assetsStore";
+import { useAssetsStore } from "@/stores/assetsStore";
 import { useLibraryStore } from "@/stores/libraryStore";
 
 export function LibraryPage() {
@@ -19,10 +18,8 @@ export function LibraryPage() {
 		loading,
 		error,
 		viewMode,
-		page,
 		sortBy,
 		sortDir,
-		setPage,
 		setSort,
 		setPinnedSourceId,
 		setTypeKind,
@@ -109,7 +106,6 @@ export function LibraryPage() {
 				)}
 			</div>
 
-			<Pagination page={page} pageSize={PAGE_SIZE} total={total} onPage={setPage} />
 		</motion.div>
 	);
 }

@@ -13,6 +13,7 @@ mod native_metadata;
 mod pinned_sources;
 mod plugins;
 mod settings;
+mod startup_timing;
 mod thumbnails;
 mod watcher;
 
@@ -29,8 +30,12 @@ use native_metadata::list_asset_metadata;
 use plugins::list_plugins;
 use pinned_sources::{list_pinned_sources, pin_source, unpin_source};
 use settings::{load_settings, save_settings};
-use thumbnails::get_thumbnail;
-use std::sync::Mutex;
+use startup_timing::{
+	finalize_startup_timings, get_startup_timings, mark_startup_phase, StartupTimings,
+	StartupTimingsState,
+};
+use std::sync::{Arc, Mutex};
+use thumbnails::{ensure_thumbnail, get_thumbnail};
 use tauri::Manager;
 use tracing_subscriber::EnvFilter;
 
@@ -84,7 +89,9 @@ fn init_logging() {
 fn main() {
 	init_logging();
 
-	let db = match db::open_and_migrate() {
+	let timings = Arc::new(StartupTimings::new());
+
+	let db = match timings.time("open and migrate DB", db::open_and_migrate) {
 		Ok(c) => c,
 		Err(e) => {
 			tracing::error!("Failed to open database: {e:#}");
@@ -93,7 +100,7 @@ fn main() {
 		}
 	};
 
-	let media_port = match media_server::spawn() {
+	let media_port = match timings.time("start media server", media_server::spawn) {
 		Ok(p) => p,
 		Err(e) => {
 			tracing::error!("Failed to start media server: {e}");
@@ -102,59 +109,81 @@ fn main() {
 		}
 	};
 
+	let timings_for_setup = Arc::clone(&timings);
 	tauri::Builder::default()
 		.plugin(tauri_plugin_dialog::init())
 		.plugin(tauri_plugin_fs::init())
 		.plugin(tauri_plugin_opener::init())
 		.manage(AppState { db: Mutex::new(db), media_port })
-		.setup(|app| {
-			if let Ok(settings) = settings::load_settings() {
-				if let (Some(w), Some(h)) = (settings.window_width, settings.window_height) {
-					if let Some(window) = app.get_webview_window("main") {
-						let size = tauri::LogicalSize::new(w as f64, h as f64);
-						let _ = window.set_size(size);
+		.manage(StartupTimingsState(Arc::clone(&timings)))
+		.setup(move |app| {
+			let t = timings_for_setup;
+
+			t.time("load + apply window settings", || {
+				if let Ok(settings) = settings::load_settings() {
+					if let (Some(w), Some(h)) = (settings.window_width, settings.window_height) {
+						if let Some(window) = app.get_webview_window("main") {
+							let size = tauri::LogicalSize::new(w as f64, h as f64);
+							let _ = window.set_size(size);
+						}
 					}
 				}
-			}
+			});
 
 			// Install the filesystem watcher and start watching the existing
 			// roots. The watcher debounces OS-native events (~1.5s) and
 			// enqueues a scan on the affected root when a batch fires, reusing
 			// the diff-aware indexer for the actual work.
 			let handle = app.handle().clone();
-			let mut watcher = match watcher::FileWatcher::new(handle.clone()) {
+			let mut watcher = match t.time("init watcher debouncer", || watcher::FileWatcher::new(handle.clone())) {
 				Ok(w) => w,
 				Err(e) => {
 					tracing::error!("watcher init failed: {e}");
 					return Err(anyhow::anyhow!(e).into());
 				}
 			};
-			let initial_roots = collect_roots().unwrap_or_default();
+			let initial_roots = t.time("collect roots from DB", || collect_roots().unwrap_or_default());
 			for (id, path) in &initial_roots {
-				if let Err(e) = watcher.watch(*id, std::path::Path::new(path)) {
-					tracing::warn!("watcher: failed to watch root_id={}: {}", id, e);
-				}
+				let p = path.clone();
+				t.time_with_note(format!("watch root: {p}"), || {
+					let result = watcher.watch(*id, std::path::Path::new(&p));
+					if let Err(e) = &result {
+						tracing::warn!("watcher: failed to watch root_id={}: {}", id, e);
+					}
+					((), Some(format!("root_id={id}")))
+				});
 			}
-			app.manage(watcher::WatcherState(std::sync::Mutex::new(watcher)));
+			t.time("manage WatcherState", || {
+				app.manage(watcher::WatcherState(std::sync::Mutex::new(watcher)));
+			});
 
 			// Background auto-scan: enumerate every registered library root
 			// and spawn a scan for each. Each scan opens its own SQLite
 			// connection (WAL mode), so they don't block IPC commands on the
 			// shared `AppState.db` mutex. Frontend listens for `scan:completed`
 			// events and refreshes its views.
-			tauri::async_runtime::spawn_blocking(move || {
-				if initial_roots.is_empty() {
-					tracing::info!("startup auto-scan: no library roots registered");
-					return;
-				}
-				tracing::info!(
-					"startup auto-scan: queueing {} root(s)",
-					initial_roots.len()
-				);
-				for (id, path) in initial_roots {
-					library::spawn_scan(handle.clone(), id, std::path::PathBuf::from(path));
-				}
+			t.time_with_note("dispatch auto-scan tasks", || {
+				let count = initial_roots.len();
+				tauri::async_runtime::spawn_blocking(move || {
+					if initial_roots.is_empty() {
+						tracing::info!("startup auto-scan: no library roots registered");
+						return;
+					}
+					tracing::info!(
+						"startup auto-scan: queueing {} root(s)",
+						initial_roots.len()
+					);
+					for (id, path) in initial_roots {
+						library::spawn_scan(handle.clone(), id, std::path::PathBuf::from(path));
+					}
+				});
+				((), Some(format!("{count} root(s)")))
 			});
+
+			// NOTE: we intentionally do NOT finalize here. Setup returns long
+			// before the window paints, the frontend mounts, or the initial
+			// data lands. The frontend calls `finalize_startup_timings` after
+			// its own splash dismissal so the report covers the full boot.
 
 			Ok(())
 		})
@@ -190,6 +219,10 @@ fn main() {
 			restore_from_trash,
 			list_asset_metadata,
 			get_thumbnail,
+			ensure_thumbnail,
+			get_startup_timings,
+			mark_startup_phase,
+			finalize_startup_timings,
 			list_garnet_metadata,
 			set_garnet_metadata_key,
 			add_garnet_metadata_value,
