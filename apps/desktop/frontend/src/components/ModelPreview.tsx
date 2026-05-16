@@ -92,6 +92,8 @@ export function ModelPreview({ url, format }: { url: string; format: string | nu
 		sceneRef.current?.setPlaying(playing);
 	}, [playing]);
 
+	const hasAnim = clips.length > 0;
+
 	return (
 		<div className="relative w-full h-full">
 			<div ref={containerRef} className="absolute inset-0" />
@@ -107,37 +109,207 @@ export function ModelPreview({ url, format }: { url: string; format: string | nu
 					</div>
 				</div>
 			)}
-			{clips.length > 0 && !error && (
-				<div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-base-100/90 backdrop-blur border border-base-300 rounded-full px-2 py-1 shadow-lg">
-					<button
-						type="button"
-						className="btn btn-xs btn-circle btn-ghost"
-						onClick={() => setPlaying((v) => !v)}
-						title={playing ? "Pause" : "Play"}
-					>
-						{playing ? <HiPause className="size-3.5" /> : <HiPlay className="size-3.5" />}
-					</button>
-					{clips.length > 1 ? (
-						<select
-							className="select select-xs select-ghost w-40"
-							value={activeClip}
-							onChange={(e) => setActiveClip(Number(e.target.value))}
-						>
-							{clips.map((c) => (
-								<option key={c.index} value={c.index}>
-									{c.name || `Clip ${c.index + 1}`}
-								</option>
-							))}
-						</select>
-					) : (
-						<span className="text-[11px] text-base-content/70 px-2 truncate max-w-40">
-							{clips[0].name || "Clip 1"}
-						</span>
-					)}
-				</div>
+			{hasAnim && !error && (
+				<AnimationControls
+					sceneRef={sceneRef}
+					clips={clips}
+					activeClip={activeClip}
+					setActiveClip={setActiveClip}
+					playing={playing}
+					setPlaying={setPlaying}
+				/>
 			)}
 		</div>
 	);
+}
+
+/// Floating pill at the bottom of the viewer: play/pause + clip selector +
+/// scrubable timeline + time readout. The timeline indicator and the time
+/// text update via refs in a rAF loop — keeping the React tree out of the
+/// per-frame path avoids a re-render every animation tick.
+/// Three.js animation clips don't carry the original authoring framerate
+/// (FBX has it but Three's loader doesn't preserve it; glTF has no FPS
+/// concept at all). Display frames against a fixed 30 FPS reference so the
+/// frame counter is at least an internally-consistent grid for "step to
+/// next moment" navigation; the actual visual playback uses real seconds.
+const ASSUMED_FPS = 30;
+
+function AnimationControls({
+	sceneRef,
+	clips,
+	activeClip,
+	setActiveClip,
+	playing,
+	setPlaying,
+}: {
+	sceneRef: React.MutableRefObject<ModelScene | null>;
+	clips: ClipInfo[];
+	activeClip: number;
+	setActiveClip: (i: number) => void;
+	playing: boolean;
+	setPlaying: (p: boolean) => void;
+}) {
+	const trackRef = useRef<HTMLDivElement | null>(null);
+	const fillRef = useRef<HTMLDivElement | null>(null);
+	const handleRef = useRef<HTMLDivElement | null>(null);
+	const timeLabelRef = useRef<HTMLSpanElement | null>(null);
+	const frameLabelRef = useRef<HTMLSpanElement | null>(null);
+	// Whether the user is currently dragging the scrub handle. While
+	// dragging, the rAF loop reads from the scene but doesn't update the
+	// progress indicator — the pointer handler owns the position.
+	const draggingRef = useRef(false);
+	// Playing-state to restore on pointer-up. Captured at pointer-down so
+	// users can scrub through a paused animation and have it stay paused.
+	const playingBeforeDragRef = useRef(playing);
+
+	// Per-frame: read the scene's current animation time and project onto
+	// the track. Refs only — no setState in the loop.
+	useEffect(() => {
+		let rafId = 0;
+		const tick = () => {
+			rafId = requestAnimationFrame(tick);
+			if (draggingRef.current) return;
+			const p = sceneRef.current?.getProgress();
+			if (!p || p.duration <= 0) return;
+			const fraction = Math.max(0, Math.min(1, p.time / p.duration));
+			updateIndicator(fraction);
+			writeLabels(p.time, p.duration);
+		};
+		rafId = requestAnimationFrame(tick);
+		return () => cancelAnimationFrame(rafId);
+	}, [sceneRef, activeClip]);
+
+	const writeLabels = (time: number, duration: number) => {
+		if (timeLabelRef.current) {
+			timeLabelRef.current.textContent = `${formatTime(time)} / ${formatTime(duration)}`;
+		}
+		if (frameLabelRef.current) {
+			frameLabelRef.current.textContent = `f${Math.floor(time * ASSUMED_FPS)} / f${Math.floor(duration * ASSUMED_FPS)}`;
+		}
+	};
+
+	const updateIndicator = (fraction: number) => {
+		const pct = `${fraction * 100}%`;
+		if (fillRef.current) fillRef.current.style.width = pct;
+		if (handleRef.current) handleRef.current.style.left = pct;
+	};
+
+	const fractionFromEvent = (clientX: number): number => {
+		const el = trackRef.current;
+		if (!el) return 0;
+		const rect = el.getBoundingClientRect();
+		return (clientX - rect.left) / rect.width;
+	};
+
+	const beginScrub = (e: React.PointerEvent) => {
+		e.currentTarget.setPointerCapture(e.pointerId);
+		draggingRef.current = true;
+		playingBeforeDragRef.current = playing;
+		// Pause for the duration of the scrub so the indicator doesn't
+		// fight the rAF advance. We don't go through setPlaying here so we
+		// don't surface the transient pause as state to the rest of the
+		// component.
+		sceneRef.current?.setPlaying(false);
+		applyScrub(e.clientX);
+	};
+	const applyScrub = (clientX: number) => {
+		const f = Math.max(0, Math.min(1, fractionFromEvent(clientX)));
+		sceneRef.current?.seekToFraction(f);
+		updateIndicator(f);
+		const dur = sceneRef.current?.getProgress()?.duration ?? 0;
+		writeLabels(f * dur, dur);
+	};
+	const onPointerDown = (e: React.PointerEvent) => {
+		if (e.button !== 0) return;
+		beginScrub(e);
+	};
+	const onPointerMove = (e: React.PointerEvent) => {
+		if (!draggingRef.current) return;
+		applyScrub(e.clientX);
+	};
+	const onPointerUp = (e: React.PointerEvent) => {
+		if (!draggingRef.current) return;
+		draggingRef.current = false;
+		try {
+			e.currentTarget.releasePointerCapture(e.pointerId);
+		} catch {
+			/* pointer may already be released by the browser */
+		}
+		sceneRef.current?.setPlaying(playingBeforeDragRef.current);
+	};
+
+	return (
+		<div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-[min(960px,calc(100%-2rem))] flex items-center gap-3 bg-base-100/90 backdrop-blur border border-base-300 rounded-full pl-1.5 pr-3 py-1 shadow-lg">
+			<button
+				type="button"
+				className="btn btn-xs btn-circle btn-ghost shrink-0"
+				onClick={() => setPlaying(!playing)}
+				title={playing ? "Pause" : "Play"}
+			>
+				{playing ? <HiPause className="size-3.5" /> : <HiPlay className="size-3.5" />}
+			</button>
+			{clips.length > 1 ? (
+				<select
+					className="select select-xs select-ghost w-32 shrink-0"
+					value={activeClip}
+					onChange={(e) => setActiveClip(Number(e.target.value))}
+				>
+					{clips.map((c) => (
+						<option key={c.index} value={c.index}>
+							{c.name || `Clip ${c.index + 1}`}
+						</option>
+					))}
+				</select>
+			) : (
+				<span
+					className="text-[11px] text-base-content/70 truncate max-w-28 shrink-0"
+					title={clips[0]?.name || "Clip 1"}
+				>
+					{clips[0]?.name || "Clip 1"}
+				</span>
+			)}
+			<div
+				ref={trackRef}
+				role="slider"
+				aria-label="Animation timeline"
+				aria-valuemin={0}
+				aria-valuemax={1}
+				tabIndex={0}
+				onPointerDown={onPointerDown}
+				onPointerMove={onPointerMove}
+				onPointerUp={onPointerUp}
+				onPointerCancel={onPointerUp}
+				className="relative flex-1 h-6 flex items-center cursor-pointer select-none"
+			>
+				<div className="relative w-full h-1 rounded-full bg-base-300/80 overflow-hidden">
+					<div
+						ref={fillRef}
+						className="absolute inset-y-0 left-0 bg-primary"
+						style={{ width: "0%" }}
+					/>
+				</div>
+				<div
+					ref={handleRef}
+					className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 size-3 rounded-full bg-primary shadow"
+					style={{ left: "0%" }}
+				/>
+			</div>
+			<div className="flex flex-col items-end text-[10px] tabular-nums text-base-content/60 shrink-0 leading-tight w-28">
+				<span ref={timeLabelRef}>0:00.00 / 0:00.00</span>
+				<span ref={frameLabelRef} className="text-base-content/45">
+					f0 / f0
+				</span>
+			</div>
+		</div>
+	);
+}
+
+function formatTime(seconds: number): string {
+	if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+	const m = Math.floor(seconds / 60);
+	const s = Math.floor(seconds % 60);
+	const cs = Math.floor((seconds - Math.floor(seconds)) * 100);
+	return `${m}:${s.toString().padStart(2, "0")}.${cs.toString().padStart(2, "0")}`;
 }
 
 class ModelScene {
@@ -215,6 +387,30 @@ class ModelScene {
 	setPlaying(playing: boolean): void {
 		if (!this.action) return;
 		this.action.paused = !playing;
+	}
+
+	/// Current playback time and total clip duration in seconds, or null
+	/// when no clip is loaded. Read at most once per frame from the React
+	/// rAF loop — never stored in React state directly, to avoid forcing
+	/// a re-render every frame.
+	getProgress(): { time: number; duration: number } | null {
+		if (!this.action) return null;
+		return {
+			time: this.action.time,
+			duration: this.action.getClip().duration,
+		};
+	}
+
+	/// Jump the active action to `fraction * duration` and tick the mixer
+	/// with delta 0 so the bones reflect the new pose immediately. Used by
+	/// the scrub interaction in the timeline UI.
+	seekToFraction(fraction: number): void {
+		if (!this.action || !this.mixer) return;
+		const duration = this.action.getClip().duration;
+		if (duration <= 0) return;
+		const clamped = Math.max(0, Math.min(1, fraction));
+		this.action.time = clamped * duration;
+		this.mixer.update(0);
 	}
 
 	resize(): void {
