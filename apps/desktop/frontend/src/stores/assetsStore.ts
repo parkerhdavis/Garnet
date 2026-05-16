@@ -6,6 +6,7 @@ import { create } from "zustand";
 import {
 	api,
 	type Asset,
+	type AssetGroupBy,
 	type AssetSortBy,
 	type FormatCount,
 	type SortDir,
@@ -42,6 +43,8 @@ type AssetsState = {
 	mtimeTo: number | null;
 	sortBy: AssetSortBy;
 	sortDir: SortDir;
+	groupBy: AssetGroupBy;
+	groupDir: SortDir;
 	page: number;
 
 	// View
@@ -69,6 +72,8 @@ type AssetsState = {
 	setMtimeFrom: (from: number | null) => Promise<void>;
 	setMtimeTo: (to: number | null) => Promise<void>;
 	setSort: (by: AssetSortBy) => Promise<void>;
+	setGroupBy: (groupBy: AssetGroupBy) => Promise<void>;
+	setGroupDir: (dir: SortDir) => Promise<void>;
 	setPage: (page: number) => Promise<void>;
 	setViewMode: (mode: ViewMode) => void;
 	resetFilters: () => Promise<void>;
@@ -88,6 +93,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 	mtimeTo: null,
 	sortBy: "path",
 	sortDir: "asc",
+	groupBy: "none",
+	groupDir: "asc",
 	page: 0,
 
 	viewMode: "grid",
@@ -174,6 +181,18 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 		await get().refresh();
 	},
 
+	setGroupBy: async (groupBy) => {
+		if (get().groupBy === groupBy) return;
+		set({ groupBy, page: 0 });
+		await get().refresh();
+	},
+
+	setGroupDir: async (groupDir) => {
+		if (get().groupDir === groupDir) return;
+		set({ groupDir, page: 0 });
+		await get().refresh();
+	},
+
 	setPage: async (page) => {
 		set({ page: Math.max(0, page) });
 		await get().refresh();
@@ -216,6 +235,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 					offset: s.page * PAGE_SIZE,
 					sort_by: s.sortBy,
 					sort_dir: s.sortDir,
+					group_by: s.groupBy,
+					group_dir: s.groupDir,
 					formats: typeQuery.formats,
 					formats_exclude: typeQuery.formats_exclude,
 					exclude_motion_only: typeQuery.exclude_motion_only,

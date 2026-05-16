@@ -43,28 +43,98 @@ pub enum SortDir {
 	Desc,
 }
 
-/// Whitelisted sort spec → SQL fragment. Match-arm rather than format!() so
-/// the sort parameters can never carry SQL injection even though they
-/// originate in our own frontend.
-fn order_clause(by: AssetSortBy, dir: SortDir) -> &'static str {
+/// Whitelisted sort spec → SQL fragment (column expression with direction, no
+/// leading "ORDER BY"). Match-arm rather than format!() so the sort parameters
+/// can never carry SQL injection even though they originate in our own frontend.
+fn sort_expr(by: AssetSortBy, dir: SortDir) -> &'static str {
 	match (by, dir) {
-		(AssetSortBy::Path, SortDir::Asc) => "ORDER BY a.relative_path COLLATE NOCASE ASC",
-		(AssetSortBy::Path, SortDir::Desc) => "ORDER BY a.relative_path COLLATE NOCASE DESC",
-		(AssetSortBy::Size, SortDir::Asc) => "ORDER BY a.size ASC NULLS LAST",
-		(AssetSortBy::Size, SortDir::Desc) => "ORDER BY a.size DESC NULLS LAST",
-		(AssetSortBy::Mtime, SortDir::Asc) => "ORDER BY a.mtime ASC NULLS LAST",
-		(AssetSortBy::Mtime, SortDir::Desc) => "ORDER BY a.mtime DESC NULLS LAST",
+		(AssetSortBy::Path, SortDir::Asc) => "a.relative_path COLLATE NOCASE ASC",
+		(AssetSortBy::Path, SortDir::Desc) => "a.relative_path COLLATE NOCASE DESC",
+		(AssetSortBy::Size, SortDir::Asc) => "a.size ASC NULLS LAST",
+		(AssetSortBy::Size, SortDir::Desc) => "a.size DESC NULLS LAST",
+		(AssetSortBy::Mtime, SortDir::Asc) => "a.mtime ASC NULLS LAST",
+		(AssetSortBy::Mtime, SortDir::Desc) => "a.mtime DESC NULLS LAST",
 		(AssetSortBy::Format, SortDir::Asc) => {
-			"ORDER BY a.format COLLATE NOCASE ASC NULLS LAST, a.relative_path COLLATE NOCASE ASC"
+			"a.format COLLATE NOCASE ASC NULLS LAST, a.relative_path COLLATE NOCASE ASC"
 		}
 		(AssetSortBy::Format, SortDir::Desc) => {
-			"ORDER BY a.format COLLATE NOCASE DESC NULLS LAST, a.relative_path COLLATE NOCASE ASC"
+			"a.format COLLATE NOCASE DESC NULLS LAST, a.relative_path COLLATE NOCASE ASC"
 		}
 		(AssetSortBy::Root, SortDir::Asc) => {
-			"ORDER BY r.path COLLATE NOCASE ASC, a.relative_path COLLATE NOCASE ASC"
+			"r.path COLLATE NOCASE ASC, a.relative_path COLLATE NOCASE ASC"
 		}
 		(AssetSortBy::Root, SortDir::Desc) => {
-			"ORDER BY r.path COLLATE NOCASE DESC, a.relative_path COLLATE NOCASE ASC"
+			"r.path COLLATE NOCASE DESC, a.relative_path COLLATE NOCASE ASC"
+		}
+	}
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AssetGroupBy {
+	None,
+	Root,
+	Folder,
+	Format,
+	MtimeBucket,
+}
+
+fn default_group_by() -> AssetGroupBy {
+	AssetGroupBy::None
+}
+
+/// Build the group-key fragment used as the *primary* ORDER BY when grouping is
+/// active. Returns the SQL expression (with direction baked in) plus any bound
+/// parameters that fragment introduces. None when group_by = None.
+///
+/// Folder grouping uses an `rtrim` + `replace` trick — `rtrim(path, chars)`
+/// strips trailing characters that are in `chars`. By passing every non-slash
+/// character (via `replace(path, '/', '')`) as the trim set, we strip back to
+/// the last `/`, leaving the directory portion of the path. Works in pure SQL,
+/// no UDF required.
+///
+/// Mtime-bucket grouping classifies into Today / Week / Month / Older /
+/// Unknown by comparing against bound timestamps captured at query time.
+fn group_expr(by: AssetGroupBy, dir: SortDir) -> Option<(String, Vec<Box<dyn ToSql>>)> {
+	let dir_s = match dir {
+		SortDir::Asc => "ASC",
+		SortDir::Desc => "DESC",
+	};
+	match by {
+		AssetGroupBy::None => None,
+		AssetGroupBy::Root => Some((format!("r.path COLLATE NOCASE {dir_s}"), vec![])),
+		AssetGroupBy::Folder => Some((
+			format!(
+				"rtrim(a.relative_path, replace(a.relative_path, '/', '')) COLLATE NOCASE {dir_s}"
+			),
+			vec![],
+		)),
+		AssetGroupBy::Format => Some((
+			format!("a.format COLLATE NOCASE {dir_s} NULLS LAST"),
+			vec![],
+		)),
+		AssetGroupBy::MtimeBucket => {
+			let now = std::time::SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)
+				.unwrap_or_default()
+				.as_secs() as i64;
+			let day = 86_400_i64;
+			let today = now - day;
+			let week = now - 7 * day;
+			let month = now - 30 * day;
+			let expr = format!(
+				"CASE \
+					WHEN a.mtime IS NULL THEN 4 \
+					WHEN a.mtime >= ? THEN 0 \
+					WHEN a.mtime >= ? THEN 1 \
+					WHEN a.mtime >= ? THEN 2 \
+					ELSE 3 \
+				 END {dir_s}"
+			);
+			Some((
+				expr,
+				vec![Box::new(today), Box::new(week), Box::new(month)],
+			))
 		}
 	}
 }
@@ -81,6 +151,10 @@ pub struct AssetQuery {
 	pub sort_by: AssetSortBy,
 	#[serde(default = "default_sort_dir")]
 	pub sort_dir: SortDir,
+	#[serde(default = "default_group_by")]
+	pub group_by: AssetGroupBy,
+	#[serde(default = "default_sort_dir")]
+	pub group_dir: SortDir,
 	/// Empty vec / absent → no format filter. Otherwise, asset's `format` must
 	/// match one of the lowercased entries.
 	#[serde(default)]
@@ -301,14 +375,23 @@ pub fn list_assets_impl(conn: &Connection, q: &AssetQuery) -> rusqlite::Result<A
 		stmt.query_row(params_ref.as_slice(), |r| r.get(0))?
 	};
 
+	let group = group_expr(q.group_by, q.group_dir);
+	let order = match &group {
+		Some((g, _)) => format!("ORDER BY {}, {}", g, sort_expr(q.sort_by, q.sort_dir)),
+		None => format!("ORDER BY {}", sort_expr(q.sort_by, q.sort_dir)),
+	};
 	let list_sql = format!(
 		"SELECT a.id, a.root_id, r.path, a.relative_path, a.size, a.mtime, a.format, a.is_motion_only
 		 FROM assets a JOIN library_roots r ON r.id = a.root_id
-		 {where_sql} {order} LIMIT ? OFFSET ?",
-		order = order_clause(q.sort_by, q.sort_dir)
+		 {where_sql} {order} LIMIT ? OFFSET ?"
 	);
 	let mut stmt = conn.prepare(&list_sql)?;
 	let mut params_ref: Vec<&dyn ToSql> = where_params.iter().map(|b| b.as_ref()).collect();
+	if let Some((_, group_params)) = &group {
+		for p in group_params {
+			params_ref.push(p.as_ref());
+		}
+	}
 	params_ref.push(&limit);
 	params_ref.push(&offset);
 
@@ -452,6 +535,8 @@ mod tests {
 			offset: 0,
 			sort_by: AssetSortBy::Path,
 			sort_dir: SortDir::Asc,
+			group_by: AssetGroupBy::None,
+			group_dir: SortDir::Asc,
 			formats: Vec::new(),
 			formats_exclude: Vec::new(),
 			path_search: None,
@@ -676,6 +761,106 @@ mod tests {
 		q.sort_dir = SortDir::Desc;
 		let page = list_assets_impl(&conn, &q).unwrap();
 		assert_eq!(page.assets[0].root_path, "/tmp/r2");
+	}
+
+	fn folder_of(rel: &str) -> &str {
+		match rel.rfind('/') {
+			Some(i) => &rel[..i],
+			None => "",
+		}
+	}
+
+	#[test]
+	fn group_by_root_keeps_roots_contiguous() {
+		let conn = fresh_db();
+		let mut q = default_query();
+		q.group_by = AssetGroupBy::Root;
+		let page = list_assets_impl(&conn, &q).unwrap();
+		// Each root's assets should appear in a single contiguous run.
+		let mut seen: Vec<i64> = Vec::new();
+		for a in &page.assets {
+			if seen.last() != Some(&a.root_id) {
+				assert!(
+					!seen.contains(&a.root_id),
+					"root {} reappeared after gap; ordering not contiguous",
+					a.root_id
+				);
+				seen.push(a.root_id);
+			}
+		}
+	}
+
+	#[test]
+	fn group_by_folder_keeps_folders_contiguous() {
+		let conn = fresh_db();
+		let mut q = default_query();
+		q.group_by = AssetGroupBy::Folder;
+		let page = list_assets_impl(&conn, &q).unwrap();
+		let mut seen: Vec<String> = Vec::new();
+		for a in &page.assets {
+			let f = folder_of(&a.relative_path).to_string();
+			if seen.last() != Some(&f) {
+				assert!(!seen.contains(&f), "folder {f:?} reappeared after gap");
+				seen.push(f);
+			}
+		}
+	}
+
+	#[test]
+	fn group_by_format_keeps_formats_contiguous() {
+		let conn = fresh_db();
+		let mut q = default_query();
+		q.group_by = AssetGroupBy::Format;
+		let page = list_assets_impl(&conn, &q).unwrap();
+		let mut seen: Vec<Option<String>> = Vec::new();
+		for a in &page.assets {
+			let f = a.format.clone();
+			if seen.last() != Some(&f) {
+				assert!(!seen.contains(&f), "format {f:?} reappeared after gap");
+				seen.push(f);
+			}
+		}
+	}
+
+	#[test]
+	fn group_by_applies_secondary_sort_within_group() {
+		// Grouping by format with secondary sort by size DESC: within each
+		// format the largest asset should come first.
+		let conn = fresh_db();
+		let mut q = default_query();
+		q.group_by = AssetGroupBy::Format;
+		q.group_dir = SortDir::Asc;
+		q.sort_by = AssetSortBy::Size;
+		q.sort_dir = SortDir::Desc;
+		let page = list_assets_impl(&conn, &q).unwrap();
+		// Walk: for each contiguous format run, sizes must be monotonically
+		// non-increasing.
+		let mut current_format: Option<Option<String>> = None;
+		let mut last_size: Option<i64> = None;
+		for a in &page.assets {
+			if current_format.as_ref() != Some(&a.format) {
+				current_format = Some(a.format.clone());
+				last_size = a.size;
+				continue;
+			}
+			if let (Some(prev), Some(cur)) = (last_size, a.size) {
+				assert!(cur <= prev, "size not desc within format group");
+			}
+			last_size = a.size;
+		}
+	}
+
+	#[test]
+	fn group_by_mtime_bucket_runs() {
+		// Mtime-bucket grouping uses bound timestamps relative to NOW. The
+		// fixture mtimes (5..25) are all well in the past, so every row lands
+		// in the "older" bucket. The query still has to execute cleanly with
+		// the CASE expression and its bound parameters in the right order.
+		let conn = fresh_db();
+		let mut q = default_query();
+		q.group_by = AssetGroupBy::MtimeBucket;
+		let page = list_assets_impl(&conn, &q).unwrap();
+		assert_eq!(page.assets.len() as i64, page.total);
 	}
 
 	fn fresh_db_with_pins() -> Connection {

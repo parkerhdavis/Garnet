@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { HiArrowsUpDown, HiBarsArrowDown, HiBarsArrowUp } from "react-icons/hi2";
 import type { Asset, AssetSortBy, SortDir } from "@/lib/tauri";
 import { openContextMenu } from "@/components/ContextMenu";
 import { buildAssetContextMenu } from "@/lib/assetContextMenu";
+import { groupOf } from "@/lib/grouping";
 import { abbreviatePath, formatSize, formatTime } from "@/lib/paths";
+import { useAssetsStore } from "@/stores/assetsStore";
 import { useIsSelected, useSelectionStore } from "@/stores/selectionStore";
 
 type Props = {
@@ -15,8 +17,12 @@ type Props = {
 	onOpen: (asset: Asset) => void;
 };
 
+const COLUMN_COUNT = 5;
+
 export function AssetList({ assets, sortBy, sortDir, onSort, onOpen }: Props) {
 	const orderedIds = useMemo(() => assets.map((a) => a.id), [assets]);
+	const groupBy = useAssetsStore((s) => s.groupBy);
+	let prevKey: string | null = null;
 	return (
 		<div className="p-6">
 			<div className="card bg-base-100 border border-base-300 overflow-hidden">
@@ -42,19 +48,41 @@ export function AssetList({ assets, sortBy, sortDir, onSort, onOpen }: Props) {
 							</tr>
 						</thead>
 						<tbody>
-							{assets.map((a) => (
-								<AssetRow
-									key={a.id}
-									asset={a}
-									orderedIds={orderedIds}
-									onOpen={onOpen}
-								/>
-							))}
+							{assets.map((a) => {
+								const group = groupOf(a, groupBy);
+								const showHeader = group !== null && group.key !== prevKey;
+								if (group) prevKey = group.key;
+								return (
+									<Fragment key={a.id}>
+										{showHeader && group && (
+											<GroupHeaderRow label={group.label} />
+										)}
+										<AssetRow
+											asset={a}
+											orderedIds={orderedIds}
+											onOpen={onOpen}
+										/>
+									</Fragment>
+								);
+							})}
 						</tbody>
 					</table>
 				</div>
 			</div>
 		</div>
+	);
+}
+
+function GroupHeaderRow({ label }: { label: string }) {
+	return (
+		<tr className="bg-base-200/60 hover:bg-base-200/60">
+			<td
+				colSpan={COLUMN_COUNT}
+				className="text-sm font-semibold text-base-content/80 border-t border-base-300 py-2"
+			>
+				{label}
+			</td>
+		</tr>
 	);
 }
 
