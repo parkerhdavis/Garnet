@@ -94,10 +94,11 @@ pub struct AssetQuery {
 	pub mtime_from: Option<i64>,
 	#[serde(default)]
 	pub mtime_to: Option<i64>,
-	/// Empty / absent → no tag filter. Otherwise, asset must be tagged with
-	/// **all** listed tag ids (AND semantics).
+	/// Empty / absent → no tag filter. Otherwise, asset must carry **every**
+	/// listed tag (AND semantics) — tags are values of the `tags` key in the
+	/// garnet_metadata table.
 	#[serde(default)]
-	pub tag_ids: Vec<i64>,
+	pub tag_names: Vec<String>,
 	/// Scope to a pinned source: resolves to the pin's (root_id,
 	/// relative_path_to_root) and limits the results accordingly. Honored
 	/// alongside an explicit `root_id` (if both are set the explicit
@@ -201,23 +202,23 @@ fn where_clause(
 		params.push(Box::new(to));
 	}
 
-	// Tag filter — AND across tags (asset must carry every listed tag). Done
-	// via `NOT EXISTS (... tag_id NOT IN (..) ...)` is fragile under
-	// duplicates; cleanest is a HAVING clause counting matched tag rows.
-	if !q.tag_ids.is_empty() {
-		let placeholders = vec!["?"; q.tag_ids.len()].join(",");
+	// Tag filter — AND across tags (asset must carry every listed tag). Tags
+	// live in `garnet_metadata` under the well-known key `tags`. HAVING
+	// counts distinct matches so duplicate rows can't satisfy the predicate.
+	if !q.tag_names.is_empty() {
+		let placeholders = vec!["?"; q.tag_names.len()].join(",");
 		sql.push_str(&format!(
 			" AND a.id IN (
-				SELECT asset_id FROM asset_tags
-				WHERE tag_id IN ({placeholders})
+				SELECT asset_id FROM garnet_metadata
+				WHERE key = 'tags' AND value IN ({placeholders})
 				GROUP BY asset_id
-				HAVING COUNT(DISTINCT tag_id) = ?
+				HAVING COUNT(DISTINCT value) = ?
 			)"
 		));
-		for tid in &q.tag_ids {
-			params.push(Box::new(*tid));
+		for name in &q.tag_names {
+			params.push(Box::new(name.clone()));
 		}
-		params.push(Box::new(q.tag_ids.len() as i64));
+		params.push(Box::new(q.tag_names.len() as i64));
 	}
 
 	(sql, params)
@@ -412,7 +413,7 @@ mod tests {
 			size_max: None,
 			mtime_from: None,
 			mtime_to: None,
-			tag_ids: Vec::new(),
+			tag_names: Vec::new(),
 			pinned_source_id: None,
 		}
 	}
@@ -421,24 +422,21 @@ mod tests {
 		let conn = fresh_db();
 		conn.execute_batch(
 			"
-			CREATE TABLE tags (
-				id        INTEGER PRIMARY KEY,
-				name      TEXT    NOT NULL UNIQUE COLLATE NOCASE,
-				parent_id INTEGER,
-				created_at INTEGER NOT NULL
+			CREATE TABLE garnet_metadata (
+				id         INTEGER PRIMARY KEY,
+				asset_id   INTEGER NOT NULL,
+				key        TEXT    NOT NULL,
+				value      TEXT    NOT NULL,
+				position   INTEGER NOT NULL DEFAULT 0,
+				created_at INTEGER NOT NULL,
+				updated_at INTEGER NOT NULL,
+				UNIQUE(asset_id, key, value)
 			);
-			CREATE TABLE asset_tags (
-				asset_id INTEGER NOT NULL,
-				tag_id   INTEGER NOT NULL,
-				PRIMARY KEY (asset_id, tag_id)
-			);
-			INSERT INTO tags (id, name, parent_id, created_at) VALUES
-				(1, 'red',    NULL, 0),
-				(2, 'square', NULL, 0);
-			INSERT INTO asset_tags VALUES
-				(1, 1), (1, 2), -- a.png: red + square
-				(2, 1),         -- b.jpg: red
-				(3, 2);         -- sub/c.png: square
+			INSERT INTO garnet_metadata (asset_id, key, value, position, created_at, updated_at) VALUES
+				(1, 'tags', 'red',    0, 0, 0),   -- a.png: red + square
+				(1, 'tags', 'square', 1, 0, 0),
+				(2, 'tags', 'red',    0, 0, 0),   -- b.jpg: red
+				(3, 'tags', 'square', 0, 0, 0);   -- sub/c.png: square
 			",
 		)
 		.unwrap();
@@ -449,7 +447,7 @@ mod tests {
 	fn tag_filter_single() {
 		let conn = fresh_db_with_tags();
 		let mut q = default_query();
-		q.tag_ids = vec![1]; // red
+		q.tag_names = vec!["red".into()];
 		let page = list_assets_impl(&conn, &q).unwrap();
 		assert_eq!(page.total, 2);
 	}
@@ -458,7 +456,7 @@ mod tests {
 	fn tag_filter_and() {
 		let conn = fresh_db_with_tags();
 		let mut q = default_query();
-		q.tag_ids = vec![1, 2]; // red AND square → only asset id 1
+		q.tag_names = vec!["red".into(), "square".into()]; // → only asset id 1
 		let page = list_assets_impl(&conn, &q).unwrap();
 		assert_eq!(page.total, 1);
 		assert_eq!(page.assets[0].id, 1);

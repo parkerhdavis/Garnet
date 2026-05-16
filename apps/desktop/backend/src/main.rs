@@ -5,28 +5,30 @@
 mod asset_ops;
 mod assets;
 mod db;
+mod garnet_metadata;
 mod indexer;
 mod library;
 mod media_server;
+mod native_metadata;
 mod pinned_sources;
 mod plugins;
 mod settings;
-mod tags;
 mod thumbnails;
 mod watcher;
 
 use asset_ops::{move_asset, move_file, rename_asset, restore_from_trash, trash_asset};
 use assets::{get_asset, list_asset_formats, list_assets};
+use garnet_metadata::{
+	add_garnet_metadata_value, list_garnet_metadata, list_garnet_metadata_values_for_key,
+	remove_garnet_metadata_key, remove_garnet_metadata_value, set_garnet_metadata_key,
+};
 use library::{
 	list_library_roots, register_library_root, remove_library_root, scan_library_root,
 };
+use native_metadata::list_asset_metadata;
 use plugins::list_plugins;
 use pinned_sources::{list_pinned_sources, pin_source, unpin_source};
 use settings::{load_settings, save_settings};
-use tags::{
-	create_tag, delete_tag, list_asset_metadata, list_asset_tags, list_tags, tag_asset,
-	untag_asset,
-};
 use thumbnails::get_thumbnail;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -188,12 +190,12 @@ fn main() {
 			restore_from_trash,
 			list_asset_metadata,
 			get_thumbnail,
-			list_tags,
-			create_tag,
-			delete_tag,
-			tag_asset,
-			untag_asset,
-			list_asset_tags,
+			list_garnet_metadata,
+			set_garnet_metadata_key,
+			add_garnet_metadata_value,
+			remove_garnet_metadata_value,
+			remove_garnet_metadata_key,
+			list_garnet_metadata_values_for_key,
 			list_pinned_sources,
 			pin_source,
 			unpin_source,

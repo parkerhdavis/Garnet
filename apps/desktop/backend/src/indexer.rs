@@ -164,6 +164,11 @@ pub fn scan_root(conn: &Connection, root_id: i64, root_path: &Path) -> rusqlite:
 			)?;
 			let new_id = tx.last_insert_rowid();
 			refresh_metadata(&tx, new_id, abs, format.as_deref())?;
+			// Seed user-editable metadata from the file's xattr/ADS mirror, if
+			// any. Lets metadata that travelled with the file (copied from
+			// another machine, restored from backup) repopulate the DB without
+			// the user re-entering it. No-op when no mirror is present.
+			crate::garnet_metadata::seed_from_mirror(&tx, new_id, abs);
 			report.files_inserted += 1;
 			report.metadata_extracted += 1;
 			seen_ids.insert(new_id);

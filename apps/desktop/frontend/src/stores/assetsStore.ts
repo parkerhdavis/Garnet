@@ -9,7 +9,7 @@ import {
 	type AssetSortBy,
 	type FormatCount,
 	type SortDir,
-	type TagWithCount,
+	type ValueCount,
 } from "@/lib/tauri";
 import { buildTypeQuery, formatsInKind, type TypeKind } from "@/lib/typeFilters";
 import { usePrefsStore } from "@/stores/prefsStore";
@@ -30,7 +30,7 @@ type AssetsState = {
 	// Query parameters
 	rootId: number | null;
 	formats: string[];
-	tagIds: number[];
+	tagNames: string[];
 	pinnedSourceId: number | null;
 	/** Active Types-sidebar filter (Images/Videos/Audio/Models/Animations/Other).
 	 *  Null when not on a /types/:kind route. */
@@ -51,7 +51,7 @@ type AssetsState = {
 	assets: Asset[];
 	total: number;
 	formatCounts: FormatCount[];
-	tagCounts: TagWithCount[];
+	tagCounts: ValueCount[];
 	loading: boolean;
 	error: string | null;
 
@@ -61,7 +61,7 @@ type AssetsState = {
 	setTypeKind: (kind: TypeKind | null) => Promise<void>;
 	toggleFormat: (format: string) => Promise<void>;
 	clearFormats: () => Promise<void>;
-	toggleTagFilter: (tagId: number) => Promise<void>;
+	toggleTagFilter: (tagName: string) => Promise<void>;
 	clearTagFilter: () => Promise<void>;
 	setPathSearch: (search: string) => Promise<void>;
 	setSizeMin: (min: number | null) => Promise<void>;
@@ -78,7 +78,7 @@ type AssetsState = {
 export const useAssetsStore = create<AssetsState>((set, get) => ({
 	rootId: null,
 	formats: [],
-	tagIds: [],
+	tagNames: [],
 	pinnedSourceId: null,
 	typeKind: null,
 	pathSearch: "",
@@ -131,17 +131,17 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 		await get().refresh();
 	},
 
-	toggleTagFilter: async (tagId) => {
-		const current = get().tagIds;
-		const next = current.includes(tagId)
-			? current.filter((t) => t !== tagId)
-			: [...current, tagId];
-		set({ tagIds: next, page: 0 });
+	toggleTagFilter: async (tagName) => {
+		const current = get().tagNames;
+		const next = current.includes(tagName)
+			? current.filter((t) => t !== tagName)
+			: [...current, tagName];
+		set({ tagNames: next, page: 0 });
 		await get().refresh();
 	},
 
 	clearTagFilter: async () => {
-		set({ tagIds: [], page: 0 });
+		set({ tagNames: [], page: 0 });
 		await get().refresh();
 	},
 
@@ -186,7 +186,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 	resetFilters: async () => {
 		set({
 			formats: [],
-			tagIds: [],
+			tagNames: [],
 			pathSearch: "",
 			sizeMin: null,
 			sizeMax: null,
@@ -223,11 +223,11 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 					size_max: s.sizeMax,
 					mtime_from: s.mtimeFrom,
 					mtime_to: s.mtimeTo,
-					tag_ids: s.tagIds,
+					tag_names: s.tagNames,
 					pinned_source_id: s.pinnedSourceId,
 				}),
 				api.listAssetFormats(s.rootId),
-				api.listTags(),
+				api.listGarnetMetadataValuesForKey("tags"),
 			]);
 			if (myToken !== refreshToken) return; // superseded by a later refresh
 			// Scope FilterBar's format chips to the active type: drop counts for

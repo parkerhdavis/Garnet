@@ -37,7 +37,7 @@ export function FilterBar() {
 	const {
 		rootId,
 		formats,
-		tagIds,
+		tagNames,
 		pathSearch,
 		sizeMin,
 		sizeMax,
@@ -79,7 +79,7 @@ export function FilterBar() {
 
 	const anyFilterActive =
 		formats.length > 0 ||
-		tagIds.length > 0 ||
+		tagNames.length > 0 ||
 		pathSearch !== "" ||
 		sizeMin !== null ||
 		sizeMax !== null ||
@@ -251,19 +251,19 @@ export function FilterBar() {
 				<div className="flex flex-wrap gap-1.5 items-center">
 					<span className="text-xs text-base-content/60 mr-1">Tags:</span>
 					{tagCounts.slice(0, 20).map((t) => {
-						const active = tagIds.includes(t.id);
+						const active = tagNames.includes(t.value);
 						return (
 							<button
-								key={t.id}
+								key={t.value}
 								type="button"
 								className={`badge badge-sm cursor-pointer ${active ? "badge-accent" : "badge-ghost"}`}
-								onClick={() => toggleTagFilter(t.id)}
+								onClick={() => toggleTagFilter(t.value)}
 							>
-								{t.name} · {t.count.toLocaleString()}
+								{t.value} · {t.count.toLocaleString()}
 							</button>
 						);
 					})}
-					{tagIds.length > 0 && (
+					{tagNames.length > 0 && (
 						<button
 							type="button"
 							className="badge badge-sm badge-outline ml-2"
