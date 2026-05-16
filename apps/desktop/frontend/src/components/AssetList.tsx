@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { useMemo } from "react";
 import { HiArrowsUpDown, HiBarsArrowDown, HiBarsArrowUp } from "react-icons/hi2";
 import type { Asset, AssetSortBy, SortDir } from "@/lib/tauri";
 import { openContextMenu } from "@/components/ContextMenu";
 import { buildAssetContextMenu } from "@/lib/assetContextMenu";
 import { abbreviatePath, formatSize, formatTime } from "@/lib/paths";
+import { useIsSelected, useSelectionStore } from "@/stores/selectionStore";
 
 type Props = {
 	assets: Asset[];
@@ -14,6 +16,7 @@ type Props = {
 };
 
 export function AssetList({ assets, sortBy, sortDir, onSort, onOpen }: Props) {
+	const orderedIds = useMemo(() => assets.map((a) => a.id), [assets]);
 	return (
 		<div className="p-6">
 			<div className="card bg-base-100 border border-base-300 overflow-hidden">
@@ -40,42 +43,79 @@ export function AssetList({ assets, sortBy, sortDir, onSort, onOpen }: Props) {
 						</thead>
 						<tbody>
 							{assets.map((a) => (
-								<tr
+								<AssetRow
 									key={a.id}
-									className="cursor-pointer hover:bg-base-200"
-									onClick={() => onOpen(a)}
-									onContextMenu={(e) =>
-										openContextMenu(e, buildAssetContextMenu(a))
-									}
-								>
-									<td
-										className="font-mono text-xs truncate max-w-md"
-										title={a.relative_path}
-									>
-										{a.relative_path}
-									</td>
-									<td
-										className="text-xs text-base-content/70 max-w-[180px] truncate"
-										title={a.root_path}
-									>
-										{abbreviatePath(a.root_path)}
-									</td>
-									<td>
-										{a.format ? (
-											<span className="badge badge-sm badge-ghost">{a.format}</span>
-										) : (
-											<span className="text-base-content/40">—</span>
-										)}
-									</td>
-									<td className="tabular-nums">{formatSize(a.size)}</td>
-									<td className="text-xs text-base-content/70">{formatTime(a.mtime)}</td>
-								</tr>
+									asset={a}
+									orderedIds={orderedIds}
+									onOpen={onOpen}
+								/>
 							))}
 						</tbody>
 					</table>
 				</div>
 			</div>
 		</div>
+	);
+}
+
+function AssetRow({
+	asset,
+	orderedIds,
+	onOpen,
+}: {
+	asset: Asset;
+	orderedIds: number[];
+	onOpen: (asset: Asset) => void;
+}) {
+	const selected = useIsSelected(asset.id);
+
+	const handleClick = (e: React.MouseEvent) => {
+		const sel = useSelectionStore.getState();
+		if (e.shiftKey) {
+			sel.selectRange(asset.id, orderedIds);
+		} else if (e.ctrlKey || e.metaKey) {
+			sel.toggle(asset.id);
+		} else {
+			sel.replace(asset.id);
+		}
+	};
+
+	const handleContextMenu = (e: React.MouseEvent) => {
+		const sel = useSelectionStore.getState();
+		if (!sel.ids.has(asset.id)) sel.replace(asset.id);
+		openContextMenu(e, buildAssetContextMenu(asset));
+	};
+
+	return (
+		<tr
+			className={`cursor-pointer ${selected ? "bg-primary/10" : "hover:bg-base-200"}`}
+			aria-selected={selected}
+			onClick={handleClick}
+			onDoubleClick={() => onOpen(asset)}
+			onContextMenu={handleContextMenu}
+		>
+			<td
+				className="font-mono text-xs truncate max-w-md"
+				title={asset.relative_path}
+			>
+				{asset.relative_path}
+			</td>
+			<td
+				className="text-xs text-base-content/70 max-w-[180px] truncate"
+				title={asset.root_path}
+			>
+				{abbreviatePath(asset.root_path)}
+			</td>
+			<td>
+				{asset.format ? (
+					<span className="badge badge-sm badge-ghost">{asset.format}</span>
+				) : (
+					<span className="text-base-content/40">—</span>
+				)}
+			</td>
+			<td className="tabular-nums">{formatSize(asset.size)}</td>
+			<td className="text-xs text-base-content/70">{formatTime(asset.mtime)}</td>
+		</tr>
 	);
 }
 

@@ -14,7 +14,7 @@
 //! never get to lay themselves out — vertical / non-standard-aspect clips
 //! used to flash stretched for a frame before object-fit clamped them.
 
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
 	HiOutlinePhoto,
@@ -58,6 +58,12 @@ const CODE_EXTS = new Set([
 
 const HOVER_PLAYBACK_DELAY_MS = 600;
 
+// Lazy-loaded so the three.js stack stays in its own chunk and only loads
+// on first hover. Shares the chunk with ModelPreview + modelThumbnailer.
+const Live3DPreview = lazy(() =>
+	import("@/components/Live3DPreview").then((m) => ({ default: m.Live3DPreview })),
+);
+
 function fallbackIconFor(format: string | null) {
 	if (!format) return HiOutlineDocument;
 	const f = format.toLowerCase();
@@ -69,11 +75,12 @@ function fallbackIconFor(format: string | null) {
 	return HiOutlineDocument;
 }
 
-function isHoverPlayable(format: string | null): "video" | "image" | null {
+function isHoverPlayable(format: string | null): "video" | "image" | "model" | null {
 	if (!format) return null;
 	const f = format.toLowerCase();
 	if (VIDEO_EXTS.has(f)) return "video";
 	if (ANIMATED_IMAGE_EXTS.has(f)) return "image";
+	if (RENDERABLE_MODEL_EXTS.has(f)) return "model";
 	return null;
 }
 
@@ -264,6 +271,18 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 			content = (
 				// biome-ignore lint/a11y/useMediaCaption: thumbnail preview, no captions track available
 				<video src={liveSrc} autoPlay muted loop playsInline className={mediaCls} />
+			);
+		} else if (playable === "model") {
+			content = (
+				<Suspense
+					fallback={
+						src ? (
+							<img src={src} alt={asset.relative_path} className={mediaCls} />
+						) : null
+					}
+				>
+					<Live3DPreview absPath={absPathFor(asset)} format={asset.format} />
+				</Suspense>
 			);
 		} else {
 			content = <img src={liveSrc} alt={asset.relative_path} className={mediaCls} />;
