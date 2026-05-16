@@ -37,6 +37,7 @@ import { PLYLoader } from "three/addons/loaders/PLYLoader.js";
 import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "@/lib/tauri";
+import { isMeaningfulClip } from "@/components/ModelPreview";
 
 const IDLE_TEARDOWN_MS = 30_000;
 const IDLE_SCHEDULE_TIMEOUT_MS = 500;
@@ -167,8 +168,10 @@ class Thumbnailer {
 	private async processJob(job: Job): Promise<boolean> {
 		this.ensureRenderer(job.size);
 		const url = convertFileSrc(job.absPath);
-		const object = await this.loadModel(url, job.kind);
-		if (!object) return false;
+		const loaded = await this.loadModel(url, job.kind);
+		if (!loaded) return false;
+		const { object, animations } = loaded;
+		const hasAnimation = animations.some(isMeaningfulClip);
 
 		const scene = this.scene!;
 		const camera = this.camera!;
@@ -199,6 +202,7 @@ class Thumbnailer {
 					job.size,
 					b64,
 					motionOnly,
+					hasAnimation,
 				);
 				return true;
 			} catch (e) {
@@ -306,19 +310,26 @@ class Thumbnailer {
 		};
 	}
 
-	private async loadModel(url: string, kind: ModelKind): Promise<THREE.Object3D | null> {
+	private async loadModel(
+		url: string,
+		kind: ModelKind,
+	): Promise<{ object: THREE.Object3D; animations: THREE.AnimationClip[] } | null> {
 		const loaders = this.loaders!;
 		try {
 			switch (kind) {
 				case "gltf":
 				case "glb": {
 					const gltf = await loaders.gltf.loadAsync(url);
-					return gltf.scene;
+					return { object: gltf.scene, animations: gltf.animations ?? [] };
 				}
-				case "obj":
-					return await loaders.obj.loadAsync(url);
-				case "fbx":
-					return await loaders.fbx.loadAsync(url);
+				case "obj": {
+					const obj = await loaders.obj.loadAsync(url);
+					return { object: obj, animations: [] };
+				}
+				case "fbx": {
+					const fbx = await loaders.fbx.loadAsync(url);
+					return { object: fbx, animations: fbx.animations ?? [] };
+				}
 				case "stl": {
 					const geom = await loaders.stl.loadAsync(url);
 					geom.computeVertexNormals();
@@ -327,7 +338,7 @@ class Thumbnailer {
 						metalness: 0.1,
 						roughness: 0.6,
 					});
-					return new THREE.Mesh(geom, mat);
+					return { object: new THREE.Mesh(geom, mat), animations: [] };
 				}
 				case "ply": {
 					const geom = await loaders.ply.loadAsync(url);
@@ -339,7 +350,7 @@ class Thumbnailer {
 						metalness: 0.1,
 						roughness: 0.6,
 					});
-					return new THREE.Mesh(geom, mat);
+					return { object: new THREE.Mesh(geom, mat), animations: [] };
 				}
 			}
 		} catch (e) {
