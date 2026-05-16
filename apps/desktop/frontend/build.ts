@@ -51,7 +51,12 @@ const mainResult = await Bun.build({
 	entrypoints: ["src/main.tsx"],
 	outdir: DIST,
 	target: "browser",
-	naming: "[name].js",
+	// `splitting` makes Bun emit dynamic imports as separate chunks instead of
+	// inlining everything into main.js. Without this, lazy-imported modules
+	// (Three.js, the offscreen thumbnailer) get parsed on initial page load
+	// even though they're never used until the user opens a 3D asset.
+	splitting: true,
+	naming: { entry: "[name].js", chunk: "[name]-[hash].js", asset: "[name]-[hash][ext]" },
 	minify: !isDebug,
 	sourcemap: isDebug ? "linked" : "none",
 	define: {

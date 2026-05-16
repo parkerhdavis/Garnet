@@ -31,7 +31,12 @@ async function buildMain() {
 		entrypoints: ["src/main.tsx"],
 		outdir: DIST,
 		target: "browser",
-		naming: "[name].js",
+		// See build.ts for why splitting is on. Without it, lazy-imported
+		// modules (three.js, the offscreen thumbnailer) get bundled into
+		// main.js and parsed on every page reload even though they're not
+		// needed until the user opens a 3D asset.
+		splitting: true,
+		naming: { entry: "[name].js", chunk: "[name]-[hash].js", asset: "[name]-[hash][ext]" },
 		define: {
 			"process.env.NODE_ENV": '"development"',
 			"__APP_VERSION__": JSON.stringify(pkg.version),

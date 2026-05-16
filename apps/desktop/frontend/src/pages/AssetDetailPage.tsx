@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -12,6 +12,13 @@ import {
 import { api, mediaUrl, type Asset, type AssetMetadata } from "@/lib/tauri";
 import { MediaDiagnostic } from "@/components/MediaDiagnostic";
 import { GarnetMetadataEditor } from "@/components/GarnetMetadataEditor";
+
+// ModelPreview pulls in three.js + addon loaders. Lazy-loading it keeps the
+// initial bundle small; the detail page is fast on non-3D assets and Three.js
+// only parses once the user actually opens a model.
+const ModelPreview = lazy(() =>
+	import("@/components/ModelPreview").then((m) => ({ default: m.ModelPreview })),
+);
 import {
 	absPathFor,
 	abbreviatePath,
@@ -25,6 +32,7 @@ const AUDIO_EXTS = new Set(["mp3", "wav", "flac", "ogg", "aiff", "m4a", "opus"])
 const RASTER_EXTS = new Set([
 	"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp", "avif", "svg", "ico",
 ]);
+const MODEL_EXTS = new Set(["gltf", "glb", "obj", "stl", "ply", "fbx"]);
 
 export function AssetDetailPage() {
 	const { id: idParam } = useParams();
@@ -43,6 +51,7 @@ export function AssetDetailPage() {
 	const isVideo = !!ext && VIDEO_EXTS.has(ext);
 	const isAudio = !!ext && AUDIO_EXTS.has(ext);
 	const isImage = !!ext && RASTER_EXTS.has(ext);
+	const isModel = !!ext && MODEL_EXTS.has(ext);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -88,6 +97,7 @@ export function AssetDetailPage() {
 			cancelled = true;
 		};
 	}, [asset, absPath, isVideo, isAudio]);
+
 
 	if (loading) {
 		return (
@@ -241,6 +251,18 @@ export function AssetDetailPage() {
 							}
 							className="max-w-full max-h-full object-contain"
 						/>
+					) : isModel ? (
+						<div className="w-full h-full">
+							<Suspense
+								fallback={
+									<div className="w-full h-full flex items-center justify-center text-xs text-base-content/60">
+										Loading 3D viewer…
+									</div>
+								}
+							>
+								<ModelPreview url={livePath} format={asset.format} />
+							</Suspense>
+						</div>
 					) : (
 						<div className="text-base-content/50 text-sm">
 							No inline preview for this format.
