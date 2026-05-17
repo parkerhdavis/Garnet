@@ -29,9 +29,46 @@ export type Operation =
 	| { type: "rotate"; angle: number }
 	| { type: "corner_round"; radius: number };
 
-/// Longest-axis cap for preview renders. Smaller = snappier slider
-/// drags; the user only sees this size scaled into the canvas anyway.
-const PREVIEW_MAX_PX = 1024;
+/// Ops that map cleanly onto CSS `filter:` primitives — these can be
+/// previewed client-side, in real time, at full resolution, with no
+/// backend round-trip. `luminance_curve` is intentionally excluded
+/// (no CSS equivalent, would need a WebGL pass).
+export function isCssFilterOp(op: Operation): boolean {
+	return (
+		op.type === "adjust_hue" ||
+		op.type === "adjust_saturation" ||
+		op.type === "adjust_brightness" ||
+		op.type === "adjust_contrast"
+	);
+}
+
+/// Split the pipeline at the last op that *can't* be represented as a
+/// CSS filter. Backend renders everything up to and including that op;
+/// the trailing CSS-representable adjusts overlay onto the result as a
+/// real-time `filter:` chain. When `backendOps` is empty, the canvas
+/// can render the original directly with the CSS chain on top — that's
+/// the hot path for slider-only edits and it never touches Rust.
+export function splitOps(ops: Operation[]): {
+	backendOps: Operation[];
+	cssOps: Operation[];
+} {
+	let lastNonCss = -1;
+	for (let i = ops.length - 1; i >= 0; i--) {
+		if (!isCssFilterOp(ops[i])) {
+			lastNonCss = i;
+			break;
+		}
+	}
+	if (lastNonCss === -1) return { backendOps: [], cssOps: ops };
+	return {
+		backendOps: ops.slice(0, lastNonCss + 1),
+		cssOps: ops.slice(lastNonCss + 1),
+	};
+}
+
+function opsEqual(a: Operation[], b: Operation[]): boolean {
+	return a.length === b.length && JSON.stringify(a) === JSON.stringify(b);
+}
 
 interface EditorState {
 	/// Absolute path of the source image. null when no asset is loaded.
@@ -41,14 +78,20 @@ interface EditorState {
 	/// Ordered list of pending operations — replayed from the original on
 	/// every preview/commit. Cleared on `reset` or after a successful save.
 	pendingOps: Operation[];
-	/// HTTP URL of the latest preview file (served by the localhost media
-	/// server). null when the original should be rendered directly.
+	/// HTTP URL of the latest backend preview (served by the localhost
+	/// media server). null when there are no transform/LUT ops to render
+	/// — in that case the canvas renders the original directly with the
+	/// CSS-filter chain applied on top.
 	previewUrl: string | null;
-	/// True while a preview round-trip is in flight.
+	/// Backend ops the current `previewUrl` corresponds to. Used to skip
+	/// the backend round-trip when the user is only tweaking CSS-filter
+	/// adjusts that overlay onto an already-rendered transform result.
+	lastBackendOps: Operation[];
+	/// True while a backend preview round-trip is in flight.
 	previewing: boolean;
 	/// Set when a fresh preview was requested while one was already in
 	/// flight. The handler re-fires `refreshPreview` once the in-flight
-	/// call resolves so slider drags don't queue up redundant work.
+	/// call resolves so transforms applied during a render don't get lost.
 	previewStale: boolean;
 	/// True when the canvas should render the original pixels — used by
 	/// the `\` peek/toggle keybind. The original is loaded as the initial
@@ -80,6 +123,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 	sourceName: null,
 	pendingOps: [],
 	previewUrl: null,
+	lastBackendOps: [],
 	previewing: false,
 	previewStale: false,
 	viewMode: "edited",
@@ -91,6 +135,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 			sourceName: name,
 			pendingOps: [],
 			previewUrl: null,
+			lastBackendOps: [],
 			previewing: false,
 			previewStale: false,
 			viewMode: "edited",
@@ -133,6 +178,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 			sourceName: null,
 			pendingOps: [],
 			previewUrl: null,
+			lastBackendOps: [],
 			previewing: false,
 			previewStale: false,
 			viewMode: "edited",
@@ -140,33 +186,52 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 		}),
 
 	refreshPreview: async () => {
-		const { sourcePath, pendingOps, previewing } = get();
+		const { sourcePath, pendingOps, previewing, lastBackendOps, previewUrl } =
+			get();
 		if (!sourcePath) return;
-		// Empty pipeline = "edited" view is the original. The canvas
-		// renders the source directly via the asset protocol in that
-		// case (see EditorPage); no need to round-trip a full decode +
-		// PNG re-encode just to reproduce the input.
-		if (pendingOps.length === 0) {
-			set({ previewUrl: null, previewing: false, previewStale: false });
+		const { backendOps } = splitOps(pendingOps);
+		// All CSS-representable (or empty). The canvas renders the
+		// original directly with a `filter:` chain applied — full
+		// resolution, real-time, zero backend round-trip.
+		if (backendOps.length === 0) {
+			set({
+				previewUrl: null,
+				lastBackendOps: [],
+				previewing: false,
+				previewStale: false,
+			});
+			return;
+		}
+		// CSS-only tweaks while the backend slice is unchanged: the
+		// existing `previewUrl` is still correct; the cssOps chain
+		// just overlays on top of it. No backend call needed.
+		if (previewUrl !== null && opsEqual(backendOps, lastBackendOps)) {
+			set({ previewing: false, previewStale: false });
 			return;
 		}
 		// If one is already running, mark stale and bail — the in-flight
-		// handler will re-fire once it resolves, picking up whatever the
-		// latest ops happen to be. Drops every intermediate slider tick
-		// except the most recent.
+		// handler will re-fire once it resolves, picking up whatever
+		// the latest backend slice happens to be.
 		if (previewing) {
 			set({ previewStale: true });
 			return;
 		}
 		set({ previewing: true, previewStale: false });
 		try {
+			// No size cap — transforms aren't slider-driven, so the
+			// one-time full-resolution render cost per transform-apply
+			// is fine, and the preview matches the eventual commit.
 			const path = await invoke<string>("preview_edit", {
 				path: sourcePath,
-				ops: pendingOps,
-				maxPreviewSize: PREVIEW_MAX_PX,
+				ops: backendOps,
+				maxPreviewSize: null,
 			});
 			const url = await mediaUrl(path);
-			set({ previewUrl: url, previewing: false });
+			set({
+				previewUrl: url,
+				lastBackendOps: backendOps,
+				previewing: false,
+			});
 		} catch (e) {
 			console.error("preview_edit failed:", e);
 			set({ previewing: false });

@@ -16,7 +16,11 @@ import { HiArrowLeft, HiCheck, HiNoSymbol } from "react-icons/hi2";
 import { EditorTools } from "@/components/EditorTools";
 import { api, type Asset } from "@/lib/tauri";
 import { absPathFor, basename, dirname } from "@/lib/paths";
-import { useEditorStore } from "@/stores/editorStore";
+import {
+	type Operation,
+	splitOps,
+	useEditorStore,
+} from "@/stores/editorStore";
 import { usePrefsStore } from "@/stores/prefsStore";
 import { useUndoStore } from "@/stores/undoStore";
 
@@ -224,11 +228,23 @@ export function EditorPage() {
 
 	const showingOriginal = viewMode === "original";
 	const originalSrc = convertFileSrc(absPath);
-	// With no pending edits, the "edited" view IS the original — render
-	// the source directly via the asset protocol instead of round-tripping
-	// the full image just to reproduce the input.
-	const renderOriginal = showingOriginal || pendingOps.length === 0;
-	const canvasSrc = renderOriginal ? originalSrc : previewUrl;
+	const { backendOps, cssOps } = useMemo(() => splitOps(pendingOps), [pendingOps]);
+	const cssFilter = useMemo(
+		() => (showingOriginal ? "" : cssFilterFor(cssOps)),
+		[cssOps, showingOriginal],
+	);
+	// What goes in the <img>'s `src`:
+	//   - peek/toggle original  → originalSrc, no filter
+	//   - no transforms in pipeline → originalSrc + CSS filter (real-time)
+	//   - has transforms, preview ready → previewUrl + CSS filter (overlay)
+	//   - has transforms, preview rendering → fall back to originalSrc so
+	//     the canvas isn't empty during the round-trip
+	const usingBackendPreview = !showingOriginal && backendOps.length > 0;
+	const canvasSrc = showingOriginal
+		? originalSrc
+		: usingBackendPreview
+			? (previewUrl ?? originalSrc)
+			: originalSrc;
 
 	return (
 		<div className="flex-1 min-h-0 flex flex-col">
@@ -281,18 +297,15 @@ export function EditorPage() {
 
 			<div className="flex-1 min-h-0 flex">
 				<div className="flex-1 min-w-0 flex items-center justify-center bg-base-300/30 p-4 relative">
-					{canvasSrc ? (
-						<img
-							src={canvasSrc}
-							alt={renderOriginal ? "Original" : "Edited preview"}
-							className="max-w-full max-h-full object-contain"
-						/>
-					) : (
-						<div className="text-xs text-base-content/50">Rendering preview…</div>
-					)}
-					{previewing && !renderOriginal && (
+					<img
+						src={canvasSrc}
+						alt={showingOriginal ? "Original" : "Edited preview"}
+						className="max-w-full max-h-full object-contain"
+						style={cssFilter ? { filter: cssFilter } : undefined}
+					/>
+					{previewing && usingBackendPreview && (
 						<div className="absolute top-2 right-2 text-[10px] uppercase tracking-wider text-base-content/55 bg-base-100/80 px-2 py-0.5 rounded">
-							Rendering…
+							Rendering transforms…
 						</div>
 					)}
 				</div>
@@ -308,4 +321,31 @@ function normalizeFormat(ext: string): string {
 	if (e === "jpeg") return "jpg";
 	if (e === "tif") return "tiff";
 	return e;
+}
+
+/// Translate the CSS-representable subset of adjust ops into a `filter:`
+/// chain. The math doesn't match the Rust pipeline exactly (CSS uses a
+/// matrix-based hue rotation; ours is HSL-based), but it's close enough
+/// for live preview — commit uses the exact Rust math, so what gets
+/// written to disk always matches the operation spec, not the CSS
+/// approximation.
+function cssFilterFor(ops: Operation[]): string {
+	const parts: string[] = [];
+	for (const op of ops) {
+		switch (op.type) {
+			case "adjust_hue":
+				if (op.offset !== 0) parts.push(`hue-rotate(${op.offset}deg)`);
+				break;
+			case "adjust_saturation":
+				if (op.offset !== 0) parts.push(`saturate(${1 + op.offset})`);
+				break;
+			case "adjust_brightness":
+				if (op.offset !== 0) parts.push(`brightness(${1 + op.offset})`);
+				break;
+			case "adjust_contrast":
+				if (op.amount !== 0) parts.push(`contrast(${1 + op.amount})`);
+				break;
+		}
+	}
+	return parts.join(" ");
 }
