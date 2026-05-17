@@ -204,6 +204,23 @@ export function EditorPage() {
 		clearUndo();
 	}
 
+	// Derive view state up here — these must run on every render to
+	// satisfy React's hook-ordering rule, even when an early-return
+	// branch below skips the canvas.
+	const showingOriginal = viewMode === "original";
+	const originalSrc = asset ? convertFileSrc(absPath) : "";
+	const { backendOps, cssOps } = useMemo(() => splitOps(pendingOps), [pendingOps]);
+	const cssFilter = useMemo(
+		() => (showingOriginal ? "" : cssFilterFor(cssOps)),
+		[cssOps, showingOriginal],
+	);
+	const usingBackendPreview = !showingOriginal && backendOps.length > 0;
+	const canvasSrc = showingOriginal
+		? originalSrc
+		: usingBackendPreview
+			? (previewUrl ?? originalSrc)
+			: originalSrc;
+
 	if (loadError) {
 		return (
 			<div className="flex-1 p-12">
@@ -226,25 +243,12 @@ export function EditorPage() {
 		);
 	}
 
-	const showingOriginal = viewMode === "original";
-	const originalSrc = convertFileSrc(absPath);
-	const { backendOps, cssOps } = useMemo(() => splitOps(pendingOps), [pendingOps]);
-	const cssFilter = useMemo(
-		() => (showingOriginal ? "" : cssFilterFor(cssOps)),
-		[cssOps, showingOriginal],
-	);
-	// What goes in the <img>'s `src`:
+	// canvasSrc semantics:
 	//   - peek/toggle original  → originalSrc, no filter
 	//   - no transforms in pipeline → originalSrc + CSS filter (real-time)
 	//   - has transforms, preview ready → previewUrl + CSS filter (overlay)
 	//   - has transforms, preview rendering → fall back to originalSrc so
 	//     the canvas isn't empty during the round-trip
-	const usingBackendPreview = !showingOriginal && backendOps.length > 0;
-	const canvasSrc = showingOriginal
-		? originalSrc
-		: usingBackendPreview
-			? (previewUrl ?? originalSrc)
-			: originalSrc;
 
 	return (
 		<div className="flex-1 min-h-0 flex flex-col">
