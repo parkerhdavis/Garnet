@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { HiFolderPlus, HiArrowPath, HiTrash } from "react-icons/hi2";
 import { useLibraryStore } from "@/stores/libraryStore";
+import { type EditorSaveDefault, usePrefsStore } from "@/stores/prefsStore";
 
 export function SettingsPage() {
 	const {
@@ -123,7 +124,77 @@ export function SettingsPage() {
 						)}
 					</div>
 				</section>
+
+				<EditorSettings />
 			</div>
 		</div>
+	);
+}
+
+function EditorSettings() {
+	const editorSaveDefault = usePrefsStore((s) => s.editorSaveDefault);
+	const setEditorSaveDefault = usePrefsStore((s) => s.setEditorSaveDefault);
+	return (
+		<section className="card bg-base-100 border border-base-300 mt-4">
+			<div className="card-body p-5">
+				<h2 className="text-lg font-medium">Editor</h2>
+				<p className="text-sm text-base-content/60 -mt-1">
+					Controls how the image editor handles saves. Edits never touch disk
+					until you press <strong>Save</strong>.
+				</p>
+
+				<fieldset className="mt-2">
+					<legend className="text-xs uppercase tracking-wider text-base-content/55 font-semibold mb-2">
+						Default save behavior
+					</legend>
+					<div className="space-y-1.5">
+						<EditorSaveRadio
+							value="new_file"
+							current={editorSaveDefault}
+							onChange={setEditorSaveDefault}
+							label="Save as new file"
+							hint="Prompt for a location each time. Defaults to the same folder as the original, suggested name {stem}-edited.{ext}."
+						/>
+						<EditorSaveRadio
+							value="overwrite"
+							current={editorSaveDefault}
+							onChange={setEditorSaveDefault}
+							label="Overwrite original"
+							hint="Write directly back to the source file with no prompt."
+						/>
+					</div>
+				</fieldset>
+			</div>
+		</section>
+	);
+}
+
+function EditorSaveRadio({
+	value,
+	current,
+	onChange,
+	label,
+	hint,
+}: {
+	value: EditorSaveDefault;
+	current: EditorSaveDefault;
+	onChange: (v: EditorSaveDefault) => void;
+	label: string;
+	hint: string;
+}) {
+	return (
+		<label className="flex items-start gap-3 cursor-pointer">
+			<input
+				type="radio"
+				className="radio radio-sm radio-primary mt-0.5"
+				name="editor-save-default"
+				checked={current === value}
+				onChange={() => onChange(value)}
+			/>
+			<div className="min-w-0">
+				<div className="text-sm">{label}</div>
+				<div className="text-xs text-base-content/55">{hint}</div>
+			</div>
+		</label>
 	);
 }

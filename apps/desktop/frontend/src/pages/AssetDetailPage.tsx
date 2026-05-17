@@ -8,6 +8,7 @@ import {
 	HiArrowLeft,
 	HiArrowTopRightOnSquare,
 	HiFolderOpen,
+	HiPencilSquare,
 } from "react-icons/hi2";
 import { api, mediaUrl, type Asset, type AssetMetadata } from "@/lib/tauri";
 import type { ModelStats } from "@/components/ModelPreview";
@@ -35,6 +36,11 @@ const AUDIO_EXTS = new Set(["mp3", "wav", "flac", "ogg", "aiff", "m4a", "opus"])
 const RASTER_EXTS = new Set([
 	"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp", "avif", "svg", "ico",
 ]);
+/// Subset of RASTER_EXTS the editor can actually round-trip today
+/// (no AVIF/SVG/ICO yet — they need format-specific decoders).
+const EDITABLE_EXTS = new Set([
+	"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp",
+]);
 const MODEL_EXTS = new Set(["gltf", "glb", "obj", "stl", "ply", "fbx"]);
 const BLEND_EXTS = new Set(["blend"]);
 
@@ -56,6 +62,7 @@ export function AssetDetailPage() {
 	const isVideo = !!ext && VIDEO_EXTS.has(ext);
 	const isAudio = !!ext && AUDIO_EXTS.has(ext);
 	const isImage = !!ext && RASTER_EXTS.has(ext);
+	const isEditable = !!ext && EDITABLE_EXTS.has(ext);
 	const isModel = !!ext && MODEL_EXTS.has(ext);
 	const isBlend = !!ext && BLEND_EXTS.has(ext);
 	const [blendPreview, setBlendPreview] = useState<string | null>(null);
@@ -225,6 +232,17 @@ export function AssetDetailPage() {
 						{abbreviatePath(asset.root_path)} / {asset.relative_path}
 					</div>
 				</div>
+				{isEditable && (
+					<button
+						type="button"
+						className="btn btn-xs"
+						onClick={() => navigate(`/edit/${asset.id}`)}
+						title="Open in the editor"
+					>
+						<HiPencilSquare className="size-3.5" />
+						Edit
+					</button>
+				)}
 				<button
 					type="button"
 					className="btn btn-xs"

@@ -57,4 +57,10 @@ export const KEYBIND_CATEGORIES: KeybindCategory[] = [
 		],
 		hint: "On macOS, ⌘ substitutes for Ctrl on every shortcut listed here.",
 	},
+	{
+		title: "Image editor",
+		items: [
+			{ keys: ["\\"], description: "Hold to peek the original; tap to toggle edited/original" },
+		],
+	},
 ];

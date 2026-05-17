@@ -15,6 +15,7 @@ import { useUndoStore } from "@/stores/undoStore";
 import { AppKeybindsPage } from "@/pages/AppKeybindsPage";
 import { AppStatsPage } from "@/pages/AppStatsPage";
 import { AssetDetailPage } from "@/pages/AssetDetailPage";
+import { EditorPage } from "@/pages/EditorPage";
 import { LibraryPage } from "@/pages/LibraryPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import {
@@ -48,6 +49,7 @@ export default function App() {
 					<Route element={<Layout />}>
 						<Route index element={<LibraryPage />} />
 						<Route path="asset/:id" element={<AssetDetailPage />} />
+						<Route path="edit/:id" element={<EditorPage />} />
 
 						<Route path="workspaces" element={<WorkspacesPage />} />
 
