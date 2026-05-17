@@ -15,6 +15,7 @@
 
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
+import { mediaUrl } from "@/lib/tauri";
 
 /// Mirrors `editor::pipeline::Operation` (snake_case via serde tag).
 export type Operation =
@@ -28,7 +29,9 @@ export type Operation =
 	| { type: "rotate"; angle: number }
 	| { type: "corner_round"; radius: number };
 
-const PREVIEW_MAX_PX = 1600;
+/// Longest-axis cap for preview renders. Smaller = snappier slider
+/// drags; the user only sees this size scaled into the canvas anyway.
+const PREVIEW_MAX_PX = 1024;
 
 interface EditorState {
 	/// Absolute path of the source image. null when no asset is loaded.
@@ -38,10 +41,15 @@ interface EditorState {
 	/// Ordered list of pending operations — replayed from the original on
 	/// every preview/commit. Cleared on `reset` or after a successful save.
 	pendingOps: Operation[];
-	/// Latest preview as a base64-encoded PNG (no data: prefix).
-	previewBase64: string | null;
+	/// HTTP URL of the latest preview file (served by the localhost media
+	/// server). null when the original should be rendered directly.
+	previewUrl: string | null;
 	/// True while a preview round-trip is in flight.
 	previewing: boolean;
+	/// Set when a fresh preview was requested while one was already in
+	/// flight. The handler re-fires `refreshPreview` once the in-flight
+	/// call resolves so slider drags don't queue up redundant work.
+	previewStale: boolean;
 	/// True when the canvas should render the original pixels — used by
 	/// the `\` peek/toggle keybind. The original is loaded as the initial
 	/// preview, so the canvas just stops re-rendering edits while this is on.
@@ -71,8 +79,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 	sourcePath: null,
 	sourceName: null,
 	pendingOps: [],
-	previewBase64: null,
+	previewUrl: null,
 	previewing: false,
+	previewStale: false,
 	viewMode: "edited",
 	dirty: false,
 
@@ -81,7 +90,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 			sourcePath: path,
 			sourceName: name,
 			pendingOps: [],
-			previewBase64: null,
+			previewUrl: null,
+			previewing: false,
+			previewStale: false,
 			viewMode: "edited",
 			dirty: false,
 		});
@@ -121,34 +132,48 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 			sourcePath: null,
 			sourceName: null,
 			pendingOps: [],
-			previewBase64: null,
+			previewUrl: null,
 			previewing: false,
+			previewStale: false,
 			viewMode: "edited",
 			dirty: false,
 		}),
 
 	refreshPreview: async () => {
-		const { sourcePath, pendingOps } = get();
+		const { sourcePath, pendingOps, previewing } = get();
 		if (!sourcePath) return;
 		// Empty pipeline = "edited" view is the original. The canvas
 		// renders the source directly via the asset protocol in that
 		// case (see EditorPage); no need to round-trip a full decode +
-		// PNG re-encode + base64 transfer just to reproduce the input.
+		// PNG re-encode just to reproduce the input.
 		if (pendingOps.length === 0) {
-			set({ previewBase64: null, previewing: false });
+			set({ previewUrl: null, previewing: false, previewStale: false });
 			return;
 		}
-		set({ previewing: true });
+		// If one is already running, mark stale and bail — the in-flight
+		// handler will re-fire once it resolves, picking up whatever the
+		// latest ops happen to be. Drops every intermediate slider tick
+		// except the most recent.
+		if (previewing) {
+			set({ previewStale: true });
+			return;
+		}
+		set({ previewing: true, previewStale: false });
 		try {
-			const b64 = await invoke<string>("preview_edit", {
+			const path = await invoke<string>("preview_edit", {
 				path: sourcePath,
 				ops: pendingOps,
 				maxPreviewSize: PREVIEW_MAX_PX,
 			});
-			set({ previewBase64: b64, previewing: false });
+			const url = await mediaUrl(path);
+			set({ previewUrl: url, previewing: false });
 		} catch (e) {
 			console.error("preview_edit failed:", e);
 			set({ previewing: false });
+		}
+		// Re-fire if more edits piled up while we were running.
+		if (get().previewStale) {
+			void get().refreshPreview();
 		}
 	},
 }));

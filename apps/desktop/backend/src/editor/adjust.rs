@@ -4,16 +4,22 @@
 //! saturation primitives are ported from Packi's `adjust.rs` so behavior
 //! stays consistent across the two apps — keep the implementations in sync
 //! when one side changes.
+//!
+//! Every adjust function is parallelized with rayon across pixel rows.
+//! Slider drags fire many calls per second on multi-megapixel previews;
+//! single-threaded per-pixel HSL was the dominant cost in v1.
 
 use image::RgbaImage;
+use rayon::prelude::*;
 
 /// Apply a luminance curve LUT to an RGBA image in-place.
 pub fn apply_luminance_curve(mut rgba: RgbaImage, lut: &[u8; 256]) -> RgbaImage {
-	for pixel in rgba.pixels_mut() {
-		pixel[0] = lut[pixel[0] as usize];
-		pixel[1] = lut[pixel[1] as usize];
-		pixel[2] = lut[pixel[2] as usize];
-	}
+	let buf: &mut [u8] = &mut rgba;
+	buf.par_chunks_exact_mut(4).for_each(|p| {
+		p[0] = lut[p[0] as usize];
+		p[1] = lut[p[1] as usize];
+		p[2] = lut[p[2] as usize];
+	});
 	rgba
 }
 
@@ -39,26 +45,28 @@ pub fn apply_contrast(rgba: RgbaImage, amount: f32) -> RgbaImage {
 
 /// Shift hue by `offset` degrees.
 pub fn apply_hue(mut rgba: RgbaImage, offset: f32) -> RgbaImage {
-	for pixel in rgba.pixels_mut() {
-		let (h, s, l) = rgb_to_hsl(pixel[0], pixel[1], pixel[2]);
+	let buf: &mut [u8] = &mut rgba;
+	buf.par_chunks_exact_mut(4).for_each(|p| {
+		let (h, s, l) = rgb_to_hsl(p[0], p[1], p[2]);
 		let (r, g, b) = hsl_to_rgb((h + offset).rem_euclid(360.0), s, l);
-		pixel[0] = r;
-		pixel[1] = g;
-		pixel[2] = b;
-	}
+		p[0] = r;
+		p[1] = g;
+		p[2] = b;
+	});
 	rgba
 }
 
 /// Scale saturation by `offset` in [-1, 1]. Matches Packi's curve.
 pub fn apply_saturation(mut rgba: RgbaImage, offset: f32) -> RgbaImage {
-	for pixel in rgba.pixels_mut() {
-		let (h, s, l) = rgb_to_hsl(pixel[0], pixel[1], pixel[2]);
+	let buf: &mut [u8] = &mut rgba;
+	buf.par_chunks_exact_mut(4).for_each(|p| {
+		let (h, s, l) = rgb_to_hsl(p[0], p[1], p[2]);
 		let new_s = (s + offset * s.max(1.0 - s)).clamp(0.0, 1.0);
 		let (r, g, b) = hsl_to_rgb(h, new_s, l);
-		pixel[0] = r;
-		pixel[1] = g;
-		pixel[2] = b;
-	}
+		p[0] = r;
+		p[1] = g;
+		p[2] = b;
+	});
 	rgba
 }
 

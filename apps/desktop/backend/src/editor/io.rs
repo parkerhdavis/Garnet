@@ -4,9 +4,7 @@
 //! absent here. Add it to `Cargo.toml`'s `image` features (and re-add the
 //! EXR branches) if the editor ever needs to round-trip HDR.
 
-use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::{DynamicImage, ImageFormat, ImageReader};
-use std::io::Cursor;
 use std::path::Path;
 
 /// Load a DynamicImage from a file path.
@@ -18,18 +16,6 @@ pub fn load_dynamic_image(path: &str) -> Result<DynamicImage, String> {
 	reader
 		.decode()
 		.map_err(|e| format!("Failed to decode image: {}", e))
-}
-
-/// Encode a DynamicImage to base64 PNG using fast compression — sized for
-/// preview round-trips, not archival output.
-pub fn encode_to_base64_png(img: &DynamicImage) -> Result<String, String> {
-	use base64::Engine;
-	let mut buf = Vec::new();
-	let cursor = Cursor::new(&mut buf);
-	let encoder = PngEncoder::new_with_quality(cursor, CompressionType::Fast, FilterType::Sub);
-	img.write_with_encoder(encoder)
-		.map_err(|e| format!("Failed to encode PNG: {}", e))?;
-	Ok(base64::engine::general_purpose::STANDARD.encode(&buf))
 }
 
 /// Optionally downscale an image to fit within `max_size` on its longest axis.
@@ -117,11 +103,4 @@ mod tests {
 		assert_eq!(r.dimensions(), (40, 40));
 	}
 
-	#[test]
-	fn encode_base64_is_valid_png() {
-		use base64::Engine;
-		let b64 = encode_to_base64_png(&solid(2, 2, [1, 2, 3, 255])).unwrap();
-		let bytes = base64::engine::general_purpose::STANDARD.decode(&b64).unwrap();
-		assert_eq!(&bytes[0..4], &[0x89, 0x50, 0x4E, 0x47]);
-	}
 }

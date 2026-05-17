@@ -34,7 +34,7 @@ export function EditorPage() {
 	const [sourceDims, setSourceDims] = useState<{ w: number; h: number } | null>(null);
 
 	const sourcePath = useEditorStore((s) => s.sourcePath);
-	const previewBase64 = useEditorStore((s) => s.previewBase64);
+	const previewUrl = useEditorStore((s) => s.previewUrl);
 	const previewing = useEditorStore((s) => s.previewing);
 	const viewMode = useEditorStore((s) => s.viewMode);
 	const setViewMode = useEditorStore((s) => s.setViewMode);
@@ -223,13 +223,12 @@ export function EditorPage() {
 	}
 
 	const showingOriginal = viewMode === "original";
-	const previewSrc = previewBase64 ? `data:image/png;base64,${previewBase64}` : null;
 	const originalSrc = convertFileSrc(absPath);
 	// With no pending edits, the "edited" view IS the original — render
 	// the source directly via the asset protocol instead of round-tripping
-	// the full image through PNG/base64 just to reproduce the input.
+	// the full image just to reproduce the input.
 	const renderOriginal = showingOriginal || pendingOps.length === 0;
-	const canvasSrc = renderOriginal ? originalSrc : previewSrc;
+	const canvasSrc = renderOriginal ? originalSrc : previewUrl;
 
 	return (
 		<div className="flex-1 min-h-0 flex flex-col">

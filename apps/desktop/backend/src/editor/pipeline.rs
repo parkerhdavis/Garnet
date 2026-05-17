@@ -11,10 +11,12 @@
 
 use image::DynamicImage;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use super::adjust::{apply_brightness, apply_contrast, apply_hue, apply_luminance_curve, apply_saturation};
-use super::io::{encode_to_base64_png, load_dynamic_image, maybe_resize, save_image};
+use super::io::{load_dynamic_image, maybe_resize, save_image};
 use super::transform::{corner_round, crop, resize, rotate};
 
 /// Process-wide cache for the decoded + downscaled preview source.
@@ -129,11 +131,15 @@ fn apply_one(img: &DynamicImage, op: &Operation) -> Result<DynamicImage, String>
 	}
 }
 
-/// Apply the pipeline at a downscaled preview size and return a base64
-/// PNG. `max_preview_size` is the longest-axis cap before the pipeline
-/// runs, so slider drags stay snappy on multi-megapixel images. Uses the
-/// session-wide preview cache to avoid re-decoding the source on every
-/// call — first call pays the decode, subsequent calls just re-apply.
+/// Apply the pipeline at a downscaled preview size and return the
+/// absolute path of a freshly written PNG file in the OS temp dir.
+/// The frontend renders this via the localhost media server, avoiding
+/// the multi-megabyte base64 IPC payload that PNG/base64 would impose
+/// for previews of multi-MP images.
+///
+/// Each call writes a uniquely numbered file and deletes the previous
+/// one — so /tmp accumulates at most one preview at a time per editor
+/// session.
 #[tauri::command]
 pub async fn preview_edit(
 	path: String,
@@ -143,10 +149,34 @@ pub async fn preview_edit(
 	tokio::task::spawn_blocking(move || {
 		let img = load_or_cache_preview_source(&path, max_preview_size)?;
 		let result = apply_pipeline(&img, &ops)?;
-		encode_to_base64_png(&result)
+		let out = next_preview_path();
+		result
+			.to_rgba8()
+			.save(&out)
+			.map_err(|e| format!("Failed to write preview: {}", e))?;
+		rotate_preview_file(out.clone());
+		Ok(out.to_string_lossy().into_owned())
 	})
 	.await
 	.map_err(|e| format!("Task failed: {}", e))?
+}
+
+fn next_preview_path() -> PathBuf {
+	static COUNTER: AtomicU64 = AtomicU64::new(0);
+	let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+	std::env::temp_dir().join(format!("garnet-preview-{}.png", n))
+}
+
+/// Track the most recently written preview path and delete the prior
+/// one once a fresh file has been written. Bounded /tmp footprint.
+fn rotate_preview_file(new_path: PathBuf) {
+	static LAST: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
+	let cell = LAST.get_or_init(|| Mutex::new(None));
+	if let Ok(mut guard) = cell.lock() {
+		if let Some(prev) = guard.replace(new_path) {
+			let _ = std::fs::remove_file(prev);
+		}
+	}
 }
 
 /// Apply the pipeline at full resolution and write to disk. Caller chooses
