@@ -18,31 +18,46 @@ import {
 import { type Operation, useEditorStore } from "@/stores/editorStore";
 import { useUndoStore } from "@/stores/undoStore";
 
+/// Hide the transform tools until their backend preview path is sorted.
+/// Backend `editor::transform` + commands are intact and unit-tested;
+/// flip this back on once the frontend integration is debugged. See
+/// `40-69 Projects/41 PhD - Software/Garnet/90-99 Agents/Transient/
+/// editor-transform-tools-todo.md` for resume notes.
+const TRANSFORM_TOOLS_ENABLED = false;
+
 export function EditorTools({ sourceDims }: { sourceDims: { w: number; h: number } | null }) {
 	return (
 		<aside className="w-72 shrink-0 border-l border-base-300 bg-base-100 overflow-y-auto">
-			<Section title="Adjust" icon={<HiSwatch className="size-3.5" />}>
+			<Section
+				title="Adjust"
+				icon={<HiSwatch className="size-3.5" />}
+				last={!TRANSFORM_TOOLS_ENABLED}
+			>
 				<AdjustSlider type="adjust_hue" label="Hue" min={-180} max={180} step={1} unit="°" />
 				<AdjustSlider type="adjust_saturation" label="Saturation" min={-1} max={1} step={0.01} />
 				<AdjustSlider type="adjust_brightness" label="Brightness" min={-1} max={1} step={0.01} />
 				<AdjustSlider type="adjust_contrast" label="Contrast" min={-1} max={1} step={0.01} />
 			</Section>
 
-			<Section title="Crop" icon={<HiScissors className="size-3.5" />}>
-				<CropTool sourceDims={sourceDims} />
-			</Section>
+			{TRANSFORM_TOOLS_ENABLED && (
+				<>
+					<Section title="Crop" icon={<HiScissors className="size-3.5" />}>
+						<CropTool sourceDims={sourceDims} />
+					</Section>
 
-			<Section title="Resize" icon={<HiSquare2Stack className="size-3.5" />}>
-				<ResizeTool sourceDims={sourceDims} />
-			</Section>
+					<Section title="Resize" icon={<HiSquare2Stack className="size-3.5" />}>
+						<ResizeTool sourceDims={sourceDims} />
+					</Section>
 
-			<Section title="Rotate" icon={<HiArrowPath className="size-3.5" />}>
-				<RotateTool />
-			</Section>
+					<Section title="Rotate" icon={<HiArrowPath className="size-3.5" />}>
+						<RotateTool />
+					</Section>
 
-			<Section title="Corner round" icon={<HiSparkles className="size-3.5" />} last>
-				<CornerRoundTool sourceDims={sourceDims} />
-			</Section>
+					<Section title="Corner round" icon={<HiSparkles className="size-3.5" />} last>
+						<CornerRoundTool sourceDims={sourceDims} />
+					</Section>
+				</>
+			)}
 		</aside>
 	);
 }
