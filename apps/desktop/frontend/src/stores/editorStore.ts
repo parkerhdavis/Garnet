@@ -48,14 +48,21 @@ export function isCssFilterOp(op: Operation): boolean {
 	);
 }
 
-/// Ops that the canvas can render without a backend round-trip. Crop
-/// joins the CSS-filter set because cropping commutes with per-pixel
-/// adjusts and is trivially renderable in CSS via container clipping —
-/// keeping it client-side avoids the multi-second backend round-trip
-/// (and the color-shift from the un-profiled PNG re-encode) that the
-/// numeric-input UI suffered from.
+/// Ops that the canvas can render without a backend round-trip. The
+/// pixel-level adjusts ride a CSS `filter:` chain; the geometric
+/// transforms (crop, resize, rotate, corner-round) ride a layered set
+/// of wrappers (overflow:hidden + aspect-ratio + transform:rotate +
+/// border-radius) computed from the cssOps. Keeping all of them
+/// client-side avoids the multi-second backend round-trip and the
+/// color-shift from the un-profiled PNG re-encode.
 export function isClientPreviewableOp(op: Operation): boolean {
-	return isCssFilterOp(op) || op.type === "crop";
+	return (
+		isCssFilterOp(op) ||
+		op.type === "crop" ||
+		op.type === "resize" ||
+		op.type === "rotate" ||
+		op.type === "corner_round"
+	);
 }
 
 /// Split the pipeline at the last op that *can't* be previewed in the
