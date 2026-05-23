@@ -23,6 +23,8 @@ export type Operation =
 	| { type: "adjust_saturation"; offset: number }
 	| { type: "adjust_brightness"; offset: number }
 	| { type: "adjust_contrast"; amount: number }
+	| { type: "adjust_temperature"; amount: number }
+	| { type: "adjust_tint"; amount: number }
 	| { type: "luminance_curve"; lut: number[] }
 	| { type: "crop"; x: number; y: number; w: number; h: number }
 	| { type: "resize"; w: number; h: number }
@@ -40,6 +42,8 @@ export function isCssFilterOp(op: Operation): boolean {
 		op.type === "adjust_saturation" ||
 		op.type === "adjust_brightness" ||
 		op.type === "adjust_contrast" ||
+		op.type === "adjust_temperature" ||
+		op.type === "adjust_tint" ||
 		op.type === "luminance_curve"
 	);
 }

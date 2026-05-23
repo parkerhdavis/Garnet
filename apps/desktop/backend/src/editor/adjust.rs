@@ -56,6 +56,35 @@ pub fn apply_hue(mut rgba: RgbaImage, offset: f32) -> RgbaImage {
 	rgba
 }
 
+/// Channel-multiplier white-balance temperature in [-1, 1]. Positive
+/// values warm the image (boost R, attenuate B); negative values cool
+/// it. The 0.3 sensitivity matches what feels useful for normal
+/// content — full +1 is a strong tint, not a hard cap.
+pub fn apply_temperature(rgba: RgbaImage, amount: f32) -> RgbaImage {
+	let t = amount.clamp(-1.0, 1.0);
+	let r_mul = 1.0 + 0.3 * t;
+	let b_mul = 1.0 - 0.3 * t;
+	apply_rgb_scale(rgba, r_mul, 1.0, b_mul)
+}
+
+/// Channel-multiplier white-balance tint in [-1, 1]. Positive pushes
+/// toward magenta (attenuate G); negative pushes toward green (boost G).
+pub fn apply_tint(rgba: RgbaImage, amount: f32) -> RgbaImage {
+	let t = amount.clamp(-1.0, 1.0);
+	let g_mul = 1.0 - 0.3 * t;
+	apply_rgb_scale(rgba, 1.0, g_mul, 1.0)
+}
+
+fn apply_rgb_scale(mut rgba: RgbaImage, r: f32, g: f32, b: f32) -> RgbaImage {
+	let buf: &mut [u8] = &mut rgba;
+	buf.par_chunks_exact_mut(4).for_each(|p| {
+		p[0] = (p[0] as f32 * r).clamp(0.0, 255.0).round() as u8;
+		p[1] = (p[1] as f32 * g).clamp(0.0, 255.0).round() as u8;
+		p[2] = (p[2] as f32 * b).clamp(0.0, 255.0).round() as u8;
+	});
+	rgba
+}
+
 /// Scale saturation by `offset` in [-1, 1]. Matches Packi's curve.
 pub fn apply_saturation(mut rgba: RgbaImage, offset: f32) -> RgbaImage {
 	let buf: &mut [u8] = &mut rgba;
@@ -229,6 +258,69 @@ mod tests {
 		assert!(p[0] < 255);
 		assert!(p[1] > 0);
 		assert!(p[2] > 0);
+	}
+
+	#[test]
+	fn temperature_zero_is_noop() {
+		let img = make_test_image();
+		let out = apply_temperature(img.clone(), 0.0);
+		assert_eq!(out, img);
+	}
+
+	#[test]
+	fn temperature_positive_warms() {
+		let mut img = RgbaImage::new(1, 1);
+		img.put_pixel(0, 0, image::Rgba([100, 100, 100, 255]));
+		let out = apply_temperature(img, 1.0);
+		let p = out.get_pixel(0, 0);
+		assert!(p[0] > 100, "R should rise");
+		assert!(p[2] < 100, "B should fall");
+		assert_eq!(p[1], 100, "G unchanged");
+		assert_eq!(p[3], 255);
+	}
+
+	#[test]
+	fn temperature_negative_cools() {
+		let mut img = RgbaImage::new(1, 1);
+		img.put_pixel(0, 0, image::Rgba([100, 100, 100, 255]));
+		let out = apply_temperature(img, -1.0);
+		let p = out.get_pixel(0, 0);
+		assert!(p[0] < 100);
+		assert!(p[2] > 100);
+	}
+
+	#[test]
+	fn tint_zero_is_noop() {
+		let img = make_test_image();
+		let out = apply_tint(img.clone(), 0.0);
+		assert_eq!(out, img);
+	}
+
+	#[test]
+	fn tint_positive_pushes_magenta() {
+		let mut img = RgbaImage::new(1, 1);
+		img.put_pixel(0, 0, image::Rgba([100, 100, 100, 255]));
+		let out = apply_tint(img, 1.0);
+		let p = out.get_pixel(0, 0);
+		assert!(p[1] < 100, "G should fall (toward magenta)");
+		assert_eq!(p[0], 100);
+		assert_eq!(p[2], 100);
+	}
+
+	#[test]
+	fn temperature_clamps_to_byte_range() {
+		let mut img = RgbaImage::new(1, 1);
+		img.put_pixel(0, 0, image::Rgba([250, 250, 250, 255]));
+		let out = apply_temperature(img, 1.0);
+		assert_eq!(out.get_pixel(0, 0)[0], 255);
+	}
+
+	#[test]
+	fn temperature_preserves_alpha() {
+		let mut img = RgbaImage::new(1, 1);
+		img.put_pixel(0, 0, image::Rgba([100, 100, 100, 42]));
+		let out = apply_temperature(img, 0.5);
+		assert_eq!(out.get_pixel(0, 0)[3], 42);
 	}
 
 	#[test]
