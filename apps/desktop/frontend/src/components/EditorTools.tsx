@@ -5,7 +5,7 @@
 //! `replaceLastOfType` and push one combined undo entry on pointer-up;
 //! click-style tools (rotate buttons, Apply) push one op + one undo entry.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
 	HiArrowPath,
 	HiArrowUturnLeft,
@@ -93,6 +93,93 @@ function Section({
 	);
 }
 
+/** Numeric readout that swaps to an input on double-click. Commits via
+ *  Enter or blur, cancels via Escape; clamps to [min, max] before
+ *  calling onCommit. The parent owns the value and undo bookkeeping —
+ *  this component is presentational only. */
+function EditableValue({
+	value,
+	min,
+	max,
+	step,
+	display,
+	onCommit,
+}: {
+	value: number;
+	min: number;
+	max: number;
+	step: number;
+	display: ReactNode;
+	onCommit: (v: number) => void;
+}) {
+	const [editing, setEditing] = useState(false);
+	const [text, setText] = useState("");
+	const inputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		if (editing && inputRef.current) {
+			inputRef.current.focus();
+			inputRef.current.select();
+		}
+	}, [editing]);
+
+	function startEdit() {
+		setText(value.toString());
+		setEditing(true);
+	}
+
+	function commit() {
+		setEditing(false);
+		const v = Number(text);
+		if (!Number.isFinite(v)) return;
+		const clamped = Math.max(min, Math.min(max, v));
+		if (clamped === value) return;
+		onCommit(clamped);
+	}
+
+	// Both modes occupy an identical box so the layout doesn't jump when
+	// double-clicking to edit. The span carries a transparent border + the
+	// same padding as the input, so swapping in the bordered input is a
+	// pure cosmetic change.
+	const sharedBox =
+		"h-5 w-14 px-1 border rounded font-mono text-[11px] text-right box-border";
+
+	if (editing) {
+		return (
+			<input
+				ref={inputRef}
+				type="number"
+				className={`${sharedBox} input input-xs input-bordered min-h-0 py-0 leading-none`}
+				value={text}
+				min={min}
+				max={max}
+				step={step}
+				onChange={(e) => setText(e.target.value)}
+				onBlur={commit}
+				onKeyDown={(e) => {
+					if (e.key === "Enter") {
+						e.preventDefault();
+						commit();
+					} else if (e.key === "Escape") {
+						e.preventDefault();
+						setEditing(false);
+					}
+				}}
+			/>
+		);
+	}
+
+	return (
+		<span
+			className={`${sharedBox} inline-flex items-center justify-end border-transparent text-base-content/60 cursor-text select-none leading-none`}
+			onDoubleClick={startEdit}
+			title="Double-click to edit"
+		>
+			{display}
+		</span>
+	);
+}
+
 /** Wraps a numeric slider for an "adjust_*" op so the slider drag coalesces
  *  into one op and one undo entry. */
 type AdjustSliderType =
@@ -163,14 +250,37 @@ function AdjustSlider({
 		});
 	}
 
+	function commitTyped(v: number) {
+		const before = useEditorStore.getState().pendingOps;
+		void pushOp(makeOp(v), { replaceLastOfType: true });
+		queueMicrotask(() => {
+			const after = useEditorStore.getState().pendingOps;
+			if (sameOps(before, after)) return;
+			undoPush({
+				description: `${label} ${v >= 0 ? "+" : ""}${v.toFixed(2)}`,
+				undo: () => setOps(before),
+				redo: () => setOps(after),
+			});
+		});
+	}
+
 	return (
 		<div>
 			<div className="flex items-center justify-between text-xs">
 				<span className="text-base-content/75">{label}</span>
-				<span className="font-mono text-[11px] text-base-content/60">
-					{currentValue.toFixed(step < 1 ? 2 : 0)}
-					{unit ?? ""}
-				</span>
+				<EditableValue
+					value={currentValue}
+					min={min}
+					max={max}
+					step={step}
+					display={
+						<>
+							{currentValue.toFixed(step < 1 ? 2 : 0)}
+							{unit ?? ""}
+						</>
+					}
+					onCommit={commitTyped}
+				/>
 			</div>
 			<input
 				type="range"
@@ -467,8 +577,19 @@ function ResizeTool({ sourceDims }: { sourceDims: { w: number; h: number } | nul
 			targetW = Math.max(1, Math.floor(Number(w) || 1));
 			targetH = Math.max(1, Math.floor(Number(h) || 1));
 		}
+		// One resize at a time — replace any existing resize op.
+		const before = useEditorStore.getState().pendingOps;
 		const op: Operation = { type: "resize", w: targetW, h: targetH };
-		pushWithUndo(op, `Resize → ${targetW}×${targetH}`);
+		const next: Operation[] = [
+			...before.filter((o) => o.type !== "resize"),
+			op,
+		];
+		void useEditorStore.getState().setOps(next);
+		useUndoStore.getState().push({
+			description: `Resize → ${targetW}×${targetH}`,
+			undo: () => useEditorStore.getState().setOps(before),
+			redo: () => useEditorStore.getState().setOps(next),
+		});
 	}
 
 	return (
@@ -511,8 +632,24 @@ function RotateTool() {
 	const [angle, setAngle] = useState("0");
 
 	function rotateBy(deg: number) {
-		const op: Operation = { type: "rotate", angle: deg };
-		pushWithUndo(op, `Rotate ${deg > 0 ? "+" : ""}${deg}°`);
+		// Fold incremental rotations into a single rotate op so the pipeline
+		// stays compact and the preview's CSS transform composes cleanly.
+		const before = useEditorStore.getState().pendingOps;
+		const existing = before.find((o) => o.type === "rotate") as
+			| Extract<Operation, { type: "rotate" }>
+			| undefined;
+		const summed = (((existing?.angle ?? 0) + deg) % 360 + 360) % 360;
+		const withoutRotate = before.filter((o) => o.type !== "rotate");
+		const next: Operation[] =
+			summed === 0
+				? withoutRotate
+				: [...withoutRotate, { type: "rotate", angle: summed }];
+		void useEditorStore.getState().setOps(next);
+		useUndoStore.getState().push({
+			description: `Rotate ${deg > 0 ? "+" : ""}${deg}°`,
+			undo: () => useEditorStore.getState().setOps(before),
+			redo: () => useEditorStore.getState().setOps(next),
+		});
 	}
 
 	function applyArbitrary() {
@@ -590,11 +727,33 @@ function CornerRoundTool({ sourceDims }: { sourceDims: { w: number; h: number } 
 		});
 	}
 
+	function commitTyped(v: number) {
+		const clamped = Math.max(0, Math.min(maxR, Math.floor(v)));
+		const before = useEditorStore.getState().pendingOps;
+		void pushOp({ type: "corner_round", radius: clamped }, { replaceLastOfType: true });
+		queueMicrotask(() => {
+			const after = useEditorStore.getState().pendingOps;
+			if (sameOps(before, after)) return;
+			undoPush({
+				description: `Corner round ${clamped} px`,
+				undo: () => setOps(before),
+				redo: () => setOps(after),
+			});
+		});
+	}
+
 	return (
 		<div>
 			<div className="flex items-center justify-between text-xs">
 				<span className="text-base-content/75">Radius</span>
-				<span className="font-mono text-[11px] text-base-content/60">{currentRadius} px</span>
+				<EditableValue
+					value={currentRadius}
+					min={0}
+					max={maxR}
+					step={1}
+					display={`${currentRadius} px`}
+					onCommit={commitTyped}
+				/>
 			</div>
 			<input
 				type="range"

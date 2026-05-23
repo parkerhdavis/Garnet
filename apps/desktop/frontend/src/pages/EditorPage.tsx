@@ -14,6 +14,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { HiArrowLeft, HiCheck, HiNoSymbol } from "react-icons/hi2";
 import CropOverlay, { type CropRect } from "@/components/CropOverlay";
+import EditorCanvas from "@/components/EditorCanvas";
 import { EditorTools } from "@/components/EditorTools";
 import { api, type Asset } from "@/lib/tauri";
 import { absPathFor, basename, dirname } from "@/lib/paths";
@@ -267,7 +268,6 @@ export function EditorPage() {
 		: usingBackendPreview
 			? (previewUrl ?? originalSrc)
 			: originalSrc;
-	const showCrop = !showingOriginal && !cropEditMode && cropOp !== undefined;
 
 	const filterDefs =
 		curveLut || wbScale ? (
@@ -400,42 +400,20 @@ export function EditorPage() {
 							onDone={handleCropDone}
 							onCancel={handleCropCancel}
 						/>
-					) : showCrop && cropOp && sourceDims ? (
-						// Client-side crop preview: the container is sized to
-						// the crop's aspect ratio (max-w/max-h capped) and the
-						// img is scaled+positioned so only the crop rect is
-						// visible. No backend round-trip, no PNG re-encode,
-						// no color shift.
-						<div
-							className="max-w-full max-h-full overflow-hidden relative"
-							style={{
-								aspectRatio: `${cropOp.w} / ${cropOp.h}`,
-								// Match the un-cropped layout: prefer width but
-								// stay bounded by available height.
-								width: `min(100%, calc((100vh - 12rem) * ${cropOp.w / cropOp.h}))`,
-							}}
-						>
-							<img
-								src={canvasSrc}
-								alt="Edited preview"
-								className="absolute top-0 left-0"
-								style={{
-									width: `${(sourceDims.w / cropOp.w) * 100}%`,
-									height: `${(sourceDims.h / cropOp.h) * 100}%`,
-									left: `${(-cropOp.x / cropOp.w) * 100}%`,
-									top: `${(-cropOp.y / cropOp.h) * 100}%`,
-									maxWidth: "none",
-									maxHeight: "none",
-									filter: cssFilter || undefined,
-								}}
-							/>
-						</div>
-					) : (
+					) : showingOriginal || !sourceDims ? (
 						<img
 							src={canvasSrc}
 							alt={showingOriginal ? "Original" : "Edited preview"}
 							className="max-w-full max-h-full object-contain"
 							style={cssFilter ? { filter: cssFilter } : undefined}
+						/>
+					) : (
+						<EditorCanvas
+							imgSrc={canvasSrc}
+							sourceW={sourceDims.w}
+							sourceH={sourceDims.h}
+							cssOps={cssOps}
+							cssFilter={cssFilter}
 						/>
 					)}
 					{previewing && usingBackendPreview && !cropEditMode && (
