@@ -29,16 +29,18 @@ export type Operation =
 	| { type: "rotate"; angle: number }
 	| { type: "corner_round"; radius: number };
 
-/// Ops that map cleanly onto CSS `filter:` primitives — these can be
-/// previewed client-side, in real time, at full resolution, with no
-/// backend round-trip. `luminance_curve` is intentionally excluded
-/// (no CSS equivalent, would need a WebGL pass).
+/// Ops that can be previewed client-side via a CSS `filter:` chain —
+/// real time, full resolution, no backend round-trip. Hue/sat/brightness/
+/// contrast map onto built-in `filter:` primitives; `luminance_curve`
+/// rides the same channel via an inline SVG `<feComponentTransfer>` filter
+/// referenced as `filter: url(#…)`.
 export function isCssFilterOp(op: Operation): boolean {
 	return (
 		op.type === "adjust_hue" ||
 		op.type === "adjust_saturation" ||
 		op.type === "adjust_brightness" ||
-		op.type === "adjust_contrast"
+		op.type === "adjust_contrast" ||
+		op.type === "luminance_curve"
 	);
 }
 
