@@ -1,9 +1,9 @@
 ![Garnet Icon](./resources/icons/128x128.png)
 # Garnet
 
-A free, open-source desktop application that bundles a general-purpose digital asset manager with a modular system of media-specific operation suites. The base install is a working DAM for any media type you drop into it — cross-format organization, search, preview, and metadata. Optional plugins (3D, 2D, video, audio, fonts, documents, …) add per-format depth on top. Borrowed from Visual Studio's installer model: a small, useful base, with the user assembling exactly the toolset they need.
+A free, open-source digital asset manager for a wide variety of asset types including image, video, audio, 3D models and animations, and more. The base install is a working DAM for any media type you drop into it: cross-format organization, search, preview, and metadata. Upcoming core and plugin functionality add helpful utilities for various media including reformatting, basic editing tools, trimming and resizing, and more.
 
-Garnet is **offline and local** — no proprietary library format, no forced ingestion, no cloud, no accounts. It indexes where files already live.
+Garnet is **offline and local**, operating as a surface over your local files. No proprietary library format, no forced ingestion, no cloud, no accounts. It indexes and operates where files already live.
 
 > [!NOTE]
 > Garnet is at the **concept / Phase 1 starter** stage. The base toolkit's scaffolding is in place; real cataloging, tagging, search, and plugin loading are still ahead. The first official plugin will be **3D Texturing**, eventually folding [Packi](https://github.com/parkerhdavis/Packi) in once its plugin API has been prototyped.
