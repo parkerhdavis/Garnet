@@ -210,9 +210,10 @@ export function EditorPage() {
 	const showingOriginal = viewMode === "original";
 	const originalSrc = asset ? convertFileSrc(absPath) : "";
 	const { backendOps, cssOps } = useMemo(() => splitOps(pendingOps), [pendingOps]);
+	const curveLut = useMemo(() => lastLutIn(cssOps), [cssOps]);
 	const cssFilter = useMemo(
-		() => (showingOriginal ? "" : cssFilterFor(cssOps)),
-		[cssOps, showingOriginal],
+		() => (showingOriginal ? "" : cssFilterFor(cssOps, curveLut ? CURVE_FILTER_ID : null)),
+		[cssOps, curveLut, showingOriginal],
 	);
 	const usingBackendPreview = !showingOriginal && backendOps.length > 0;
 	const canvasSrc = showingOriginal
@@ -301,6 +302,27 @@ export function EditorPage() {
 
 			<div className="flex-1 min-h-0 flex">
 				<div className="flex-1 min-w-0 flex items-center justify-center bg-base-300/30 p-4 relative">
+					{/* Inline SVG filter for the luminance-curve LUT. The img
+					    below references it via `filter: url(#...)`, which
+					    keeps curve previews on the GPU and at full resolution. */}
+					{curveLut && (
+						<svg
+							aria-hidden
+							width={0}
+							height={0}
+							style={{ position: "absolute", width: 0, height: 0 }}
+						>
+							<defs>
+								<filter id={CURVE_FILTER_ID} colorInterpolationFilters="sRGB">
+									<feComponentTransfer>
+										<feFuncR type="table" tableValues={lutToTableValues(curveLut)} />
+										<feFuncG type="table" tableValues={lutToTableValues(curveLut)} />
+										<feFuncB type="table" tableValues={lutToTableValues(curveLut)} />
+									</feComponentTransfer>
+								</filter>
+							</defs>
+						</svg>
+					)}
 					<img
 						src={canvasSrc}
 						alt={showingOriginal ? "Original" : "Edited preview"}
@@ -327,13 +349,18 @@ function normalizeFormat(ext: string): string {
 	return e;
 }
 
+const CURVE_FILTER_ID = "garnet-curve-lut";
+
 /// Translate the CSS-representable subset of adjust ops into a `filter:`
 /// chain. The math doesn't match the Rust pipeline exactly (CSS uses a
 /// matrix-based hue rotation; ours is HSL-based), but it's close enough
 /// for live preview — commit uses the exact Rust math, so what gets
 /// written to disk always matches the operation spec, not the CSS
 /// approximation.
-function cssFilterFor(ops: Operation[]): string {
+///
+/// `lutFilterId`, when provided, is appended as `url(#id)` so the inline
+/// SVG `<feComponentTransfer>` applies the luminance curve on the GPU.
+function cssFilterFor(ops: Operation[], lutFilterId: string | null): string {
 	const parts: string[] = [];
 	for (const op of ops) {
 		switch (op.type) {
@@ -349,7 +376,25 @@ function cssFilterFor(ops: Operation[]): string {
 			case "adjust_contrast":
 				if (op.amount !== 0) parts.push(`contrast(${1 + op.amount})`);
 				break;
+			// luminance_curve is handled via the SVG filter; nothing to push here.
 		}
 	}
+	if (lutFilterId) parts.push(`url(#${lutFilterId})`);
 	return parts.join(" ");
+}
+
+/// Find the LUT from the last `luminance_curve` op in the CSS slice, if any.
+/// Subsequent CSS-filter primitives in the chain still apply on top of it.
+function lastLutIn(ops: Operation[]): number[] | null {
+	for (let i = ops.length - 1; i >= 0; i--) {
+		if (ops[i].type === "luminance_curve") {
+			return (ops[i] as Extract<Operation, { type: "luminance_curve" }>).lut;
+		}
+	}
+	return null;
+}
+
+/// SVG feFunc table values are normalized [0,1] space-separated floats.
+function lutToTableValues(lut: number[]): string {
+	return lut.map((v) => (v / 255).toFixed(4)).join(" ");
 }

@@ -5,16 +5,18 @@
 //! `replaceLastOfType` and push one combined undo entry on pointer-up;
 //! click-style tools (rotate buttons, Apply) push one op + one undo entry.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	HiArrowPath,
 	HiArrowUturnLeft,
 	HiArrowUturnRight,
+	HiChartBar,
 	HiScissors,
 	HiSparkles,
 	HiSquare2Stack,
 	HiSwatch,
 } from "react-icons/hi2";
+import CurveEditor, { type CurvePoint } from "@/components/CurveEditor";
 import { type Operation, useEditorStore } from "@/stores/editorStore";
 import { useUndoStore } from "@/stores/undoStore";
 
@@ -31,12 +33,19 @@ export function EditorTools({ sourceDims }: { sourceDims: { w: number; h: number
 			<Section
 				title="Adjust"
 				icon={<HiSwatch className="size-3.5" />}
-				last={!TRANSFORM_TOOLS_ENABLED}
 			>
 				<AdjustSlider type="adjust_hue" label="Hue" min={-180} max={180} step={1} unit="°" />
 				<AdjustSlider type="adjust_saturation" label="Saturation" min={-1} max={1} step={0.01} />
 				<AdjustSlider type="adjust_brightness" label="Brightness" min={-1} max={1} step={0.01} />
 				<AdjustSlider type="adjust_contrast" label="Contrast" min={-1} max={1} step={0.01} />
+			</Section>
+
+			<Section
+				title="Luminance curve"
+				icon={<HiChartBar className="size-3.5" />}
+				last={!TRANSFORM_TOOLS_ENABLED}
+			>
+				<CurveTool />
 			</Section>
 
 			{TRANSFORM_TOOLS_ENABLED && (
@@ -161,6 +170,104 @@ function AdjustSlider({
 					});
 				}}
 			/>
+		</div>
+	);
+}
+
+function CurveTool() {
+	const pendingOps = useEditorStore((s) => s.pendingOps);
+	const pushOp = useEditorStore((s) => s.pushOp);
+	const setOps = useEditorStore((s) => s.setOps);
+	const undoPush = useUndoStore((s) => s.push);
+
+	// Recover the current control points from the last luminance_curve op
+	// in the pipeline, falling back to identity. We stash points alongside
+	// the LUT in a ref so the editor can rehydrate after undo/redo without
+	// having to round-trip through a LUT-to-points solver.
+	const pointsRef = useRef<CurvePoint[]>([
+		{ x: 0, y: 0 },
+		{ x: 1, y: 1 },
+	]);
+
+	const hasCurveOp = useMemo(
+		() => pendingOps.some((o) => o.type === "luminance_curve"),
+		[pendingOps],
+	);
+
+	const beforeOpsRef = useRef<Operation[] | null>(null);
+
+	function handleLive(points: CurvePoint[], lut: number[]) {
+		// First live tick of a gesture: snapshot the pre-edit op list so the
+		// commit handler can emit a single before→after undo entry.
+		if (beforeOpsRef.current === null) {
+			beforeOpsRef.current = useEditorStore.getState().pendingOps;
+		}
+		pointsRef.current = points;
+		void pushOp({ type: "luminance_curve", lut }, { replaceLastOfType: true });
+	}
+
+	function handleCommit(points: CurvePoint[], lut: number[]) {
+		const before = beforeOpsRef.current;
+		beforeOpsRef.current = null;
+		// Double-click add/remove fires commit without a prior live tick; in
+		// that case treat the current pendingOps as the before state.
+		const snapshot = before ?? useEditorStore.getState().pendingOps;
+		pointsRef.current = points;
+		void pushOp({ type: "luminance_curve", lut }, { replaceLastOfType: true });
+		queueMicrotask(() => {
+			const after = useEditorStore.getState().pendingOps;
+			if (sameOps(snapshot, after)) return;
+			undoPush({
+				description: "Luminance curve",
+				undo: () => setOps(snapshot),
+				redo: () => setOps(after),
+			});
+		});
+	}
+
+	function handleReset() {
+		const next = pendingOps.filter((o) => o.type !== "luminance_curve");
+		const before = pendingOps;
+		pointsRef.current = [
+			{ x: 0, y: 0 },
+			{ x: 1, y: 1 },
+		];
+		void setOps(next);
+		undoPush({
+			description: "Reset curve",
+			undo: () => setOps(before),
+			redo: () => setOps(next),
+		});
+	}
+
+	const initialPoints = hasCurveOp
+		? pointsRef.current
+		: [
+				{ x: 0, y: 0 },
+				{ x: 1, y: 1 },
+			];
+
+	return (
+		<div className="flex flex-col gap-2">
+			<CurveEditor
+				key={hasCurveOp ? "active" : "identity"}
+				points={initialPoints}
+				width={224}
+				height={180}
+				onChangeLive={handleLive}
+				onChangeCommit={handleCommit}
+			/>
+			<div className="flex items-center justify-between text-[10px] text-base-content/45">
+				<span>Drag to bend · double-click to add / remove</span>
+				<button
+					type="button"
+					className="btn btn-ghost btn-xs h-5 min-h-0 px-1.5"
+					onClick={handleReset}
+					disabled={!hasCurveOp}
+				>
+					Reset
+				</button>
+			</div>
 		</div>
 	);
 }
