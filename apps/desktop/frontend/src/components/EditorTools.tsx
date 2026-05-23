@@ -24,7 +24,7 @@ import { useUndoStore } from "@/stores/undoStore";
 /// flip this back on once the frontend integration is debugged. See
 /// `40-69 Projects/41 PhD - Software/Garnet/90-99 Agents/Transient/
 /// editor-transform-tools-todo.md` for resume notes.
-const TRANSFORM_TOOLS_ENABLED = false;
+const TRANSFORM_TOOLS_ENABLED = true;
 
 export function EditorTools({ sourceDims }: { sourceDims: { w: number; h: number } | null }) {
 	return (
@@ -310,50 +310,144 @@ function CurveTool() {
 	);
 }
 
+/** Aspect-ratio presets. Click → replaces any existing crop with the
+ *  largest centered rect of that aspect that fits inside the source
+ *  ("smallest crop necessary" to reach the ratio). */
+const CROP_PRESETS: { label: string; ratio: number }[] = [
+	{ label: "1:1", ratio: 1 },
+	{ label: "4:3", ratio: 4 / 3 },
+	{ label: "3:2", ratio: 3 / 2 },
+	{ label: "16:9", ratio: 16 / 9 },
+	{ label: "9:16", ratio: 9 / 16 },
+	{ label: "2:3", ratio: 2 / 3 },
+];
+
 function CropTool({ sourceDims }: { sourceDims: { w: number; h: number } | null }) {
-	const [x, setX] = useState("0");
-	const [y, setY] = useState("0");
-	const [w, setW] = useState(sourceDims?.w.toString() ?? "");
-	const [h, setH] = useState(sourceDims?.h.toString() ?? "");
+	const pendingOps = useEditorStore((s) => s.pendingOps);
+	const setOps = useEditorStore((s) => s.setOps);
+	const setCropEditMode = useEditorStore((s) => s.setCropEditMode);
+	const undoPush = useUndoStore((s) => s.push);
 
-	useEffect(() => {
-		if (sourceDims) {
-			setW(sourceDims.w.toString());
-			setH(sourceDims.h.toString());
-		}
-	}, [sourceDims]);
+	const cropOp = pendingOps.find((o) => o.type === "crop") as
+		| Extract<Operation, { type: "crop" }>
+		| undefined;
 
-	function apply() {
-		const op: Operation = {
-			type: "crop",
-			x: Math.max(0, Math.floor(Number(x) || 0)),
-			y: Math.max(0, Math.floor(Number(y) || 0)),
-			w: Math.max(1, Math.floor(Number(w) || 1)),
-			h: Math.max(1, Math.floor(Number(h) || 1)),
-		};
-		pushWithUndo(op, `Crop ${op.w}×${op.h} @ ${op.x},${op.y}`);
+	function clearCrop() {
+		const before = pendingOps;
+		const next = before.filter((o) => o.type !== "crop");
+		if (sameOps(before, next)) return;
+		void setOps(next);
+		undoPush({
+			description: "Clear crop",
+			undo: () => setOps(before),
+			redo: () => setOps(next),
+		});
+	}
+
+	function applyPreset(ratio: number) {
+		if (!sourceDims) return;
+		const rect = centeredCropForAspect(sourceDims.w, sourceDims.h, ratio);
+		// Open the crop editor pre-loaded with the preset rect so the user
+		// can review and tweak before committing.
+		setCropEditMode(true, rect);
 	}
 
 	return (
-		<>
-			<div className="grid grid-cols-2 gap-1.5">
-				<NumberField label="X" value={x} onChange={setX} />
-				<NumberField label="Y" value={y} onChange={setY} />
-				<NumberField label="W" value={w} onChange={setW} />
-				<NumberField label="H" value={h} onChange={setH} />
+		<div className="flex flex-col gap-1.5">
+			<div className="text-[11px] text-base-content/55 font-mono">
+				Original: {sourceDims ? formatAspect(sourceDims.w, sourceDims.h) : "…"}
 			</div>
-			<button type="button" className="btn btn-xs btn-block mt-1" onClick={apply}>
-				Apply crop
+			{cropOp && (
+				<div className="text-[11px] text-base-content/55 font-mono">
+					{cropOp.w} × {cropOp.h} @ {cropOp.x},{cropOp.y}
+				</div>
+			)}
+			<button
+				type="button"
+				className="btn btn-xs btn-block"
+				onClick={() => setCropEditMode(true)}
+			>
+				Edit crop
 			</button>
-		</>
+			<div className="grid grid-cols-3 gap-1">
+				{CROP_PRESETS.map((p) => (
+					<button
+						key={p.label}
+						type="button"
+						className="btn btn-xs btn-ghost font-mono"
+						onClick={() => applyPreset(p.ratio)}
+						disabled={!sourceDims}
+						title={`Open crop editor at ${p.label}`}
+					>
+						{p.label}
+					</button>
+				))}
+			</div>
+			{cropOp && (
+				<button
+					type="button"
+					className="btn btn-xs btn-ghost btn-block"
+					onClick={clearCrop}
+				>
+					Clear crop
+				</button>
+			)}
+		</div>
 	);
+}
+
+/** Format an aspect ratio for display: clean a:b when w and h reduce to
+ *  small integers (covers all the common photo sizes); otherwise express
+ *  as one-decimal ratio:1. */
+function formatAspect(w: number, h: number): string {
+	if (w <= 0 || h <= 0) return "—";
+	const g = gcd(w, h);
+	const aw = w / g;
+	const ah = h / g;
+	if (aw <= 32 && ah <= 32) return `${aw}:${ah}`;
+	const r = w / h;
+	return r >= 1 ? `${r.toFixed(1)}:1` : `1:${(1 / r).toFixed(1)}`;
+}
+
+function gcd(a: number, b: number): number {
+	while (b !== 0) {
+		[a, b] = [b, a % b];
+	}
+	return a;
+}
+
+/** Largest rect with aspect `targetRatio` (= w/h) that fits inside the
+ *  source, centered on the source's center. */
+function centeredCropForAspect(
+	srcW: number,
+	srcH: number,
+	targetRatio: number,
+): { x: number; y: number; w: number; h: number } {
+	const srcRatio = srcW / srcH;
+	let w: number;
+	let h: number;
+	if (targetRatio >= srcRatio) {
+		// Target wider than source — pin to source width.
+		w = srcW;
+		h = srcW / targetRatio;
+	} else {
+		// Target narrower than source — pin to source height.
+		h = srcH;
+		w = srcH * targetRatio;
+	}
+	return {
+		x: Math.max(0, Math.round((srcW - w) / 2)),
+		y: Math.max(0, Math.round((srcH - h) / 2)),
+		w: Math.max(1, Math.round(w)),
+		h: Math.max(1, Math.round(h)),
+	};
 }
 
 function ResizeTool({ sourceDims }: { sourceDims: { w: number; h: number } | null }) {
 	const [w, setW] = useState(sourceDims?.w.toString() ?? "");
 	const [h, setH] = useState(sourceDims?.h.toString() ?? "");
 	const [pct, setPct] = useState("100");
-	const [mode, setMode] = useState<"px" | "pct">("px");
+	const [mode, setMode] = useState<"px" | "pct">("pct");
 
 	useEffect(() => {
 		if (sourceDims) {
@@ -379,20 +473,23 @@ function ResizeTool({ sourceDims }: { sourceDims: { w: number; h: number } | nul
 
 	return (
 		<>
+			<div className="text-[11px] text-base-content/55 font-mono">
+				Original: {sourceDims ? `${sourceDims.w} × ${sourceDims.h} px` : "…"}
+			</div>
 			<div className="join w-full">
 				<button
 					type="button"
-					className={`btn btn-xs join-item flex-1 ${mode === "px" ? "btn-active" : ""}`}
-					onClick={() => setMode("px")}
-				>
-					Pixels
-				</button>
-				<button
-					type="button"
-					className={`btn btn-xs join-item flex-1 ${mode === "pct" ? "btn-active" : ""}`}
+					className={`btn btn-xs join-item flex-1 ${mode === "pct" ? "btn-primary" : ""}`}
 					onClick={() => setMode("pct")}
 				>
 					Percent
+				</button>
+				<button
+					type="button"
+					className={`btn btn-xs join-item flex-1 ${mode === "px" ? "btn-primary" : ""}`}
+					onClick={() => setMode("px")}
+				>
+					Pixels
 				</button>
 			</div>
 			{mode === "px" ? (
