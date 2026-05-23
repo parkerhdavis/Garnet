@@ -6,7 +6,7 @@ A free, open-source digital asset manager for a wide variety of asset types incl
 Garnet is **offline and local**, operating as a surface over your local files. No proprietary library format, no forced ingestion, no cloud, no accounts. It indexes and operates where files already live.
 
 > [!NOTE]
-> Garnet is at the **concept / Phase 1 starter** stage. The base toolkit's scaffolding is in place; real cataloging, tagging, search, and plugin loading are still ahead. The first official plugin will be **3D Texturing**, eventually folding [Packi](https://github.com/parkerhdavis/Packi) in once its plugin API has been prototyped.
+> Garnet is still in an early stage of development, with limited editing utilities available. The functionalities available should work without issue, but you'll see a lot of gaps where core or plugin functions have yet to be built.
 
 ## Stack
 
