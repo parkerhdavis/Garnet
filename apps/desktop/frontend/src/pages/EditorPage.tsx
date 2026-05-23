@@ -13,6 +13,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { HiArrowLeft, HiCheck, HiNoSymbol } from "react-icons/hi2";
+import CropOverlay, { type CropRect } from "@/components/CropOverlay";
 import { EditorTools } from "@/components/EditorTools";
 import { api, type Asset } from "@/lib/tauri";
 import { absPathFor, basename, dirname } from "@/lib/paths";
@@ -42,10 +43,15 @@ export function EditorPage() {
 	const previewing = useEditorStore((s) => s.previewing);
 	const viewMode = useEditorStore((s) => s.viewMode);
 	const setViewMode = useEditorStore((s) => s.setViewMode);
+	const cropEditMode = useEditorStore((s) => s.cropEditMode);
+	const cropEditorInitial = useEditorStore((s) => s.cropEditorInitial);
+	const setCropEditMode = useEditorStore((s) => s.setCropEditMode);
 	const pendingOps = useEditorStore((s) => s.pendingOps);
+	const setOps = useEditorStore((s) => s.setOps);
 	const dirty = useEditorStore((s) => s.dirty);
 	const load = useEditorStore((s) => s.load);
 	const reset = useEditorStore((s) => s.reset);
+	const undoPush = useUndoStore((s) => s.push);
 
 	const editorSaveDefault = usePrefsStore((s) => s.editorSaveDefault);
 	const clearUndo = useUndoStore((s) => s.clear);
@@ -204,6 +210,28 @@ export function EditorPage() {
 		clearUndo();
 	}
 
+	function handleCropDone(rect: CropRect) {
+		const before = useEditorStore.getState().pendingOps;
+		// Replace any existing crop op (keep it as the last in the pipeline
+		// so it composes after upstream client-side ops).
+		const withoutCrop = before.filter((o) => o.type !== "crop");
+		const next: Operation[] = [
+			...withoutCrop,
+			{ type: "crop", x: rect.x, y: rect.y, w: rect.w, h: rect.h },
+		];
+		void setOps(next);
+		setCropEditMode(false);
+		undoPush({
+			description: `Crop ${rect.w}×${rect.h} @ ${rect.x},${rect.y}`,
+			undo: () => setOps(before),
+			redo: () => setOps(next),
+		});
+	}
+
+	function handleCropCancel() {
+		setCropEditMode(false);
+	}
+
 	// Derive view state up here — these must run on every render to
 	// satisfy React's hook-ordering rule, even when an early-return
 	// branch below skips the canvas.
@@ -212,6 +240,16 @@ export function EditorPage() {
 	const { backendOps, cssOps } = useMemo(() => splitOps(pendingOps), [pendingOps]);
 	const curveLut = useMemo(() => lastLutIn(cssOps), [cssOps]);
 	const wbScale = useMemo(() => accumulateWhiteBalance(cssOps), [cssOps]);
+	const cropOp = useMemo(
+		() =>
+			cssOps.find((o) => o.type === "crop") as
+				| Extract<Operation, { type: "crop" }>
+				| undefined,
+		[cssOps],
+	);
+	// Filters that apply to the canvas img. When in crop-edit mode the
+	// committed crop is hidden so the user can re-select the rect, but
+	// other adjustments stay visible.
 	const cssFilter = useMemo(
 		() =>
 			showingOriginal
@@ -229,6 +267,37 @@ export function EditorPage() {
 		: usingBackendPreview
 			? (previewUrl ?? originalSrc)
 			: originalSrc;
+	const showCrop = !showingOriginal && !cropEditMode && cropOp !== undefined;
+
+	const filterDefs =
+		curveLut || wbScale ? (
+			<svg
+				aria-hidden
+				width={0}
+				height={0}
+				style={{ position: "absolute", width: 0, height: 0 }}
+			>
+				<defs>
+					{curveLut && (
+						<filter id={CURVE_FILTER_ID} colorInterpolationFilters="sRGB">
+							<feComponentTransfer>
+								<feFuncR type="table" tableValues={lutToTableValues(curveLut)} />
+								<feFuncG type="table" tableValues={lutToTableValues(curveLut)} />
+								<feFuncB type="table" tableValues={lutToTableValues(curveLut)} />
+							</feComponentTransfer>
+						</filter>
+					)}
+					{wbScale && (
+						<filter id={WB_FILTER_ID} colorInterpolationFilters="sRGB">
+							<feColorMatrix
+								type="matrix"
+								values={`${wbScale.r} 0 0 0 0  0 ${wbScale.g} 0 0 0  0 0 ${wbScale.b} 0 0  0 0 0 1 0`}
+							/>
+						</filter>
+					)}
+				</defs>
+			</svg>
+		) : null;
 
 	if (loadError) {
 		return (
@@ -314,41 +383,62 @@ export function EditorPage() {
 					    luminance curve as <feComponentTransfer>, white-balance
 					    temp+tint combined as a single channel-scale
 					    <feColorMatrix>. Both stay on the GPU at full resolution. */}
-					{(curveLut || wbScale) && (
-						<svg
-							aria-hidden
-							width={0}
-							height={0}
-							style={{ position: "absolute", width: 0, height: 0 }}
+					{filterDefs}
+					{cropEditMode && sourceDims ? (
+						<CropOverlay
+							imgSrc={canvasSrc}
+							sourceW={sourceDims.w}
+							sourceH={sourceDims.h}
+							initial={
+								// Preset override > existing crop op > full image.
+								cropEditorInitial ??
+								(cropOp
+									? { x: cropOp.x, y: cropOp.y, w: cropOp.w, h: cropOp.h }
+									: null)
+							}
+							cssFilter={cssFilter}
+							onDone={handleCropDone}
+							onCancel={handleCropCancel}
+						/>
+					) : showCrop && cropOp && sourceDims ? (
+						// Client-side crop preview: the container is sized to
+						// the crop's aspect ratio (max-w/max-h capped) and the
+						// img is scaled+positioned so only the crop rect is
+						// visible. No backend round-trip, no PNG re-encode,
+						// no color shift.
+						<div
+							className="max-w-full max-h-full overflow-hidden relative"
+							style={{
+								aspectRatio: `${cropOp.w} / ${cropOp.h}`,
+								// Match the un-cropped layout: prefer width but
+								// stay bounded by available height.
+								width: `min(100%, calc((100vh - 12rem) * ${cropOp.w / cropOp.h}))`,
+							}}
 						>
-							<defs>
-								{curveLut && (
-									<filter id={CURVE_FILTER_ID} colorInterpolationFilters="sRGB">
-										<feComponentTransfer>
-											<feFuncR type="table" tableValues={lutToTableValues(curveLut)} />
-											<feFuncG type="table" tableValues={lutToTableValues(curveLut)} />
-											<feFuncB type="table" tableValues={lutToTableValues(curveLut)} />
-										</feComponentTransfer>
-									</filter>
-								)}
-								{wbScale && (
-									<filter id={WB_FILTER_ID} colorInterpolationFilters="sRGB">
-										<feColorMatrix
-											type="matrix"
-											values={`${wbScale.r} 0 0 0 0  0 ${wbScale.g} 0 0 0  0 0 ${wbScale.b} 0 0  0 0 0 1 0`}
-										/>
-									</filter>
-								)}
-							</defs>
-						</svg>
+							<img
+								src={canvasSrc}
+								alt="Edited preview"
+								className="absolute top-0 left-0"
+								style={{
+									width: `${(sourceDims.w / cropOp.w) * 100}%`,
+									height: `${(sourceDims.h / cropOp.h) * 100}%`,
+									left: `${(-cropOp.x / cropOp.w) * 100}%`,
+									top: `${(-cropOp.y / cropOp.h) * 100}%`,
+									maxWidth: "none",
+									maxHeight: "none",
+									filter: cssFilter || undefined,
+								}}
+							/>
+						</div>
+					) : (
+						<img
+							src={canvasSrc}
+							alt={showingOriginal ? "Original" : "Edited preview"}
+							className="max-w-full max-h-full object-contain"
+							style={cssFilter ? { filter: cssFilter } : undefined}
+						/>
 					)}
-					<img
-						src={canvasSrc}
-						alt={showingOriginal ? "Original" : "Edited preview"}
-						className="max-w-full max-h-full object-contain"
-						style={cssFilter ? { filter: cssFilter } : undefined}
-					/>
-					{previewing && usingBackendPreview && (
+					{previewing && usingBackendPreview && !cropEditMode && (
 						<div className="absolute top-2 right-2 text-[10px] uppercase tracking-wider text-base-content/55 bg-base-100/80 px-2 py-0.5 rounded">
 							Rendering transforms…
 						</div>

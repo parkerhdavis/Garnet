@@ -48,27 +48,37 @@ export function isCssFilterOp(op: Operation): boolean {
 	);
 }
 
-/// Split the pipeline at the last op that *can't* be represented as a
-/// CSS filter. Backend renders everything up to and including that op;
-/// the trailing CSS-representable adjusts overlay onto the result as a
-/// real-time `filter:` chain. When `backendOps` is empty, the canvas
-/// can render the original directly with the CSS chain on top — that's
-/// the hot path for slider-only edits and it never touches Rust.
+/// Ops that the canvas can render without a backend round-trip. Crop
+/// joins the CSS-filter set because cropping commutes with per-pixel
+/// adjusts and is trivially renderable in CSS via container clipping —
+/// keeping it client-side avoids the multi-second backend round-trip
+/// (and the color-shift from the un-profiled PNG re-encode) that the
+/// numeric-input UI suffered from.
+export function isClientPreviewableOp(op: Operation): boolean {
+	return isCssFilterOp(op) || op.type === "crop";
+}
+
+/// Split the pipeline at the last op that *can't* be previewed in the
+/// browser. Backend renders everything up to and including that op;
+/// the trailing client-renderable ops (CSS filters + crop) apply on the
+/// canvas in real time. When `backendOps` is empty, the canvas can
+/// render the original directly with the client overlay on top — the
+/// hot path for slider/curve/crop edits, which never touches Rust.
 export function splitOps(ops: Operation[]): {
 	backendOps: Operation[];
 	cssOps: Operation[];
 } {
-	let lastNonCss = -1;
+	let lastNonClient = -1;
 	for (let i = ops.length - 1; i >= 0; i--) {
-		if (!isCssFilterOp(ops[i])) {
-			lastNonCss = i;
+		if (!isClientPreviewableOp(ops[i])) {
+			lastNonClient = i;
 			break;
 		}
 	}
-	if (lastNonCss === -1) return { backendOps: [], cssOps: ops };
+	if (lastNonClient === -1) return { backendOps: [], cssOps: ops };
 	return {
-		backendOps: ops.slice(0, lastNonCss + 1),
-		cssOps: ops.slice(lastNonCss + 1),
+		backendOps: ops.slice(0, lastNonClient + 1),
+		cssOps: ops.slice(lastNonClient + 1),
 	};
 }
 
@@ -103,6 +113,15 @@ interface EditorState {
 	/// the `\` peek/toggle keybind. The original is loaded as the initial
 	/// preview, so the canvas just stops re-rendering edits while this is on.
 	viewMode: "edited" | "original";
+	/// True while the user is interactively setting a crop rect. The
+	/// canvas swaps to a full-image view with a draggable rect overlay
+	/// instead of showing the cropped result.
+	cropEditMode: boolean;
+	/// Optional initial rect to seed the crop editor with, in image px.
+	/// Used by the aspect-ratio presets so the editor opens already
+	/// shaped to (e.g.) 16:9 rather than mirroring the existing crop.
+	/// Null falls back to the existing crop op, or the full image.
+	cropEditorInitial: { x: number; y: number; w: number; h: number } | null;
 	/// True after any op has landed; reset on load / save / reset.
 	dirty: boolean;
 
@@ -117,6 +136,13 @@ interface EditorState {
 	/// Replace the entire op list (used by redo restoring a full state).
 	setOps: (ops: Operation[]) => Promise<void>;
 	setViewMode: (mode: "edited" | "original") => void;
+	/// Toggle the crop editor. When opening, an optional initial rect
+	/// can be passed (e.g. from an aspect-ratio preset); when closing,
+	/// the initial override is cleared.
+	setCropEditMode: (
+		b: boolean,
+		initial?: { x: number; y: number; w: number; h: number } | null,
+	) => void;
 	reset: () => void;
 	/// Re-render the preview from the current `pendingOps`. Called
 	/// automatically by push/pop/setOps; exposed so the canvas can
@@ -133,6 +159,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 	previewing: false,
 	previewStale: false,
 	viewMode: "edited",
+	cropEditMode: false,
+	cropEditorInitial: null,
 	dirty: false,
 
 	load: async (path, name) => {
@@ -145,6 +173,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 			previewing: false,
 			previewStale: false,
 			viewMode: "edited",
+			cropEditMode: false,
+			cropEditorInitial: null,
 			dirty: false,
 		});
 		await get().refreshPreview();
@@ -178,6 +208,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
 	setViewMode: (mode) => set({ viewMode: mode }),
 
+	setCropEditMode: (b, initial) =>
+		set({
+			cropEditMode: b,
+			// On open: store the optional initial (may be null = use cropOp).
+			// On close: always clear so the next open starts clean.
+			cropEditorInitial: b ? (initial ?? null) : null,
+		}),
+
 	reset: () =>
 		set({
 			sourcePath: null,
@@ -188,6 +226,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 			previewing: false,
 			previewStale: false,
 			viewMode: "edited",
+			cropEditMode: false,
+			cropEditorInitial: null,
 			dirty: false,
 		}),
 
