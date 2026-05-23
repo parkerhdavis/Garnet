@@ -211,9 +211,17 @@ export function EditorPage() {
 	const originalSrc = asset ? convertFileSrc(absPath) : "";
 	const { backendOps, cssOps } = useMemo(() => splitOps(pendingOps), [pendingOps]);
 	const curveLut = useMemo(() => lastLutIn(cssOps), [cssOps]);
+	const wbScale = useMemo(() => accumulateWhiteBalance(cssOps), [cssOps]);
 	const cssFilter = useMemo(
-		() => (showingOriginal ? "" : cssFilterFor(cssOps, curveLut ? CURVE_FILTER_ID : null)),
-		[cssOps, curveLut, showingOriginal],
+		() =>
+			showingOriginal
+				? ""
+				: cssFilterFor(
+						cssOps,
+						curveLut ? CURVE_FILTER_ID : null,
+						wbScale ? WB_FILTER_ID : null,
+					),
+		[cssOps, curveLut, wbScale, showingOriginal],
 	);
 	const usingBackendPreview = !showingOriginal && backendOps.length > 0;
 	const canvasSrc = showingOriginal
@@ -302,10 +310,11 @@ export function EditorPage() {
 
 			<div className="flex-1 min-h-0 flex">
 				<div className="flex-1 min-w-0 flex items-center justify-center bg-base-300/30 p-4 relative">
-					{/* Inline SVG filter for the luminance-curve LUT. The img
-					    below references it via `filter: url(#...)`, which
-					    keeps curve previews on the GPU and at full resolution. */}
-					{curveLut && (
+					{/* Inline SVG filters for ops without a built-in CSS primitive:
+					    luminance curve as <feComponentTransfer>, white-balance
+					    temp+tint combined as a single channel-scale
+					    <feColorMatrix>. Both stay on the GPU at full resolution. */}
+					{(curveLut || wbScale) && (
 						<svg
 							aria-hidden
 							width={0}
@@ -313,13 +322,23 @@ export function EditorPage() {
 							style={{ position: "absolute", width: 0, height: 0 }}
 						>
 							<defs>
-								<filter id={CURVE_FILTER_ID} colorInterpolationFilters="sRGB">
-									<feComponentTransfer>
-										<feFuncR type="table" tableValues={lutToTableValues(curveLut)} />
-										<feFuncG type="table" tableValues={lutToTableValues(curveLut)} />
-										<feFuncB type="table" tableValues={lutToTableValues(curveLut)} />
-									</feComponentTransfer>
-								</filter>
+								{curveLut && (
+									<filter id={CURVE_FILTER_ID} colorInterpolationFilters="sRGB">
+										<feComponentTransfer>
+											<feFuncR type="table" tableValues={lutToTableValues(curveLut)} />
+											<feFuncG type="table" tableValues={lutToTableValues(curveLut)} />
+											<feFuncB type="table" tableValues={lutToTableValues(curveLut)} />
+										</feComponentTransfer>
+									</filter>
+								)}
+								{wbScale && (
+									<filter id={WB_FILTER_ID} colorInterpolationFilters="sRGB">
+										<feColorMatrix
+											type="matrix"
+											values={`${wbScale.r} 0 0 0 0  0 ${wbScale.g} 0 0 0  0 0 ${wbScale.b} 0 0  0 0 0 1 0`}
+										/>
+									</filter>
+								)}
 							</defs>
 						</svg>
 					)}
@@ -350,6 +369,12 @@ function normalizeFormat(ext: string): string {
 }
 
 const CURVE_FILTER_ID = "garnet-curve-lut";
+const WB_FILTER_ID = "garnet-wb-scale";
+
+/// Sensitivity factor matched to the backend's `apply_temperature` /
+/// `apply_tint` math so the live preview tracks what the commit pipeline
+/// will produce.
+const WB_K = 0.3;
 
 /// Translate the CSS-representable subset of adjust ops into a `filter:`
 /// chain. The math doesn't match the Rust pipeline exactly (CSS uses a
@@ -358,9 +383,13 @@ const CURVE_FILTER_ID = "garnet-curve-lut";
 /// written to disk always matches the operation spec, not the CSS
 /// approximation.
 ///
-/// `lutFilterId`, when provided, is appended as `url(#id)` so the inline
-/// SVG `<feComponentTransfer>` applies the luminance curve on the GPU.
-function cssFilterFor(ops: Operation[], lutFilterId: string | null): string {
+/// `lutFilterId` and `wbFilterId`, when non-null, are appended as
+/// `url(#id)` so their inline SVG filters apply on the GPU.
+function cssFilterFor(
+	ops: Operation[],
+	lutFilterId: string | null,
+	wbFilterId: string | null,
+): string {
 	const parts: string[] = [];
 	for (const op of ops) {
 		switch (op.type) {
@@ -376,11 +405,36 @@ function cssFilterFor(ops: Operation[], lutFilterId: string | null): string {
 			case "adjust_contrast":
 				if (op.amount !== 0) parts.push(`contrast(${1 + op.amount})`);
 				break;
-			// luminance_curve is handled via the SVG filter; nothing to push here.
+			// luminance_curve, adjust_temperature, adjust_tint are handled
+			// via their respective SVG filters below.
 		}
 	}
 	if (lutFilterId) parts.push(`url(#${lutFilterId})`);
+	if (wbFilterId) parts.push(`url(#${wbFilterId})`);
 	return parts.join(" ");
+}
+
+/// Fold all temperature + tint ops in the CSS slice into a single set
+/// of R/G/B channel multipliers, matching the backend's math. Returns
+/// null when nothing would change (avoids rendering a no-op filter).
+function accumulateWhiteBalance(
+	ops: Operation[],
+): { r: number; g: number; b: number } | null {
+	let r = 1;
+	let g = 1;
+	let b = 1;
+	let any = false;
+	for (const op of ops) {
+		if (op.type === "adjust_temperature" && op.amount !== 0) {
+			r *= 1 + WB_K * op.amount;
+			b *= 1 - WB_K * op.amount;
+			any = true;
+		} else if (op.type === "adjust_tint" && op.amount !== 0) {
+			g *= 1 - WB_K * op.amount;
+			any = true;
+		}
+	}
+	return any ? { r, g, b } : null;
 }
 
 /// Find the LUT from the last `luminance_curve` op in the CSS slice, if any.

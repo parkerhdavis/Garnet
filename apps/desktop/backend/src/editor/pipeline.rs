@@ -15,7 +15,10 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use super::adjust::{apply_brightness, apply_contrast, apply_hue, apply_luminance_curve, apply_saturation};
+use super::adjust::{
+	apply_brightness, apply_contrast, apply_hue, apply_luminance_curve, apply_saturation,
+	apply_temperature, apply_tint,
+};
 use super::io::{load_dynamic_image, maybe_resize, save_image};
 use super::transform::{corner_round, crop, resize, rotate};
 
@@ -79,6 +82,10 @@ pub enum Operation {
 	AdjustBrightness { offset: f32 },
 	/// Contrast amount in [-1, 1]; 0 is identity.
 	AdjustContrast { amount: f32 },
+	/// White-balance temperature in [-1, 1]; positive = warmer.
+	AdjustTemperature { amount: f32 },
+	/// White-balance tint in [-1, 1]; positive = magenta, negative = green.
+	AdjustTint { amount: f32 },
 	/// Arbitrary 256-entry luminance LUT.
 	LuminanceCurve { lut: Vec<u8> },
 	/// Axis-aligned crop.
@@ -115,6 +122,12 @@ fn apply_one(img: &DynamicImage, op: &Operation) -> Result<DynamicImage, String>
 		}
 		Operation::AdjustContrast { amount } => {
 			Ok(DynamicImage::ImageRgba8(apply_contrast(img.to_rgba8(), *amount)))
+		}
+		Operation::AdjustTemperature { amount } => {
+			Ok(DynamicImage::ImageRgba8(apply_temperature(img.to_rgba8(), *amount)))
+		}
+		Operation::AdjustTint { amount } => {
+			Ok(DynamicImage::ImageRgba8(apply_tint(img.to_rgba8(), *amount)))
 		}
 		Operation::LuminanceCurve { lut } => {
 			if lut.len() != 256 {

@@ -10,7 +10,6 @@ import {
 	HiArrowPath,
 	HiArrowUturnLeft,
 	HiArrowUturnRight,
-	HiChartBar,
 	HiScissors,
 	HiSparkles,
 	HiSquare2Stack,
@@ -31,21 +30,22 @@ export function EditorTools({ sourceDims }: { sourceDims: { w: number; h: number
 	return (
 		<aside className="w-72 shrink-0 border-l border-base-300 bg-base-100 overflow-y-auto">
 			<Section
-				title="Adjust"
+				title="Adjustments"
 				icon={<HiSwatch className="size-3.5" />}
+				last={!TRANSFORM_TOOLS_ENABLED}
 			>
 				<AdjustSlider type="adjust_hue" label="Hue" min={-180} max={180} step={1} unit="°" />
 				<AdjustSlider type="adjust_saturation" label="Saturation" min={-1} max={1} step={0.01} />
 				<AdjustSlider type="adjust_brightness" label="Brightness" min={-1} max={1} step={0.01} />
 				<AdjustSlider type="adjust_contrast" label="Contrast" min={-1} max={1} step={0.01} />
-			</Section>
-
-			<Section
-				title="Luminance curve"
-				icon={<HiChartBar className="size-3.5" />}
-				last={!TRANSFORM_TOOLS_ENABLED}
-			>
-				<CurveTool />
+				<AdjustSlider type="adjust_temperature" label="Temperature" min={-1} max={1} step={0.01} />
+				<AdjustSlider type="adjust_tint" label="Tint" min={-1} max={1} step={0.01} />
+				<div className="pt-2">
+					<div className="text-[10px] uppercase tracking-wider text-base-content/45 font-semibold mb-1.5">
+						Luminance curve
+					</div>
+					<CurveTool />
+				</div>
 			</Section>
 
 			{TRANSFORM_TOOLS_ENABLED && (
@@ -95,6 +95,22 @@ function Section({
 
 /** Wraps a numeric slider for an "adjust_*" op so the slider drag coalesces
  *  into one op and one undo entry. */
+type AdjustSliderType =
+	| "adjust_hue"
+	| "adjust_saturation"
+	| "adjust_brightness"
+	| "adjust_contrast"
+	| "adjust_temperature"
+	| "adjust_tint";
+
+/** Ops carry their value under `amount` vs `offset` depending on type;
+ *  centralize the mapping here so AdjustSlider can stay generic. */
+const AMOUNT_OPS = new Set<AdjustSliderType>([
+	"adjust_contrast",
+	"adjust_temperature",
+	"adjust_tint",
+]);
+
 function AdjustSlider({
 	type,
 	label,
@@ -103,7 +119,7 @@ function AdjustSlider({
 	step,
 	unit,
 }: {
-	type: "adjust_hue" | "adjust_saturation" | "adjust_brightness" | "adjust_contrast";
+	type: AdjustSliderType;
 	label: string;
 	min: number;
 	max: number;
@@ -115,13 +131,14 @@ function AdjustSlider({
 	const setOps = useEditorStore((s) => s.setOps);
 	const undoPush = useUndoStore((s) => s.push);
 
+	const isAmount = AMOUNT_OPS.has(type);
+
 	const currentValue = (() => {
 		for (let i = pendingOps.length - 1; i >= 0; i--) {
 			const op = pendingOps[i];
 			if (op.type === type) {
-				return type === "adjust_contrast"
-					? (op as Extract<Operation, { type: "adjust_contrast" }>).amount
-					: (op as Extract<Operation, { type: typeof type; offset: number }>).offset;
+				// biome-ignore lint/suspicious/noExplicitAny: discriminated union narrowing already done by op.type === type
+				return isAmount ? (op as any).amount : (op as any).offset;
 			}
 		}
 		return 0;
@@ -130,8 +147,20 @@ function AdjustSlider({
 	const beforeOpsRef = useRef<Operation[] | null>(null);
 
 	function makeOp(value: number): Operation {
-		if (type === "adjust_contrast") return { type, amount: value };
-		return { type, offset: value };
+		if (isAmount) return { type, amount: value } as Operation;
+		return { type, offset: value } as Operation;
+	}
+
+	function resetToDefault() {
+		const before = useEditorStore.getState().pendingOps;
+		const next = before.filter((o) => o.type !== type);
+		if (sameOps(before, next)) return;
+		void setOps(next);
+		undoPush({
+			description: `Reset ${label}`,
+			undo: () => setOps(before),
+			redo: () => setOps(next),
+		});
 	}
 
 	return (
@@ -150,7 +179,16 @@ function AdjustSlider({
 				max={max}
 				step={step}
 				value={currentValue}
-				onPointerDown={() => {
+				title="Ctrl+click to reset"
+				onPointerDown={(e) => {
+					// Ctrl/Cmd+click resets to default without first jumping
+					// the slider to the click position.
+					if (e.ctrlKey || e.metaKey) {
+						e.preventDefault();
+						e.stopPropagation();
+						resetToDefault();
+						return;
+					}
 					beforeOpsRef.current = useEditorStore.getState().pendingOps;
 				}}
 				onChange={(e) => {
@@ -443,6 +481,18 @@ function CornerRoundTool({ sourceDims }: { sourceDims: { w: number; h: number } 
 
 	const beforeOpsRef = useRef<Operation[] | null>(null);
 
+	function resetToDefault() {
+		const before = useEditorStore.getState().pendingOps;
+		const next = before.filter((o) => o.type !== "corner_round");
+		if (sameOps(before, next)) return;
+		void setOps(next);
+		undoPush({
+			description: "Reset corner round",
+			undo: () => setOps(before),
+			redo: () => setOps(next),
+		});
+	}
+
 	return (
 		<div>
 			<div className="flex items-center justify-between text-xs">
@@ -456,7 +506,14 @@ function CornerRoundTool({ sourceDims }: { sourceDims: { w: number; h: number } 
 				max={maxR}
 				step={1}
 				value={currentRadius}
-				onPointerDown={() => {
+				title="Ctrl+click to reset"
+				onPointerDown={(e) => {
+					if (e.ctrlKey || e.metaKey) {
+						e.preventDefault();
+						e.stopPropagation();
+						resetToDefault();
+						return;
+					}
 					beforeOpsRef.current = useEditorStore.getState().pendingOps;
 				}}
 				onChange={(e) => {
