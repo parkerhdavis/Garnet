@@ -12,6 +12,7 @@ import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { PLYLoader } from "three/addons/loaders/PLYLoader.js";
 import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
+import { USDLoader } from "three/addons/loaders/USDLoader.js";
 import { HiPause, HiPlay } from "react-icons/hi2";
 
 type ClipInfo = { name: string; index: number };
@@ -21,7 +22,7 @@ type LoadResult = {
 	animations: THREE.AnimationClip[];
 };
 
-type ModelKind = "gltf" | "obj" | "stl" | "ply" | "fbx";
+type ModelKind = "gltf" | "obj" | "stl" | "ply" | "fbx" | "usd";
 
 export type ModelStats = {
 	triangles: number;
@@ -43,10 +44,11 @@ export function isMeaningfulClip(clip: THREE.AnimationClip): boolean {
 }
 
 function detectKind(url: string): ModelKind | null {
-	const m = url.toLowerCase().match(/\.(gltf|glb|obj|stl|ply|fbx)(?:$|\?)/);
+	const m = url.toLowerCase().match(/\.(gltf|glb|obj|stl|ply|fbx|usd|usda|usdc|usdz)(?:$|\?)/);
 	if (!m) return null;
 	const ext = m[1];
 	if (ext === "gltf" || ext === "glb") return "gltf";
+	if (ext === "usd" || ext === "usda" || ext === "usdc" || ext === "usdz") return "usd";
 	return ext as ModelKind;
 }
 
@@ -681,6 +683,11 @@ async function loadByKind(url: string, kind: ModelKind): Promise<LoadResult> {
 				roughness: 0.6,
 			});
 			return { object: new THREE.Mesh(geom, mat), animations: [] };
+		}
+		case "usd": {
+			const loader = new USDLoader();
+			const group = await loader.loadAsync(url);
+			return { object: group, animations: group.animations ?? [] };
 		}
 	}
 }

@@ -35,6 +35,7 @@ import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { PLYLoader } from "three/addons/loaders/PLYLoader.js";
 import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
+import { USDLoader } from "three/addons/loaders/USDLoader.js";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "@/lib/tauri";
 import { isMeaningfulClip } from "@/components/ModelPreview";
@@ -42,7 +43,9 @@ import { isMeaningfulClip } from "@/components/ModelPreview";
 const IDLE_TEARDOWN_MS = 30_000;
 const IDLE_SCHEDULE_TIMEOUT_MS = 500;
 
-const MODEL_KINDS = ["gltf", "glb", "obj", "stl", "ply", "fbx"] as const;
+const MODEL_KINDS = [
+	"gltf", "glb", "obj", "stl", "ply", "fbx", "usd", "usda", "usdc", "usdz",
+] as const;
 type ModelKind = (typeof MODEL_KINDS)[number];
 
 type Job = {
@@ -99,6 +102,7 @@ class Thumbnailer {
 		stl: STLLoader;
 		ply: PLYLoader;
 		fbx: FBXLoader;
+		usd: USDLoader;
 	} | null = null;
 
 	/// Queue a thumbnail render. Returns a promise that resolves true if the
@@ -307,6 +311,7 @@ class Thumbnailer {
 			stl: new STLLoader(),
 			ply: new PLYLoader(),
 			fbx: new FBXLoader(),
+			usd: new USDLoader(),
 		};
 	}
 
@@ -351,6 +356,13 @@ class Thumbnailer {
 						roughness: 0.6,
 					});
 					return { object: new THREE.Mesh(geom, mat), animations: [] };
+				}
+				case "usd":
+				case "usda":
+				case "usdc":
+				case "usdz": {
+					const group = await loaders.usd.loadAsync(url);
+					return { object: group, animations: group.animations ?? [] };
 				}
 			}
 		} catch (e) {

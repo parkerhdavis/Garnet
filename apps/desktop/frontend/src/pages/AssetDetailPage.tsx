@@ -41,7 +41,9 @@ const RASTER_EXTS = new Set([
 const EDITABLE_EXTS = new Set([
 	"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp",
 ]);
-const MODEL_EXTS = new Set(["gltf", "glb", "obj", "stl", "ply", "fbx"]);
+const MODEL_EXTS = new Set([
+	"gltf", "glb", "obj", "stl", "ply", "fbx", "usd", "usda", "usdc", "usdz",
+]);
 const BLEND_EXTS = new Set(["blend"]);
 
 export function AssetDetailPage() {

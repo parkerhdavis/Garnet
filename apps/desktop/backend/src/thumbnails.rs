@@ -43,7 +43,8 @@ const VIDEO_FORMATS: &[&str] = &["mp4", "mov", "mkv", "avi", "webm", "m4v", "wmv
 /// 3D formats the frontend's Three.js thumbnailer can render. Listed here so
 /// `get_thumbnail` will return cached PNGs for these extensions even though
 /// the backend never generates them itself.
-const MODEL_FORMATS: &[&str] = &["gltf", "glb", "obj", "stl", "ply", "fbx"];
+const MODEL_FORMATS: &[&str] =
+	&["gltf", "glb", "obj", "stl", "ply", "fbx", "usd", "usda", "usdc", "usdz"];
 /// `.blend` files don't load into Three.js, so we extract the preview
 /// Blender embeds in the header (BGRA pixels in a `TEST` block) and treat
 /// that as the thumbnail. Generation happens here in Rust, not the
