@@ -42,11 +42,13 @@ const AUDIO_EXTS = new Set([
 	"mp3", "wav", "flac", "ogg", "aiff", "m4a", "opus",
 ]);
 const MODEL_EXTS = new Set([
-	"fbx", "obj", "gltf", "glb", "usd", "usdz", "stl", "blend", "dae", "3ds", "ply",
+	"fbx", "obj", "gltf", "glb", "usd", "usda", "usdc", "usdz", "stl", "blend", "dae", "3ds", "ply",
 ]);
 /// Subset the frontend's Three.js thumbnailer can render. Other model
 /// formats stay on the cube-icon fallback.
-const RENDERABLE_MODEL_EXTS = new Set(["gltf", "glb", "obj", "stl", "ply", "fbx"]);
+const RENDERABLE_MODEL_EXTS = new Set([
+	"gltf", "glb", "obj", "stl", "ply", "fbx", "usd", "usda", "usdc", "usdz",
+]);
 /// `.blend` doesn't render in Three.js, but the backend extracts the
 /// preview Blender saves into the file header. From the AssetThumbnail's
 /// perspective it's just another backend-thumbnail format like images.
