@@ -62,7 +62,7 @@ export function WorkingFolderFields({
 				<input
 					type="text"
 					className="input input-bordered input-sm w-full font-mono text-xs"
-					placeholder="e.g. png, tga, exr (blank = all images)"
+					placeholder="e.g. png tga exr, or mp3 flac (blank = all types)"
 					value={fileFilters}
 					onChange={(e) => onFileFilters(e.target.value)}
 				/>

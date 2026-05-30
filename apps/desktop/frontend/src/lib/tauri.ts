@@ -128,6 +128,9 @@ export type AssetQuery = {
 	formats?: string[];
 	formats_exclude?: string[];
 	path_search?: string | null;
+	/// Absolute folder path; scope results to assets at or beneath it. Used by
+	/// catalog-backed workspaces (base Library view, Music Library plugin).
+	under_path?: string | null;
 	size_min?: number | null;
 	size_max?: number | null;
 	mtime_from?: number | null;

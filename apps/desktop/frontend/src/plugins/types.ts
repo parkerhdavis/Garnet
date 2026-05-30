@@ -29,12 +29,16 @@ export interface WorkflowContribution {
 	/// Renders the workspace interior. Receives the workspace row so it can
 	/// read/write type-specific `config` and (later) scope to library assets.
 	Component: React.ComponentType<{ workspace: Workspace }>;
-	/// When true, the New Workspace dialog + Workspace Settings expose a
-	/// "working folder" + "file filters" for this type (a root OS directory the
-	/// workflow's file tools draw inputs from). File-based workflows (3D
-	/// Texturing) set this; library-backed ones (e.g. a future Music Library)
-	/// leave it off.
+	/// The working folder + file filters are a universal workspace capability,
+	/// shown for every type. Set this `false` only for a hypothetical type that
+	/// genuinely shouldn't offer them (none ship today). File-tool workflows (3D
+	/// Texturing) draw inputs from the folder; catalog-backed ones (Music
+	/// Library) use it to scope the library.
 	usesWorkingFolder?: boolean;
+	/// Pre-fills the New Workspace dialog's file-filters field when this type is
+	/// chosen (the user can still edit/clear it). Music Library sets the audio
+	/// extension list so a music workspace defaults to audio-only.
+	defaultFileFilters?: string;
 }
 
 /// Editor for one automation step's parameters. Receives the current params
