@@ -18,6 +18,7 @@ mod settings;
 mod startup_timing;
 mod thumbnails;
 mod watcher;
+mod workspaces;
 
 use asset_ops::{move_asset, move_file, rename_asset, restore_from_trash, trash_asset};
 use assets::{get_asset, list_asset_formats, list_assets};
@@ -39,6 +40,9 @@ use startup_timing::{
 };
 use std::sync::{Arc, Mutex};
 use thumbnails::{ensure_thumbnail, get_thumbnail, save_model_thumbnail};
+use workspaces::{
+	create_workspace, delete_workspace, list_workspaces, rename_workspace, update_workspace_config,
+};
 use tauri::Manager;
 use tracing_subscriber::EnvFilter;
 
@@ -240,6 +244,11 @@ fn main() {
 			get_media_port,
 			preview_edit,
 			commit_edit,
+			list_workspaces,
+			create_workspace,
+			rename_workspace,
+			update_workspace_config,
+			delete_workspace,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");

@@ -251,6 +251,18 @@ export const api = {
 	pinSource: (absPath: string, name?: string | null) =>
 		invoke<PinnedSource>("pin_source", { absPath, name: name ?? null }),
 	unpinSource: (id: number) => invoke<void>("unpin_source", { id }),
+	listWorkspaces: () => invoke<Workspace[]>("list_workspaces"),
+	createWorkspace: (name: string, type: string, icon?: string | null) =>
+		invoke<Workspace>("create_workspace", {
+			name,
+			workspaceType: type,
+			icon: icon ?? null,
+		}),
+	renameWorkspace: (id: number, name: string) =>
+		invoke<void>("rename_workspace", { id, name }),
+	updateWorkspaceConfig: (id: number, config: Record<string, unknown>) =>
+		invoke<void>("update_workspace_config", { id, config }),
+	deleteWorkspace: (id: number) => invoke<void>("delete_workspace", { id }),
 	listPlugins: () => invoke<PluginManifest[]>("list_plugins"),
 	getMediaPort: () => invoke<number>("get_media_port"),
 	renameAsset: (assetId: number, newName: string) =>

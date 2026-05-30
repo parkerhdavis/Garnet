@@ -19,6 +19,7 @@ import { EditorPage } from "@/pages/EditorPage";
 import { LibraryPage } from "@/pages/LibraryPage";
 import { PluginsPage } from "@/pages/PluginsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { WorkspaceRoute } from "@/pages/WorkspaceRoute";
 import {
 	AppAboutPage,
 	AutomationsPage,
@@ -52,6 +53,7 @@ export default function App() {
 						<Route path="edit/:id" element={<EditorPage />} />
 
 						<Route path="workspaces" element={<WorkspacesPage />} />
+						<Route path="workspaces/:id" element={<WorkspaceRoute />} />
 
 						<Route path="types/:kind" element={<LibraryPage />} />
 

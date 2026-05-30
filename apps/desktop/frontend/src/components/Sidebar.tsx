@@ -21,7 +21,7 @@
 //!
 //! Clicking the Garnet logo/title returns to the all-assets root view.
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink, Link, useNavigate, useParams } from "react-router-dom";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
@@ -40,6 +40,7 @@ import {
 	HiGlobeAlt,
 	HiInformationCircle,
 	HiMusicalNote,
+	HiPencilSquare,
 	HiPhoto,
 	HiPlus,
 	HiPuzzlePiece,
@@ -50,20 +51,76 @@ import {
 } from "react-icons/hi2";
 import { confirm } from "@/components/ConfirmDialog";
 import { openContextMenu } from "@/components/ContextMenu";
-import type { PinnedSource } from "@/lib/tauri";
+import { NewWorkspaceDialog } from "@/components/NewWorkspaceDialog";
+import { prompt } from "@/components/PromptDialog";
+import type { PinnedSource, Workspace } from "@/lib/tauri";
+import { workspaceTypeMeta } from "@/lib/workspaceTypes";
 import { useLibraryStore } from "@/stores/libraryStore";
 import { usePinnedSourcesStore } from "@/stores/pinnedSourcesStore";
+import { useWorkspacesStore } from "@/stores/workspacesStore";
 
 export function Sidebar() {
 	const { sources, refresh, pin, unpin, error: pinError } = usePinnedSourcesStore();
 	const roots = useLibraryStore((s) => s.roots);
+	const workspaces = useWorkspacesStore((s) => s.workspaces);
+	const refreshWorkspaces = useWorkspacesStore((s) => s.refresh);
+	const createWorkspace = useWorkspacesStore((s) => s.create);
+	const renameWorkspace = useWorkspacesStore((s) => s.rename);
+	const removeWorkspace = useWorkspacesStore((s) => s.remove);
 	const navigate = useNavigate();
 	const params = useParams<{ id?: string }>();
 	const activeSourceId = params.id ? Number(params.id) : null;
+	const [newWorkspaceOpen, setNewWorkspaceOpen] = useState(false);
 
 	useEffect(() => {
 		void refresh();
-	}, [refresh]);
+		void refreshWorkspaces();
+	}, [refresh, refreshWorkspaces]);
+
+	async function handleCreateWorkspace(name: string, type: string) {
+		const ws = await createWorkspace(name, type);
+		if (ws) navigate(`/workspaces/${ws.id}`);
+	}
+
+	async function handleRenameWorkspace(ws: Workspace) {
+		const next = await prompt({
+			title: "Rename workspace",
+			initialValue: ws.name,
+			confirmLabel: "Rename",
+			validate: (v) => (v.trim() ? null : "Name cannot be empty"),
+		});
+		if (next === null) return;
+		await renameWorkspace(ws.id, next.trim());
+	}
+
+	async function handleDeleteWorkspace(ws: Workspace) {
+		const ok = await confirm({
+			title: "Delete workspace?",
+			message: `"${ws.name}" will be removed. Your files and library are not affected.`,
+			confirmLabel: "Delete",
+			danger: true,
+		});
+		if (!ok) return;
+		if (params.id && Number(params.id) === ws.id) navigate("/", { replace: true });
+		await removeWorkspace(ws.id);
+	}
+
+	function handleWorkspaceContextMenu(event: React.MouseEvent, ws: Workspace) {
+		openContextMenu(event, [
+			{
+				label: "Rename…",
+				icon: HiPencilSquare,
+				onClick: () => handleRenameWorkspace(ws),
+			},
+			{ kind: "separator" },
+			{
+				label: "Delete",
+				icon: HiTrash,
+				danger: true,
+				onClick: () => handleDeleteWorkspace(ws),
+			},
+		]);
+	}
 
 	async function handleRemovePin(source: PinnedSource) {
 		const ok = await confirm({
@@ -142,7 +199,17 @@ export function Sidebar() {
 			<nav className="flex-1 overflow-y-auto py-3 px-2 divide-y divide-base-300 [&>*]:py-6 [&>*:first-child]:pt-1 [&>*:last-child]:pb-2">
 				<NavGroup title="Workspaces">
 					<ul className="flex flex-col gap-0.5 pl-1">
-						<NavAction icon={HiPlus} disabled>
+						{workspaces.map((w) => (
+							<NavItem
+								key={w.id}
+								to={`/workspaces/${w.id}`}
+								icon={workspaceTypeMeta(w.type).icon}
+								onContextMenu={(e) => handleWorkspaceContextMenu(e, w)}
+							>
+								{w.name}
+							</NavItem>
+						))}
+						<NavAction icon={HiPlus} onClick={() => setNewWorkspaceOpen(true)}>
 							New workspace
 						</NavAction>
 					</ul>
@@ -231,6 +298,12 @@ export function Sidebar() {
 				<span>Phase 1 — base toolkit</span>
 				<HiSquares2X2 className="size-3 opacity-60" />
 			</footer>
+
+			<NewWorkspaceDialog
+				open={newWorkspaceOpen}
+				onClose={() => setNewWorkspaceOpen(false)}
+				onCreate={handleCreateWorkspace}
+			/>
 		</aside>
 	);
 }
