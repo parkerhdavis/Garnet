@@ -310,6 +310,20 @@ export const api = {
 	/// absolute path (wrap in convertFileSrc) or null.
 	loadAlbumArt: (absPath: string, mtime: number | null, size?: number) =>
 		invoke<string | null>("load_album_art", { absPath, mtime, size }),
+	/// Waveform peaks (abs-max per bucket) for an audio file; computed +
+	/// cached on first call. Feeds wavesurfer's peaks-only render path.
+	getAudioPeaks: (absPath: string, mtime: number | null, buckets?: number) =>
+		invoke<number[]>("get_audio_peaks", { absPath, mtime, buckets }),
+	// Native audio transport (Music Library). The Rust engine owns playback;
+	// position/state come back as `audio:position` / `audio:state` events.
+	audioLoad: (path: string, volumeDb?: number) =>
+		invoke<void>("audio_load", { path, volumeDb: volumeDb ?? null }),
+	audioPlay: () => invoke<void>("audio_play"),
+	audioPause: () => invoke<void>("audio_pause"),
+	audioSeek: (positionSeconds: number) =>
+		invoke<void>("audio_seek", { positionSeconds }),
+	audioStop: () => invoke<void>("audio_stop"),
+	audioSetVolume: (volumeDb: number) => invoke<void>("audio_set_volume", { volumeDb }),
 	getMediaPort: () => invoke<number>("get_media_port"),
 	renameAsset: (assetId: number, newName: string) =>
 		invoke<AssetOpResult>("rename_asset", { assetId, newName }),

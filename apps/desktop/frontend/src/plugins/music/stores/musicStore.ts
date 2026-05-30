@@ -9,6 +9,8 @@ import { api, type MusicAlbum, type MusicLibrary, type MusicTrack } from "@/lib/
 
 export type MusicView = "albums" | "artists";
 
+export type PlaybackStatus = "idle" | "loaded" | "playing" | "paused" | "ended" | "error";
+
 export type MusicScope = {
 	underPath: string | null;
 	formats: string[] | null;
@@ -27,6 +29,9 @@ type MusicState = {
 	nowPlaying: MusicTrack | null;
 	queue: MusicTrack[];
 	queueIndex: number;
+	/// Mirrors the native player's status so the track list can show a
+	/// playing indicator without threading the player hook through the tree.
+	playbackStatus: PlaybackStatus;
 
 	load: (scope: MusicScope) => Promise<void>;
 	setView: (v: MusicView) => void;
@@ -38,6 +43,7 @@ type MusicState = {
 	prev: () => void;
 	hasNext: () => boolean;
 	hasPrev: () => boolean;
+	setPlaybackStatus: (s: PlaybackStatus) => void;
 };
 
 export const useMusicStore = create<MusicState>((set, get) => ({
@@ -49,6 +55,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 	nowPlaying: null,
 	queue: [],
 	queueIndex: -1,
+	playbackStatus: "idle",
 
 	load: async (scope) => {
 		set({ loading: true, error: null });
@@ -92,6 +99,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 		return queueIndex >= 0 && queueIndex + 1 < queue.length;
 	},
 	hasPrev: () => get().queueIndex > 0,
+
+	setPlaybackStatus: (playbackStatus) => set({ playbackStatus }),
 }));
 
 /// The album the user has drilled into, resolved against the loaded library.

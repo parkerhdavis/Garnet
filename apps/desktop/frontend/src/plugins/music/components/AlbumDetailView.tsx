@@ -13,6 +13,7 @@ export function AlbumDetailView({ album, onBack }: { album: MusicAlbum; onBack: 
 	const playTrack = useMusicStore((s) => s.playTrack);
 	const playAlbum = useMusicStore((s) => s.playAlbum);
 	const nowPlaying = useMusicStore((s) => s.nowPlaying);
+	const playbackStatus = useMusicStore((s) => s.playbackStatus);
 
 	return (
 		<div>
@@ -48,17 +49,20 @@ export function AlbumDetailView({ album, onBack }: { album: MusicAlbum; onBack: 
 			</header>
 
 			<ul className="p-2">
-				{album.tracks.map((track, i) => (
-					<li key={track.asset_id}>
-						<TrackRow
-							track={track}
-							index={i}
-							isCurrent={nowPlaying?.asset_id === track.asset_id}
-							isPlaying={false}
-							onPlay={() => playTrack(track, album.tracks)}
-						/>
-					</li>
-				))}
+				{album.tracks.map((track, i) => {
+					const isCurrent = nowPlaying?.asset_id === track.asset_id;
+					return (
+						<li key={track.asset_id}>
+							<TrackRow
+								track={track}
+								index={i}
+								isCurrent={isCurrent}
+								isPlaying={isCurrent && playbackStatus === "playing"}
+								onPlay={() => playTrack(track, album.tracks)}
+							/>
+						</li>
+					);
+				})}
 			</ul>
 		</div>
 	);
