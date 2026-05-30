@@ -343,12 +343,36 @@ function CurveTool() {
 	);
 
 	const beforeOpsRef = useRef<Operation[] | null>(null);
+	// True while a curve gesture is in progress, so the remount effect below
+	// can tell "the curve op just appeared because the user started dragging
+	// from identity" (don't remount — it would drop pointer capture and kill
+	// the drag) apart from "the curve appeared via undo/redo" (do remount).
+	const draggingRef = useRef(false);
+
+	// The editor keeps its control points in internal state, so we remount it
+	// (via `key`) to re-sync with the pipeline when the curve's presence
+	// changes for a reason *other* than the user starting a drag — i.e. the
+	// Reset button, or undo/redo crossing the curve. Keying on op-presence
+	// directly used to flip the key on the first drag tick (when the op first
+	// lands), remounting mid-gesture and freezing the curve after one move.
+	const [curveNonce, setCurveNonce] = useState(0);
+	const prevHasCurveRef = useRef(hasCurveOp);
+	useEffect(() => {
+		if (hasCurveOp !== prevHasCurveRef.current) {
+			if (!(hasCurveOp && draggingRef.current)) {
+				setCurveNonce((n) => n + 1);
+			}
+			prevHasCurveRef.current = hasCurveOp;
+		}
+	}, [hasCurveOp]);
 
 	function handleLive(points: CurvePoint[], lut: number[]) {
 		// First live tick of a gesture: snapshot the pre-edit op list so the
-		// commit handler can emit a single before→after undo entry.
+		// commit handler can emit a single before→after undo entry, and mark
+		// the gesture active so the remount effect leaves us mounted.
 		if (beforeOpsRef.current === null) {
 			beforeOpsRef.current = useEditorStore.getState().pendingOps;
+			draggingRef.current = true;
 		}
 		pointsRef.current = points;
 		void pushOp({ type: "luminance_curve", lut }, { replaceLastOfType: true });
@@ -357,6 +381,7 @@ function CurveTool() {
 	function handleCommit(points: CurvePoint[], lut: number[]) {
 		const before = beforeOpsRef.current;
 		beforeOpsRef.current = null;
+		draggingRef.current = false;
 		// Double-click add/remove fires commit without a prior live tick; in
 		// that case treat the current pendingOps as the before state.
 		const snapshot = before ?? useEditorStore.getState().pendingOps;
@@ -398,7 +423,7 @@ function CurveTool() {
 	return (
 		<div className="flex flex-col gap-2">
 			<CurveEditor
-				key={hasCurveOp ? "active" : "identity"}
+				key={curveNonce}
 				points={initialPoints}
 				width={224}
 				height={180}
