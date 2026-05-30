@@ -19,6 +19,42 @@ export const PAGE_SIZE = 60;
 
 export type ViewMode = "grid" | "list";
 
+/** The subset of library filter/sort state a Library workspace persists. Omits
+ *  root/pinned-source/page/viewMode — those are navigation context, not a
+ *  saved query. */
+export type SavedLibraryQuery = {
+	formats: string[];
+	tagNames: string[];
+	pathSearch: string;
+	sizeMin: number | null;
+	sizeMax: number | null;
+	mtimeFrom: number | null;
+	mtimeTo: number | null;
+	sortBy: AssetSortBy;
+	sortDir: SortDir;
+	groupBy: AssetGroupBy;
+	groupDir: SortDir;
+	typeKind: TypeKind | null;
+};
+
+/** A cleared query — applied when a Library workspace has no saved filter so
+ *  entering it starts from a clean slate rather than leaking the previous
+ *  view's filters. */
+export const EMPTY_LIBRARY_QUERY: SavedLibraryQuery = {
+	formats: [],
+	tagNames: [],
+	pathSearch: "",
+	sizeMin: null,
+	sizeMax: null,
+	mtimeFrom: null,
+	mtimeTo: null,
+	sortBy: "path",
+	sortDir: "asc",
+	groupBy: "none",
+	groupDir: "asc",
+	typeKind: null,
+};
+
 // Token for cancelling stale refresh() responses. Each refresh increments the
 // counter and remembers its own value; if the value at response time no
 // longer matches, the response is discarded. Without this, a slow earlier
@@ -77,6 +113,11 @@ type AssetsState = {
 	setPage: (page: number) => Promise<void>;
 	setViewMode: (mode: ViewMode) => void;
 	resetFilters: () => Promise<void>;
+	/** Snapshot the persistable filter/sort state (for saving to a workspace). */
+	snapshotFilters: () => SavedLibraryQuery;
+	/** Apply a saved query wholesale (clearing anything it doesn't specify) and
+	 *  refresh. Used when entering / leaving a Library workspace. */
+	applyFilters: (q: SavedLibraryQuery) => Promise<void>;
 	refresh: () => Promise<void>;
 };
 
@@ -213,6 +254,29 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 			mtimeTo: null,
 			page: 0,
 		});
+		await get().refresh();
+	},
+
+	snapshotFilters: () => {
+		const s = get();
+		return {
+			formats: [...s.formats],
+			tagNames: [...s.tagNames],
+			pathSearch: s.pathSearch,
+			sizeMin: s.sizeMin,
+			sizeMax: s.sizeMax,
+			mtimeFrom: s.mtimeFrom,
+			mtimeTo: s.mtimeTo,
+			sortBy: s.sortBy,
+			sortDir: s.sortDir,
+			groupBy: s.groupBy,
+			groupDir: s.groupDir,
+			typeKind: s.typeKind,
+		};
+	},
+
+	applyFilters: async (q) => {
+		set({ ...q, page: 0 });
 		await get().refresh();
 	},
 

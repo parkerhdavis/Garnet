@@ -7,6 +7,7 @@
 import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { HiPuzzlePiece } from "react-icons/hi2";
+import { LibraryWorkspaceView } from "@/components/LibraryWorkspaceView";
 import { LIBRARY_TYPE } from "@/lib/workspaceTypes";
 import { workflowForType } from "@/stores/pluginsStore";
 import { usePluginsStore } from "@/stores/pluginsStore";
@@ -36,15 +37,7 @@ export function WorkspaceRoute() {
 	}
 
 	if (workspace.type === LIBRARY_TYPE) {
-		// Minimal placeholder until the Library workspace interior lands.
-		return (
-			<div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
-				<h1 className="text-2xl font-semibold tracking-tight">{workspace.name}</h1>
-				<p className="text-sm text-base-content/60 mt-2 max-w-md">
-					Library workspace interior coming up next.
-				</p>
-			</div>
-		);
+		return <LibraryWorkspaceView workspace={workspace} />;
 	}
 
 	const workflow = workflowForType(workspace.type);
