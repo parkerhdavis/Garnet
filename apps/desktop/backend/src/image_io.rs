@@ -321,6 +321,19 @@ pub fn save_image(img: &DynamicImage, path: &str, format: &str) -> Result<(), St
 			.save(output_path)
 			.map_err(|e| format!("Failed to save JPEG: {}", e))?,
 		"exr" => save_exr(img, path)?,
+		"webp" => DynamicImage::ImageRgba8(img.to_rgba8())
+			.save_with_format(output_path, ImageFormat::WebP)
+			.map_err(|e| format!("Failed to save WebP: {}", e))?,
+		"bmp" => img
+			.to_rgb8()
+			.save(output_path)
+			.map_err(|e| format!("Failed to save BMP: {}", e))?,
+		"tiff" | "tif" => DynamicImage::ImageRgba8(img.to_rgba8())
+			.save_with_format(output_path, ImageFormat::Tiff)
+			.map_err(|e| format!("Failed to save TIFF: {}", e))?,
+		"gif" => DynamicImage::ImageRgba8(img.to_rgba8())
+			.save_with_format(output_path, ImageFormat::Gif)
+			.map_err(|e| format!("Failed to save GIF: {}", e))?,
 		_ => return Err(format!("Unsupported export format: {}", format)),
 	}
 

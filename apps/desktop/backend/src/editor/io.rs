@@ -1,75 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Image I/O helpers shared across editor tools. Slim subset of Packi's
-//! `image_io.rs` — Garnet doesn't pull in `exr`, so EXR is intentionally
-//! absent here. Add it to `Cargo.toml`'s `image` features (and re-add the
-//! EXR branches) if the editor ever needs to round-trip HDR.
+//! Image I/O for the editor. These are re-exports of the canonical
+//! `crate::image_io` module so there's a single loader/saver/resizer across the
+//! editor and the plugins (the 3D Texturing tools, Automations). `image_io`
+//! adds EXR/TGA on top of what the editor needs; the editor's own
+//! `SUPPORTED_EXTS` gate keeps unsupported inputs out regardless.
 
-use image::{DynamicImage, ImageFormat, ImageReader};
-use std::path::Path;
-
-/// Load a DynamicImage from a file path.
-pub fn load_dynamic_image(path: &str) -> Result<DynamicImage, String> {
-	let reader = ImageReader::open(path)
-		.map_err(|e| format!("Failed to open image: {}", e))?
-		.with_guessed_format()
-		.map_err(|e| format!("Failed to detect format: {}", e))?;
-	reader
-		.decode()
-		.map_err(|e| format!("Failed to decode image: {}", e))
-}
-
-/// Optionally downscale an image to fit within `max_size` on its longest axis.
-/// Used to keep preview round-trips cheap during slider drags.
-pub fn maybe_resize(img: DynamicImage, max_size: Option<u32>) -> DynamicImage {
-	if let Some(max) = max_size {
-		let (w, h) = (img.width(), img.height());
-		if w > max || h > max {
-			return img.resize(max, max, image::imageops::FilterType::CatmullRom);
-		}
-	}
-	img
-}
-
-/// Save a DynamicImage to disk. Format string is lowercased extension-ish
-/// ("png", "png16", "tga", "jpg"/"jpeg", "webp", "bmp", "tiff"). Formats
-/// that don't carry alpha (jpg, bmp) silently flatten the image.
-pub fn save_image(img: &DynamicImage, path: &str, format: &str) -> Result<(), String> {
-	let output_path = Path::new(path);
-	match format {
-		"png" | "png8" => img
-			.to_rgba8()
-			.save(output_path)
-			.map_err(|e| format!("Failed to save PNG: {}", e))?,
-		"png16" => img
-			.to_rgba16()
-			.save(output_path)
-			.map_err(|e| format!("Failed to save PNG 16-bit: {}", e))?,
-		"jpg" | "jpeg" => img
-			.to_rgb8()
-			.save(output_path)
-			.map_err(|e| format!("Failed to save JPEG: {}", e))?,
-		"webp" => DynamicImage::ImageRgba8(img.to_rgba8())
-			.save_with_format(output_path, ImageFormat::WebP)
-			.map_err(|e| format!("Failed to save WebP: {}", e))?,
-		"bmp" => img
-			.to_rgb8()
-			.save(output_path)
-			.map_err(|e| format!("Failed to save BMP: {}", e))?,
-		"tiff" | "tif" => DynamicImage::ImageRgba8(img.to_rgba8())
-			.save_with_format(output_path, ImageFormat::Tiff)
-			.map_err(|e| format!("Failed to save TIFF: {}", e))?,
-		"gif" => DynamicImage::ImageRgba8(img.to_rgba8())
-			.save_with_format(output_path, ImageFormat::Gif)
-			.map_err(|e| format!("Failed to save GIF: {}", e))?,
-		other => return Err(format!("Unsupported export format: {}", other)),
-	}
-	Ok(())
-}
+pub use crate::image_io::{load_dynamic_image, maybe_resize, save_image};
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use image::GenericImageView;
+	use image::{DynamicImage, GenericImageView};
 
 	fn solid(w: u32, h: u32, color: [u8; 4]) -> DynamicImage {
 		let mut img = image::RgbaImage::new(w, h);
