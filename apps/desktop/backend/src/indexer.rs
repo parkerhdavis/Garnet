@@ -77,6 +77,23 @@ pub fn scan_root(conn: &Connection, root_id: i64, root_path: &Path) -> rusqlite:
 	// O(1). Populated lazily once we've reduced `by_path` to "unseen" only.
 	let mut seen_ids: std::collections::HashSet<i64> = std::collections::HashSet::new();
 
+	// Asset ids in this root that already carry extracted metadata. Used to
+	// backfill files indexed *before* a given extractor existed: an unchanged
+	// file is otherwise skipped by the fast path forever, so audio assets
+	// catalogued before the audio-tag extractor landed would never get their
+	// `audio.*` rows. We re-extract for handled formats that have no rows yet.
+	let mut has_metadata: std::collections::HashSet<i64> = std::collections::HashSet::new();
+	{
+		let mut stmt = conn.prepare(
+			"SELECT DISTINCT m.asset_id FROM asset_metadata m
+			 JOIN assets a ON a.id = m.asset_id WHERE a.root_id = ?1",
+		)?;
+		let rows = stmt.query_map([root_id], |r| r.get::<_, i64>(0))?;
+		for id in rows {
+			has_metadata.insert(id?);
+		}
+	}
+
 	let tx = conn.unchecked_transaction()?;
 	{
 		for entry in WalkDir::new(root_path)
@@ -120,7 +137,17 @@ pub fn scan_root(conn: &Connection, root_id: i64, root_path: &Path) -> rusqlite:
 
 			if let Some(row) = existing {
 				if row.size == Some(size) && row.mtime == mtime {
-					// Unchanged — fast path.
+					// Unchanged — fast path. Backfill metadata if this asset has
+					// none yet but its format is one we now extract (catches
+					// files indexed before the audio-tag extractor existed).
+					if !has_metadata.contains(&row.id) {
+						if let Some(ext) = format.as_deref() {
+							if extracts_metadata(ext) {
+								refresh_metadata(&tx, row.id, abs, Some(ext))?;
+								report.metadata_extracted += 1;
+							}
+						}
+					}
 					seen_ids.insert(row.id);
 					continue;
 				}
@@ -317,6 +344,13 @@ const AUDIO_EXTS: &[&str] = &[
 	"mp3", "wav", "flac", "aac", "ogg", "oga", "m4a", "opus", "wma", "aif", "aiff", "ape", "ac3",
 ];
 
+/// Formats whose metadata `refresh_metadata` extracts (image dimensions / EXIF,
+/// audio tags). Gate for the unchanged-file metadata backfill.
+fn extracts_metadata(ext: &str) -> bool {
+	matches!(ext, "png" | "jpg" | "jpeg" | "gif" | "bmp" | "tif" | "tiff" | "webp")
+		|| AUDIO_EXTS.contains(&ext)
+}
+
 /// Read tags + duration from an audio file into `audio.*` metadata pairs.
 /// Returns None when the file has no readable tags/properties (e.g. unsupported
 /// container) so nothing is written. The mapping itself lives in the pure
@@ -337,7 +371,11 @@ fn read_audio_tags(path: &Path) -> Option<Vec<(&'static str, String)>> {
 			tag.genre().as_deref(),
 			tag.track(),
 			tag.disk(),
-			tag.get_string(ItemKey::Year).and_then(parse_year),
+			// MP3/ID3 stores the year in `Year`; FLAC/Vorbis uses `DATE`
+			// (lofty's `RecordingDate`). Try both.
+			tag.get_string(ItemKey::Year)
+				.or_else(|| tag.get_string(ItemKey::RecordingDate))
+				.and_then(parse_year),
 			tag.picture_count() > 0,
 		),
 		None => build_audio_pairs(
@@ -556,6 +594,45 @@ mod tests {
 			.query_row("SELECT COUNT(*) FROM asset_metadata", [], |r| r.get(0))
 			.unwrap();
 		assert_eq!(md_count, 0);
+	}
+
+	#[test]
+	fn backfills_metadata_for_unchanged_files_missing_it() {
+		// Simulates an asset indexed before an extractor existed: its row has
+		// no metadata, the file is unchanged, yet a rescan should re-extract.
+		let tmp = tempfile::tempdir().unwrap();
+		let png = tmp.path().join("a.png");
+		image::RgbaImage::from_pixel(8, 6, image::Rgba([1, 2, 3, 255]))
+			.save(&png)
+			.unwrap();
+		let conn = fresh_db();
+		let root_id = register_root(&conn, tmp.path());
+		scan_root(&conn, root_id, tmp.path()).unwrap();
+
+		let count = |c: &Connection| -> i64 {
+			c.query_row(
+				"SELECT COUNT(*) FROM asset_metadata WHERE key LIKE 'image.%'",
+				[],
+				|r| r.get(0),
+			)
+			.unwrap()
+		};
+		assert!(count(&conn) >= 2, "first scan extracts width+height");
+
+		// Wipe metadata to mimic a pre-extractor row, then rescan unchanged.
+		conn.execute("DELETE FROM asset_metadata", []).unwrap();
+		let r2 = scan_root(&conn, root_id, tmp.path()).unwrap();
+		assert_eq!(r2.files_updated, 0, "file is unchanged (fast path)");
+		assert!(count(&conn) >= 2, "metadata is backfilled on rescan");
+	}
+
+	#[test]
+	fn extracts_metadata_covers_audio_and_images() {
+		assert!(extracts_metadata("flac"));
+		assert!(extracts_metadata("m4a"));
+		assert!(extracts_metadata("png"));
+		assert!(!extracts_metadata("txt"));
+		assert!(!extracts_metadata("obj"));
 	}
 
 	#[test]
