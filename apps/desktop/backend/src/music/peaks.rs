@@ -70,8 +70,21 @@ fn cache_key(abs_path: &str, mtime: Option<i64>, buckets: usize) -> String {
 }
 
 /// Return waveform peaks for an audio file, computing + caching on first call.
+/// The decode is a full-file pass, so it runs on the blocking pool — never on a
+/// runtime worker — so it can't stall the lightweight transport commands
+/// (audio_play etc.) that need to fire the instant a track is double-clicked.
 #[tauri::command]
-pub fn get_audio_peaks(
+pub async fn get_audio_peaks(
+	abs_path: String,
+	mtime: Option<i64>,
+	buckets: Option<usize>,
+) -> Result<Vec<f32>, String> {
+	tauri::async_runtime::spawn_blocking(move || get_audio_peaks_sync(abs_path, mtime, buckets))
+		.await
+		.map_err(|e| format!("peaks task failed: {e}"))?
+}
+
+fn get_audio_peaks_sync(
 	abs_path: String,
 	mtime: Option<i64>,
 	buckets: Option<usize>,

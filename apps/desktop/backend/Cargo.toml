@@ -61,3 +61,24 @@ tempfile = "3"
 # automations responsive in `make dev` without optimizing the whole tree.
 [profile.dev.package.image]
 opt-level = 3
+
+# Symphonia audio decode is just as slow unoptimized — a full-file decode (for
+# waveform peaks on first play) takes several seconds in a debug build, which
+# stalls playback. Bump the codec/format crates so the Music player stays
+# responsive in `make dev`, scoped to the audio crates like `image` above.
+[profile.dev.package.symphonia-core]
+opt-level = 3
+[profile.dev.package.symphonia-bundle-flac]
+opt-level = 3
+[profile.dev.package.symphonia-bundle-mp3]
+opt-level = 3
+[profile.dev.package.symphonia-codec-aac]
+opt-level = 3
+[profile.dev.package.symphonia-codec-alac]
+opt-level = 3
+[profile.dev.package.symphonia-codec-vorbis]
+opt-level = 3
+[profile.dev.package.symphonia-format-isomp4]
+opt-level = 3
+[profile.dev.package.symphonia-format-ogg]
+opt-level = 3
