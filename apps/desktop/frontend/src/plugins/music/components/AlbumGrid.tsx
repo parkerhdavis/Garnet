@@ -7,9 +7,11 @@ import { AlbumCard } from "@/plugins/music/components/AlbumCard";
 export function AlbumGrid({
 	albums,
 	onSelect,
+	onArtist,
 }: {
 	albums: MusicAlbum[];
 	onSelect: (id: string) => void;
+	onArtist?: (artist: string) => void;
 }) {
 	return (
 		<div
@@ -17,7 +19,12 @@ export function AlbumGrid({
 			style={{ gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))" }}
 		>
 			{albums.map((album) => (
-				<AlbumCard key={album.id} album={album} onOpen={() => onSelect(album.id)} />
+				<AlbumCard
+					key={album.id}
+					album={album}
+					onOpen={() => onSelect(album.id)}
+					onArtist={onArtist}
+				/>
 			))}
 		</div>
 	);

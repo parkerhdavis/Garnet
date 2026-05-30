@@ -11,7 +11,15 @@ import { TRACK_GRID, TrackRow } from "@/plugins/music/components/TrackRow";
 import { albumSubtitle, isHiRes, qualityChips } from "@/plugins/music/lib/format";
 import { useMusicStore } from "@/plugins/music/stores/musicStore";
 
-export function AlbumDetailView({ album, onBack }: { album: MusicAlbum; onBack: () => void }) {
+export function AlbumDetailView({
+	album,
+	onBack,
+	onArtist,
+}: {
+	album: MusicAlbum;
+	onBack: () => void;
+	onArtist?: (artist: string) => void;
+}) {
 	const playTrack = useMusicStore((s) => s.playTrack);
 	const playAlbum = useMusicStore((s) => s.playAlbum);
 	const playAlbumShuffled = useMusicStore((s) => s.playAlbumShuffled);
@@ -51,7 +59,17 @@ export function AlbumDetailView({ album, onBack }: { album: MusicAlbum; onBack: 
 							Albums
 						</button>
 						<h1 className="truncate text-3xl font-bold leading-tight">{album.album}</h1>
-						<div className="truncate text-lg text-base-content/80">{album.album_artist}</div>
+						{onArtist ? (
+							<button
+								type="button"
+								onClick={() => onArtist(album.album_artist)}
+								className="block max-w-full truncate text-left text-lg text-base-content/80 hover:text-primary hover:underline"
+							>
+								{album.album_artist}
+							</button>
+						) : (
+							<div className="truncate text-lg text-base-content/80">{album.album_artist}</div>
+						)}
 						<div className="mt-1 text-xs text-base-content/55">
 							{albumSubtitle(album.track_count, album.total_duration_secs, album.year)}
 						</div>

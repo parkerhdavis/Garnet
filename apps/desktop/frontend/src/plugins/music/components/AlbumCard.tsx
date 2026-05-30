@@ -8,7 +8,15 @@ import type { MusicAlbum } from "@/lib/tauri";
 import { AlbumArt } from "@/plugins/music/components/AlbumArt";
 import { useMusicStore } from "@/plugins/music/stores/musicStore";
 
-export function AlbumCard({ album, onOpen }: { album: MusicAlbum; onOpen: () => void }) {
+export function AlbumCard({
+	album,
+	onOpen,
+	onArtist,
+}: {
+	album: MusicAlbum;
+	onOpen: () => void;
+	onArtist?: (artist: string) => void;
+}) {
 	const playAlbum = useMusicStore((s) => s.playAlbum);
 	return (
 		<div className="group flex flex-col gap-2">
@@ -28,10 +36,23 @@ export function AlbumCard({ album, onOpen }: { album: MusicAlbum; onOpen: () => 
 					<HiPlay className="size-5" />
 				</button>
 			</div>
-			<button type="button" onClick={onOpen} className="min-w-0 text-left">
-				<div className="truncate text-sm font-medium leading-tight">{album.album}</div>
-				<div className="truncate text-xs text-base-content/60">{album.album_artist}</div>
-			</button>
+			<div className="min-w-0">
+				<button type="button" onClick={onOpen} className="block w-full text-left">
+					<div className="truncate text-sm font-medium leading-tight">{album.album}</div>
+				</button>
+				{onArtist ? (
+					<button
+						type="button"
+						onClick={() => onArtist(album.album_artist)}
+						className="block max-w-full truncate text-left text-xs text-base-content/60 hover:text-primary hover:underline"
+						title={`Go to ${album.album_artist}`}
+					>
+						{album.album_artist}
+					</button>
+				) : (
+					<div className="truncate text-xs text-base-content/60">{album.album_artist}</div>
+				)}
+			</div>
 		</div>
 	);
 }
