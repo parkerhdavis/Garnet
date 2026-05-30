@@ -94,6 +94,24 @@ pub fn scan_root(conn: &Connection, root_id: i64, root_path: &Path) -> rusqlite:
 		}
 	}
 
+	// Audio assets that already carry the *current* audio extractor's output,
+	// keyed off the `audio.sample_rate` marker. Audio files without it are
+	// re-extracted even when otherwise unchanged — so assets indexed by an
+	// earlier extractor (e.g. before sample-rate/bit-depth/channels) pick up the
+	// new fields on the next scan, not just brand-new files.
+	let mut audio_indexed: std::collections::HashSet<i64> = std::collections::HashSet::new();
+	{
+		let mut stmt = conn.prepare(
+			"SELECT DISTINCT m.asset_id FROM asset_metadata m
+			 JOIN assets a ON a.id = m.asset_id
+			 WHERE a.root_id = ?1 AND m.key = 'audio.sample_rate'",
+		)?;
+		let rows = stmt.query_map([root_id], |r| r.get::<_, i64>(0))?;
+		for id in rows {
+			audio_indexed.insert(id?);
+		}
+	}
+
 	let tx = conn.unchecked_transaction()?;
 	{
 		for entry in WalkDir::new(root_path)
@@ -137,16 +155,18 @@ pub fn scan_root(conn: &Connection, root_id: i64, root_path: &Path) -> rusqlite:
 
 			if let Some(row) = existing {
 				if row.size == Some(size) && row.mtime == mtime {
-					// Unchanged — fast path. Backfill metadata if this asset has
-					// none yet but its format is one we now extract (catches
-					// files indexed before the audio-tag extractor existed).
-					if !has_metadata.contains(&row.id) {
-						if let Some(ext) = format.as_deref() {
-							if extracts_metadata(ext) {
-								refresh_metadata(&tx, row.id, abs, Some(ext))?;
-								report.metadata_extracted += 1;
-							}
-						}
+					// Unchanged — fast path. Backfill metadata for files indexed
+					// before (a newer version of) their extractor existed: audio
+					// files missing the current extractor's marker, or other
+					// handled formats with no metadata at all.
+					let needs_backfill = match format.as_deref() {
+						Some(ext) if AUDIO_EXTS.contains(&ext) => !audio_indexed.contains(&row.id),
+						Some(ext) if extracts_metadata(ext) => !has_metadata.contains(&row.id),
+						_ => false,
+					};
+					if needs_backfill {
+						refresh_metadata(&tx, row.id, abs, format.as_deref())?;
+						report.metadata_extracted += 1;
 					}
 					seen_ids.insert(row.id);
 					continue;
@@ -360,10 +380,14 @@ fn read_audio_tags(path: &Path) -> Option<Vec<(&'static str, String)>> {
 	use lofty::tag::{Accessor, ItemKey};
 
 	let tagged = lofty::read_from_path(path).ok()?;
-	let duration_secs = tagged.properties().duration().as_secs();
+	let props = tagged.properties();
+	let duration_secs = props.duration().as_secs();
+	let sample_rate = props.sample_rate();
+	let bit_depth = props.bit_depth();
+	let channels = props.channels();
 	let pairs = match tagged.primary_tag().or_else(|| tagged.first_tag()) {
 		Some(tag) => build_audio_pairs(
-			duration_secs,
+			AudioProps { duration_secs, sample_rate, bit_depth, channels },
 			tag.title().as_deref(),
 			tag.artist().as_deref(),
 			tag.album().as_deref(),
@@ -379,7 +403,16 @@ fn read_audio_tags(path: &Path) -> Option<Vec<(&'static str, String)>> {
 			tag.picture_count() > 0,
 		),
 		None => build_audio_pairs(
-			duration_secs, None, None, None, None, None, None, None, None, false,
+			AudioProps { duration_secs, sample_rate, bit_depth, channels },
+			None,
+			None,
+			None,
+			None,
+			None,
+			None,
+			None,
+			None,
+			false,
 		),
 	};
 	if pairs.is_empty() {
@@ -406,11 +439,22 @@ fn push_audio_str(out: &mut Vec<(&'static str, String)>, key: &'static str, val:
 	}
 }
 
+/// Codec/stream properties (independent of tags) lofty reads from the file.
+#[derive(Clone, Copy, Default)]
+struct AudioProps {
+	duration_secs: u64,
+	sample_rate: Option<u32>,
+	bit_depth: Option<u8>,
+	channels: Option<u8>,
+}
+
 /// Pure mapping from extracted tag fields to `audio.*` metadata pairs. Empty/
-/// whitespace strings and a zero duration are skipped so the row set stays lean.
+/// whitespace strings and zero numeric values are skipped so the row set stays
+/// lean. `audio.sample_rate` doubles as the marker that the current audio
+/// extractor has run (used to re-extract files indexed by an earlier version).
 #[allow(clippy::too_many_arguments)]
 fn build_audio_pairs(
-	duration_secs: u64,
+	props: AudioProps,
 	title: Option<&str>,
 	artist: Option<&str>,
 	album: Option<&str>,
@@ -422,8 +466,17 @@ fn build_audio_pairs(
 	has_cover: bool,
 ) -> Vec<(&'static str, String)> {
 	let mut out: Vec<(&'static str, String)> = Vec::new();
-	if duration_secs > 0 {
-		out.push(("audio.duration_secs", duration_secs.to_string()));
+	if props.duration_secs > 0 {
+		out.push(("audio.duration_secs", props.duration_secs.to_string()));
+	}
+	if let Some(sr) = props.sample_rate.filter(|v| *v > 0) {
+		out.push(("audio.sample_rate", sr.to_string()));
+	}
+	if let Some(bd) = props.bit_depth.filter(|v| *v > 0) {
+		out.push(("audio.bit_depth", bd.to_string()));
+	}
+	if let Some(ch) = props.channels.filter(|v| *v > 0) {
+		out.push(("audio.channels", ch.to_string()));
 	}
 	push_audio_str(&mut out, "audio.title", title);
 	push_audio_str(&mut out, "audio.artist", artist);
@@ -638,7 +691,12 @@ mod tests {
 	#[test]
 	fn builds_audio_pairs_from_full_tags() {
 		let pairs = build_audio_pairs(
-			215,
+			AudioProps {
+				duration_secs: 215,
+				sample_rate: Some(48000),
+				bit_depth: Some(24),
+				channels: Some(2),
+			},
 			Some("Song"),
 			Some("Artist"),
 			Some("Album"),
@@ -659,13 +717,16 @@ mod tests {
 		assert_eq!(map["audio.disc"], "1");
 		assert_eq!(map["audio.year"], "2001");
 		assert_eq!(map["audio.duration_secs"], "215");
+		assert_eq!(map["audio.sample_rate"], "48000");
+		assert_eq!(map["audio.bit_depth"], "24");
+		assert_eq!(map["audio.channels"], "2");
 		assert_eq!(map["audio.has_cover"], "1");
 	}
 
 	#[test]
 	fn audio_pairs_skip_empty_zero_and_false() {
 		let pairs = build_audio_pairs(
-			0,
+			AudioProps { duration_secs: 0, sample_rate: Some(0), bit_depth: None, channels: None },
 			Some("   "),
 			None,
 			Some("Album"),
@@ -678,6 +739,7 @@ mod tests {
 		);
 		let keys: Vec<_> = pairs.iter().map(|(k, _)| *k).collect();
 		assert!(!keys.contains(&"audio.duration_secs"), "zero duration omitted");
+		assert!(!keys.contains(&"audio.sample_rate"), "zero sample rate omitted");
 		assert!(!keys.contains(&"audio.title"), "whitespace-only title omitted");
 		assert!(!keys.contains(&"audio.has_cover"), "no cover omitted");
 		assert!(keys.contains(&"audio.album"));

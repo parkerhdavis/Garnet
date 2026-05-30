@@ -41,6 +41,9 @@ pub struct Track {
 	pub duration_secs: Option<u64>,
 	pub year: Option<u32>,
 	pub format: Option<String>,
+	pub sample_rate: Option<u32>,
+	pub bit_depth: Option<u32>,
+	pub channels: Option<u32>,
 	pub has_cover: bool,
 }
 
@@ -177,6 +180,9 @@ pub fn list_music_library_impl(
 				disc_no: get("audio.disc").and_then(|s| s.parse().ok()),
 				duration_secs: get("audio.duration_secs").and_then(|s| s.parse().ok()),
 				year: get("audio.year").and_then(|s| s.parse().ok()),
+				sample_rate: get("audio.sample_rate").and_then(|s| s.parse().ok()),
+				bit_depth: get("audio.bit_depth").and_then(|s| s.parse().ok()),
+				channels: get("audio.channels").and_then(|s| s.parse().ok()),
 				has_cover: md.map(|m| m.contains_key("audio.has_cover")).unwrap_or(false),
 				asset_id: id,
 				abs_path,
@@ -274,6 +280,9 @@ mod tests {
 			duration_secs: Some(180),
 			year: Some(2000),
 			format: Some("mp3".into()),
+			sample_rate: Some(44100),
+			bit_depth: Some(16),
+			channels: Some(2),
 			has_cover: false,
 		}
 	}
