@@ -52,17 +52,9 @@ export interface AutomationStepContribution {
 	group: "base" | string;
 	/// Fresh default params for a newly-added instance of this step.
 	defaultParams: () => Record<string, unknown>;
-	/// Controls for editing this step's params in the pipeline list.
-	ParamsEditor: AutomationStepParamsEditor;
-	/// Pure client-side preview of how this step rewrites a file's output
-	/// name/format — mirrors the backend so the "what will the output look
-	/// like" table updates without a round-trip. Omit for steps that don't
-	/// change the name or format (e.g. pixel-only ops).
-	transformPreview?: (
-		cur: { filename: string; format: string },
-		params: Record<string, unknown>,
-		ctx: { index: number },
-	) => { filename: string; format: string };
+	/// Controls for editing this step's params in the pipeline list. Omit for
+	/// param-less steps (e.g. flip-green, normalize).
+	ParamsEditor?: AutomationStepParamsEditor;
 }
 
 /// A first-party plugin compiled into Garnet. Registered at startup via a

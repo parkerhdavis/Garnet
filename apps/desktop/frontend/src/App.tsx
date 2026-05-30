@@ -16,13 +16,13 @@ import { AppKeybindsPage } from "@/pages/AppKeybindsPage";
 import { AppStatsPage } from "@/pages/AppStatsPage";
 import { AssetDetailPage } from "@/pages/AssetDetailPage";
 import { EditorPage } from "@/pages/EditorPage";
+import { AutomationsPage } from "@/pages/AutomationsPage";
 import { LibraryPage } from "@/pages/LibraryPage";
 import { PluginsPage } from "@/pages/PluginsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { WorkspaceRoute } from "@/pages/WorkspaceRoute";
 import {
 	AppAboutPage,
-	AutomationsPage,
 	SettingsAppearancePage,
 	SettingsGeneralPage,
 	WorkspacesPage,

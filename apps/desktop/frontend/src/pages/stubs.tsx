@@ -4,7 +4,6 @@
 //! the navigation shell feels real while the underlying behavior is built.
 
 import {
-	HiBolt,
 	HiCog6Tooth,
 	HiFolder,
 	HiInformationCircle,
@@ -22,16 +21,6 @@ export function WorkspacesPage() {
 			icon={HiSquares2X2}
 			description="User-defined collections that combine manually-added assets with filter-rule
                 automatic membership (e.g., 'every video in this folder')."
-		/>
-	);
-}
-
-export function AutomationsPage() {
-	return (
-		<StubPage
-			title="Automations"
-			icon={HiBolt}
-			description="Saved sequences of operations the user can name and reuse. Phase 2."
 		/>
 	);
 }
