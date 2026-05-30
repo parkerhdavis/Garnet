@@ -233,7 +233,7 @@ export function Sidebar() {
 				</div>
 			</Link>
 
-			<nav className="flex-1 overflow-y-auto py-3 px-2 divide-y divide-base-300 [&>*]:py-6 [&>*:first-child]:pt-1 [&>*:first-child]:pb-2 [&>*:last-child]:pb-2">
+			<nav className="flex-1 overflow-y-auto py-3 px-2 divide-y divide-base-300 [&>*]:py-6 [&>*:first-child]:pt-1 [&>*:first-child]:pb-3 [&>*:last-child]:pb-2">
 				{/* Ad-hoc open: deliberately above Workspaces and outside the
 				    Library group — it's a one-off "look at this loose file,"
 				    not a curation of the library (cf. Pin source). */}
