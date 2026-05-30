@@ -20,6 +20,8 @@ Garnet's base install is a basic multi-format DAM: it catalogs, previews, search
 
 ![Library browser grouped by format](.github/assets/garnet-screenshot-core-formatgroups.png)
 
+![Modal for adding custom workspaces](.github/assets/garnet-screenshot-core-workspaces.png)
+
 Register any number of folders as **library roots** and Garnet indexes them in place, tracking files across moves and renames by content hash and rescanning automatically as the folders change on disk.
 
 - Paginated grid or list view; **group** by folder, format, source, or date, and sort by any column
@@ -62,7 +64,7 @@ Build reusable batch pipelines and run them across many files at once: base step
 
 ## Plugin Features
 
-Plugins add per-format depth on top of the base. Each is first-party, compiles into the app, and is toggled on or off from the in-app plugin manager. Garnet ships with two today.
+Plugins add per-format depth on top of the base: new editing features, specialized automations, and even Workflows that offer totally unique UI/UX for plugin-typed Workspaces. Each is first-party, compiles into the app, and is toggled on or off from the in-app plugin manager. Garnet ships with two today.
 
 ### 3D Texturing
 
