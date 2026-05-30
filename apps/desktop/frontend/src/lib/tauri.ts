@@ -37,6 +37,28 @@ export type PluginManifest = {
 	};
 };
 
+/** Backend app settings (settings.json). Mirrors `settings::AppSettings`.
+ *  Window fields are managed by the backend; `enabled_plugins` is the
+ *  user-toggled set of compiled-in plugins (null = never configured). */
+export type AppSettings = {
+	window_width?: number | null;
+	window_height?: number | null;
+	enabled_plugins?: string[] | null;
+};
+
+/** A user-created workspace. `type` selects the interior: "library" for the
+ *  base filtered-view, or a plugin-provided workflow type (e.g. "texturing").
+ *  `config` is opaque type-specific JSON owned by the interior. */
+export type Workspace = {
+	id: number;
+	name: string;
+	type: string;
+	icon: string | null;
+	config: Record<string, unknown>;
+	sort_order: number;
+	created_at: number;
+};
+
 export type Asset = {
 	id: number;
 	root_id: number;
@@ -162,6 +184,8 @@ export type TrashResult = {
 };
 
 export const api = {
+	loadSettings: () => invoke<AppSettings>("load_settings"),
+	saveSettings: (settings: AppSettings) => invoke<void>("save_settings", { settings }),
 	registerLibraryRoot: (path: string) =>
 		invoke<LibraryRoot>("register_library_root", { path }),
 	listLibraryRoots: () => invoke<LibraryRoot[]>("list_library_roots"),

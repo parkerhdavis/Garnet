@@ -14,6 +14,13 @@ const SETTINGS_FILE: &str = "settings.json";
 pub struct AppSettings {
 	pub window_width: Option<u32>,
 	pub window_height: Option<u32>,
+	/// Ids of plugins the user has enabled. `None` means "never configured" —
+	/// the frontend applies its own default (see `pluginsStore`). The built-in
+	/// `core` pseudo-plugin is always on and is never listed here. Persisted so
+	/// enable/disable survives restarts; kept in settings rather than the
+	/// library DB because it's tiny app-global state, not per-library data.
+	#[serde(default)]
+	pub enabled_plugins: Option<Vec<String>>,
 }
 
 fn settings_path() -> Result<PathBuf, String> {
