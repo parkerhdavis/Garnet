@@ -116,6 +116,14 @@ interface EditorState {
 	/// flight. The handler re-fires `refreshPreview` once the in-flight
 	/// call resolves so transforms applied during a render don't get lost.
 	previewStale: boolean;
+	/// Monotonic generation token, bumped at the start of every
+	/// `refreshPreview`. A backend render captures the token before it
+	/// awaits and discards its result if the token has since moved on (a
+	/// newer edit) or the asset was switched/reset — so a slow or
+	/// out-of-order render can never clobber fresher state. (Backend renders
+	/// only happen when an op isn't client-previewable, which is none today,
+	/// so this is forward-looking insurance, not currently load-bearing.)
+	previewToken: number;
 	/// True when the canvas should render the original pixels — used by
 	/// the `\` peek/toggle keybind. The original is loaded as the initial
 	/// preview, so the canvas just stops re-rendering edits while this is on.
@@ -165,6 +173,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 	lastBackendOps: [],
 	previewing: false,
 	previewStale: false,
+	previewToken: 0,
 	viewMode: "edited",
 	cropEditMode: false,
 	cropEditorInitial: null,
@@ -191,8 +200,27 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 		const replace = opts?.replaceLastOfType === true;
 		const current = get().pendingOps;
 		let next: Operation[];
-		if (replace && current.length > 0 && current[current.length - 1].type === op.type) {
-			next = [...current.slice(0, -1), op];
+		if (replace) {
+			// Replace the last op of the SAME type wherever it sits in the
+			// pipeline — not only when it happens to be the trailing element.
+			// Slider/curve drags coalesce through here; if the user touched a
+			// different tool in between (so a different op is now last), the
+			// old "tail only" check appended a duplicate op of this type
+			// instead of replacing it, and the duplicates then compounded in
+			// the CSS filter chain (the image no longer matched the slider).
+			let idx = -1;
+			for (let i = current.length - 1; i >= 0; i--) {
+				if (current[i].type === op.type) {
+					idx = i;
+					break;
+				}
+			}
+			if (idx === -1) {
+				next = [...current, op];
+			} else {
+				next = current.slice();
+				next[idx] = op;
+			}
 		} else {
 			next = [...current, op];
 		}
@@ -239,6 +267,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 		}),
 
 	refreshPreview: async () => {
+		// Bump the generation token first thing. Any backend render already
+		// in flight captured an earlier token and will discard its result
+		// rather than overwrite the state this (newer) call produces. Cheap:
+		// the field isn't subscribed by any component, so this never renders.
+		const token = get().previewToken + 1;
+		set({ previewToken: token });
+
 		const { sourcePath, pendingOps, previewing, lastBackendOps, previewUrl } =
 			get();
 		if (!sourcePath) return;
@@ -280,11 +315,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 				maxPreviewSize: null,
 			});
 			const url = await mediaUrl(path);
-			set({
-				previewUrl: url,
-				lastBackendOps: backendOps,
-				previewing: false,
-			});
+			// Discard if a newer refresh superseded us while we were awaiting
+			// — a later edit (token moved on) or an asset switch/reset
+			// (sourcePath changed). Writing here would clobber fresher state
+			// with a stale (possibly wrong-asset) preview.
+			if (get().previewToken === token && get().sourcePath === sourcePath) {
+				set({
+					previewUrl: url,
+					lastBackendOps: backendOps,
+					previewing: false,
+				});
+			} else {
+				set({ previewing: false });
+			}
 		} catch (e) {
 			console.error("preview_edit failed:", e);
 			set({ previewing: false });
