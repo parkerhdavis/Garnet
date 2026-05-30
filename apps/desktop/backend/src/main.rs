@@ -18,6 +18,7 @@ mod pinned_sources;
 mod plugins;
 mod settings;
 mod startup_timing;
+mod texturing;
 mod thumbnails;
 mod watcher;
 mod workspaces;
@@ -44,6 +45,11 @@ use native_metadata::list_asset_metadata;
 use plugins::list_plugins;
 use pinned_sources::{list_pinned_sources, pin_source, unpin_source};
 use settings::{load_settings, save_settings};
+use texturing::{
+	blend_normals, delete_user_preset, export_normal_result, export_packed, export_swizzled,
+	export_unpacked, flip_normal_green, get_builtin_presets, height_to_normal, load_user_presets,
+	normalize_map, pack_channels, save_user_preset, swizzle_channels, unpack_channels,
+};
 use startup_timing::{
 	finalize_startup_timings, get_startup_timings, mark_startup_phase, StartupTimings,
 	StartupTimingsState,
@@ -271,6 +277,21 @@ fn main() {
 			save_automation_preset,
 			load_automation_presets,
 			delete_automation_preset,
+			pack_channels,
+			export_packed,
+			unpack_channels,
+			export_unpacked,
+			swizzle_channels,
+			export_swizzled,
+			flip_normal_green,
+			height_to_normal,
+			blend_normals,
+			normalize_map,
+			export_normal_result,
+			get_builtin_presets,
+			load_user_presets,
+			save_user_preset,
+			delete_user_preset,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");

@@ -38,7 +38,12 @@ pub enum AutomationStep {
 	},
 	#[serde(rename = "rename")]
 	Rename { pattern: String },
-	// The 3D Texturing plugin adds FlipGreen / Normalize variants here.
+	// Contributed by the 3D Texturing plugin; implemented via
+	// `crate::texturing::normal_map` in the executor.
+	#[serde(rename = "flip-green")]
+	FlipGreen,
+	#[serde(rename = "normalize")]
+	Normalize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,7 +102,9 @@ pub fn preview_automation(
 					output_name = apply_rename_pattern(pattern, stem, &output_format, idx);
 				}
 				// Pixel-only steps don't change the filename or format.
-				AutomationStep::Resize { .. } => {}
+				AutomationStep::Resize { .. }
+				| AutomationStep::FlipGreen
+				| AutomationStep::Normalize => {}
 			}
 		}
 
@@ -238,6 +245,16 @@ fn process_single_file(
 			}
 			AutomationStep::Rename { pattern } => {
 				output_name = apply_rename_pattern(pattern, stem, &output_ext, idx);
+			}
+			AutomationStep::FlipGreen => {
+				img = image::DynamicImage::ImageRgba8(
+					crate::texturing::normal_map::flip_green_on_image(img.to_rgba8()),
+				);
+			}
+			AutomationStep::Normalize => {
+				img = image::DynamicImage::ImageRgba8(
+					crate::texturing::normal_map::normalize_on_image(img.to_rgba8()),
+				);
 			}
 		}
 	}
