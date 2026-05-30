@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Helpers for the general workspace `config` fields. Two are cross-cutting
-//! (available to any workflow that opts in via `usesWorkingFolder`):
-//!   - `rootFolder` — a root OS directory the workflow's file tools draw from.
-//!   - `fileFilters` — a comma/space-separated extension list scoping which
-//!     files show in the working-folder browser (empty = all supported images).
+//! Helpers for the general workspace `config` fields. Two are cross-cutting and
+//! available to **every** workspace type (set in the New Workspace dialog and
+//! the Settings dialog):
+//!   - `rootFolder` — a root folder. File-tool workflows (3D Texturing) draw
+//!     inputs from it; catalog-backed workflows (the base Library view, the
+//!     Music Library) scope the library to assets beneath it.
+//!   - `fileFilters` — a comma/space-separated extension list. Scopes the
+//!     working-folder browser for file-tool workflows, and the catalog query
+//!     for catalog-backed ones (empty = all supported types).
 //! Workflow-specific keys (e.g. `texturing.outputDir`) are namespaced under the
 //! workflow id and read/written by that workflow.
 
@@ -33,4 +37,18 @@ export function parseFileFilters(filters: string | null): string[] | null {
 		.map((s) => s.trim().replace(/^\./, "").toLowerCase())
 		.filter(Boolean);
 	return exts.length > 0 ? exts : null;
+}
+
+/// Map a workspace's cross-cutting `rootFolder` + `fileFilters` to catalog-query
+/// scope params. `underPath` is an absolute folder (null = whole library);
+/// `formats` is the parsed extension allow-list (null = all types). Reused by
+/// the base Library workspace view and the Music Library plugin.
+export function workspaceScopeQuery(ws: Workspace): {
+	underPath: string | null;
+	formats: string[] | null;
+} {
+	return {
+		underPath: getWorkingFolder(ws),
+		formats: parseFileFilters(getFileFilters(ws)),
+	};
 }

@@ -85,6 +85,45 @@ export type AssetMetadata = {
 	value: string;
 };
 
+/** One audio track in the Music Library, derived from an audio asset + its
+ *  `audio.*` metadata. Field names mirror the Rust `music::Track`. */
+export type MusicTrack = {
+	asset_id: number;
+	abs_path: string;
+	title: string;
+	artist: string;
+	album: string;
+	album_artist: string;
+	track_no: number | null;
+	disc_no: number | null;
+	duration_secs: number | null;
+	year: number | null;
+	format: string | null;
+	sample_rate: number | null;
+	bit_depth: number | null;
+	channels: number | null;
+	has_cover: boolean;
+};
+
+/** An album: tracks grouped by (album_artist, album). `cover_abs_path` is a
+ *  representative track used to source the cover image. */
+export type MusicAlbum = {
+	id: string;
+	album: string;
+	album_artist: string;
+	year: number | null;
+	track_count: number;
+	total_duration_secs: number;
+	cover_asset_id: number;
+	cover_abs_path: string;
+	tracks: MusicTrack[];
+};
+
+export type MusicLibrary = {
+	albums: MusicAlbum[];
+	track_count: number;
+};
+
 /** A single user-editable metadata entry: one key plus an ordered list of
  *  values. Tags are not a separate type — they're just an entry whose key is
  *  the string `"tags"`. */
@@ -128,6 +167,9 @@ export type AssetQuery = {
 	formats?: string[];
 	formats_exclude?: string[];
 	path_search?: string | null;
+	/// Absolute folder path; scope results to assets at or beneath it. Used by
+	/// catalog-backed workspaces (base Library view, Music Library plugin).
+	under_path?: string | null;
 	size_min?: number | null;
 	size_max?: number | null;
 	mtime_from?: number | null;
@@ -264,6 +306,30 @@ export const api = {
 		invoke<void>("update_workspace_config", { id, config }),
 	deleteWorkspace: (id: number) => invoke<void>("delete_workspace", { id }),
 	listPlugins: () => invoke<PluginManifest[]>("list_plugins"),
+	/// Music Library: in-scope audio assets grouped into an album/artist tree.
+	listMusicLibrary: (underPath: string | null, formats: string[] | null) =>
+		invoke<MusicLibrary>("list_music_library", { underPath, formats }),
+	/// Resolve album art (embedded → folder cover); returns a cached PNG's
+	/// absolute path (wrap in convertFileSrc) or null.
+	loadAlbumArt: (absPath: string, mtime: number | null, size?: number) =>
+		invoke<string | null>("load_album_art", { absPath, mtime, size }),
+	/// Waveform peaks (abs-max per bucket) for an audio file; computed +
+	/// cached on first call. Feeds wavesurfer's peaks-only render path.
+	getAudioPeaks: (absPath: string, mtime: number | null, buckets?: number) =>
+		invoke<number[]>("get_audio_peaks", { absPath, mtime, buckets }),
+	/// Background-warm the peaks cache for a set of tracks so first-play is
+	/// instant. Fire-and-forget; skips already-cached files.
+	prewarmPeaks: (paths: string[]) => invoke<void>("prewarm_peaks", { paths }),
+	// Native audio transport (Music Library). The Rust engine owns playback;
+	// position/state come back as `audio:position` / `audio:state` events.
+	audioLoad: (path: string, volumeDb?: number) =>
+		invoke<void>("audio_load", { path, volumeDb: volumeDb ?? null }),
+	audioPlay: () => invoke<void>("audio_play"),
+	audioPause: () => invoke<void>("audio_pause"),
+	audioSeek: (positionSeconds: number) =>
+		invoke<void>("audio_seek", { positionSeconds }),
+	audioStop: () => invoke<void>("audio_stop"),
+	audioSetVolume: (volumeDb: number) => invoke<void>("audio_set_volume", { volumeDb }),
 	getMediaPort: () => invoke<number>("get_media_port"),
 	renameAsset: (assetId: number, newName: string) =>
 		invoke<AssetOpResult>("rename_asset", { assetId, newName }),

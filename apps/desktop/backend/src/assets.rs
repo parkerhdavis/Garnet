@@ -175,6 +175,12 @@ pub struct AssetQuery {
 	pub formats_exclude: Vec<String>,
 	#[serde(default)]
 	pub path_search: Option<String>,
+	/// Absolute folder path. When set, scope to assets whose full path
+	/// (`root_path/relative_path`) is at or beneath this folder. Used by
+	/// catalog-backed workspaces (the base Library view, the Music Library
+	/// plugin) to limit a workspace to a chosen subtree of the library.
+	#[serde(default)]
+	pub under_path: Option<String>,
 	#[serde(default)]
 	pub size_min: Option<i64>,
 	#[serde(default)]
@@ -304,6 +310,21 @@ fn where_clause(
 		if !s.is_empty() {
 			sql.push_str(" AND a.relative_path LIKE ? COLLATE NOCASE");
 			params.push(Box::new(format!("%{s}%")));
+		}
+	}
+
+	// Scope to a folder subtree: the asset's full path (root + relative) must
+	// equal the folder or sit beneath it. Trailing slashes are normalized so
+	// `/music` and `/music/` behave identically.
+	if let Some(folder) = &q.under_path {
+		let f = folder.trim_end_matches('/');
+		if !f.is_empty() {
+			sql.push_str(
+				" AND ((r.path || '/' || a.relative_path) = ? \
+				  OR (r.path || '/' || a.relative_path) LIKE ? || '/%')",
+			);
+			params.push(Box::new(f.to_string()));
+			params.push(Box::new(f.to_string()));
 		}
 	}
 
@@ -556,6 +577,7 @@ mod tests {
 			formats: Vec::new(),
 			formats_exclude: Vec::new(),
 			path_search: None,
+			under_path: None,
 			size_min: None,
 			size_max: None,
 			mtime_from: None,
@@ -732,6 +754,36 @@ mod tests {
 		q.path_search = Some("DOCS".into());
 		let page = list_assets_impl(&conn, &q).unwrap();
 		assert_eq!(page.total, 1);
+	}
+
+	#[test]
+	fn under_path_scopes_to_folder() {
+		// /tmp/r1 holds sub/c.png; scoping to /tmp/r1/sub yields only it.
+		let conn = fresh_db();
+		let mut q = default_query();
+		q.under_path = Some("/tmp/r1/sub".into());
+		let page = list_assets_impl(&conn, &q).unwrap();
+		assert_eq!(page.total, 1);
+		assert!(page.assets[0].relative_path.starts_with("sub"));
+	}
+
+	#[test]
+	fn under_path_root_matches_all_in_root() {
+		let conn = fresh_db();
+		let mut q = default_query();
+		q.under_path = Some("/tmp/r1".into());
+		let page = list_assets_impl(&conn, &q).unwrap();
+		assert_eq!(page.total, 5);
+		assert!(page.assets.iter().all(|a| a.root_id == 1));
+	}
+
+	#[test]
+	fn under_path_trailing_slash_normalized() {
+		let conn = fresh_db();
+		let mut q = default_query();
+		q.under_path = Some("/tmp/r1/".into());
+		let page = list_assets_impl(&conn, &q).unwrap();
+		assert_eq!(page.total, 5);
 	}
 
 	#[test]

@@ -26,6 +26,9 @@ export type SavedLibraryQuery = {
 	formats: string[];
 	tagNames: string[];
 	pathSearch: string;
+	/// Absolute folder the view is scoped to (null = whole library). Set by a
+	/// Library workspace from its `rootFolder` config; not part of the FilterBar.
+	underPath: string | null;
 	sizeMin: number | null;
 	sizeMax: number | null;
 	mtimeFrom: number | null;
@@ -44,6 +47,7 @@ export const EMPTY_LIBRARY_QUERY: SavedLibraryQuery = {
 	formats: [],
 	tagNames: [],
 	pathSearch: "",
+	underPath: null,
 	sizeMin: null,
 	sizeMax: null,
 	mtimeFrom: null,
@@ -73,6 +77,9 @@ type AssetsState = {
 	 *  Null when not on a /types/:kind route. */
 	typeKind: TypeKind | null;
 	pathSearch: string;
+	/// Folder scope (null = whole library). Driven by a Library workspace's
+	/// rootFolder; cleared when leaving the workspace.
+	underPath: string | null;
 	sizeMin: number | null;
 	sizeMax: number | null;
 	mtimeFrom: number | null;
@@ -128,6 +135,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 	pinnedSourceId: null,
 	typeKind: null,
 	pathSearch: "",
+	underPath: null,
 	sizeMin: null,
 	sizeMax: null,
 	mtimeFrom: null,
@@ -263,6 +271,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 			formats: [...s.formats],
 			tagNames: [...s.tagNames],
 			pathSearch: s.pathSearch,
+			underPath: s.underPath,
 			sizeMin: s.sizeMin,
 			sizeMax: s.sizeMax,
 			mtimeFrom: s.mtimeFrom,
@@ -306,6 +315,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 					exclude_motion_only: typeQuery.exclude_motion_only,
 					motion_only_overlay: typeQuery.motion_only_overlay,
 					path_search: s.pathSearch.trim() || null,
+					under_path: s.underPath,
 					size_min: s.sizeMin,
 					size_max: s.sizeMax,
 					mtime_from: s.mtimeFrom,

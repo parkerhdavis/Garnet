@@ -109,7 +109,13 @@ export function NewWorkspaceDialog({
 									key={t.type}
 									meta={t}
 									selected={type === t.type}
-									onSelect={() => setType(t.type)}
+									onSelect={() => {
+										setType(t.type);
+										// Pre-fill filters with the type's default (e.g.
+										// audio extensions for Music Library); the user
+										// can still edit or clear them.
+										setFileFilters(t.defaultFileFilters ?? "");
+									}}
 								/>
 							))}
 						</div>

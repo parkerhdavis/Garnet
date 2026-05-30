@@ -42,7 +42,10 @@ const VIDEO_FORMATS = [
 	"mpg", "mpeg", "3gp", "vob", "mts", "m2ts", "ogv", "ts",
 ];
 
-const AUDIO_FORMATS = [
+/// Audio file extensions. Exported so the Music Library plugin can pre-fill a
+/// music workspace's file filters from the same canonical list the Audio type
+/// view uses.
+export const AUDIO_FORMATS = [
 	"mp3", "wav", "flac", "aac", "ogg", "oga", "m4a", "opus", "wma",
 	"aif", "aiff", "ape", "ac3", "mid", "midi",
 ];

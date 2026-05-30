@@ -124,7 +124,7 @@ ifeq ($(DETECTED_OS),linux)
 	@echo ""
 	@echo "Checking Linux system dependencies for Tauri (build)..."
 	@MISSING=""; \
-	for p in libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev; do \
+	for p in libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev; do \
 		if ! dpkg-query -W -f='$${Status}' "$$p" 2>/dev/null | grep -q "install ok installed"; then \
 			MISSING="$$MISSING $$p"; \
 		fi; \

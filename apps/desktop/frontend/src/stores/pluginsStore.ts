@@ -12,6 +12,7 @@ import { create } from "zustand";
 import { api } from "@/lib/tauri";
 import {
 	allAutomationSteps,
+	allGlobals,
 	allWorkflows,
 } from "@/plugins/registry";
 import type {
@@ -24,10 +25,9 @@ import type {
 const ALWAYS_ON = new Set(["core"]);
 
 /// Applied when `enabled_plugins` is null (fresh install / never configured).
-/// The 3D Texturing plugin ships on so its functionality is discoverable out
-/// of the box; users can disable it from the Plugins page. (Flipping this to
-/// opt-in is a one-line change — see the commit-10 default-enabled decision.)
-const DEFAULT_ENABLED = ["texturing"];
+/// First-party plugins ship on so their functionality is discoverable out of
+/// the box; users can disable any of them from the Plugins page.
+const DEFAULT_ENABLED = ["texturing", "music"];
 
 type PluginsState = {
 	/// User-configurable enabled ids (excludes always-on `core`). A new Set
@@ -88,6 +88,15 @@ export function enabledAutomationSteps(): AutomationStepContribution[] {
 	return allAutomationSteps()
 		.filter((s) => isEnabled(s.pluginId))
 		.map((s) => s.contribution);
+}
+
+/// Always-mounted global components for enabled plugins. Components that need to
+/// update on toggle should subscribe to `usePluginsStore(s => s.enabledIds)`.
+export function enabledGlobals(): React.ComponentType[] {
+	const isEnabled = usePluginsStore.getState().isEnabled;
+	return allGlobals()
+		.filter((g) => isEnabled(g.pluginId))
+		.map((g) => g.contribution);
 }
 
 /// The enabled workflow for a given workspace type, or undefined if no plugin

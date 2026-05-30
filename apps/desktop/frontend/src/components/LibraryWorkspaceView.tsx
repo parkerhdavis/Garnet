@@ -10,6 +10,11 @@ import { HiBookmark, HiBookmarkSlash } from "react-icons/hi2";
 import { LibraryBrowser } from "@/components/LibraryBrowser";
 import type { Workspace } from "@/lib/tauri";
 import {
+	getFileFilters,
+	getWorkingFolder,
+	workspaceScopeQuery,
+} from "@/lib/workspaceConfig";
+import {
 	EMPTY_LIBRARY_QUERY,
 	type SavedLibraryQuery,
 	useAssetsStore,
@@ -23,6 +28,19 @@ function savedQueryOf(workspace: Workspace): SavedLibraryQuery | null {
 	return q && typeof q === "object" ? (q as SavedLibraryQuery) : null;
 }
 
+/// The query to apply on entering this workspace: its saved filter (if any),
+/// scoped by the universal working folder + file filters. A saved format
+/// filter wins; otherwise the workspace's file filters scope the catalog.
+function effectiveQuery(workspace: Workspace): SavedLibraryQuery {
+	const base = savedQueryOf(workspace) ?? EMPTY_LIBRARY_QUERY;
+	const scope = workspaceScopeQuery(workspace);
+	return {
+		...base,
+		underPath: scope.underPath,
+		formats: base.formats.length ? base.formats : (scope.formats ?? []),
+	};
+}
+
 export function LibraryWorkspaceView({ workspace }: { workspace: Workspace }) {
 	const applyFilters = useAssetsStore((s) => s.applyFilters);
 	const refreshRoots = useLibraryStore((s) => s.refresh);
@@ -33,16 +51,21 @@ export function LibraryWorkspaceView({ workspace }: { workspace: Workspace }) {
 		void refreshRoots();
 	}, [refreshRoots]);
 
-	// Apply this workspace's saved filter on enter; reset to a clean slate on
-	// leave so the workspace's filter doesn't leak into the global library view.
-	// Keyed on workspace.id so switching workspaces re-applies.
+	// Apply this workspace's saved filter + folder scope on enter; reset to a
+	// clean slate on leave so it doesn't leak into the global library view.
+	// Re-applies when the identity OR the scope/saved-filter config changes
+	// (e.g. the user edits the working folder from the Settings dialog).
+	const scopeKey = JSON.stringify({
+		root: getWorkingFolder(workspace),
+		filters: getFileFilters(workspace),
+		saved: savedQueryOf(workspace),
+	});
 	useEffect(() => {
-		void applyFilters(savedQueryOf(workspace) ?? EMPTY_LIBRARY_QUERY);
+		void applyFilters(effectiveQuery(workspace));
 		return () => {
 			void applyFilters(EMPTY_LIBRARY_QUERY);
 		};
-		// Re-run when the workspace identity changes, not on every config tweak.
-	}, [workspace.id, applyFilters]);
+	}, [workspace.id, scopeKey, applyFilters]);
 
 	async function handleSaveFilter() {
 		const savedQuery = useAssetsStore.getState().snapshotFilters();

@@ -1,0 +1,23 @@
+{
+	"$schema": "https://garnet.dev/schemas/plugin-manifest-v0.json",
+	"identity": "com.parkerhdavis.garnet.music",
+	"version": "0.1.0",
+	"name": "Music Library",
+	"description": "Browse your audio library by album and artist, with a built-in native-audio player and waveform. Catalog-backed: it reads the indexed audio assets (tagged by the base indexer) rather than an OS folder. Garnet's second plugin, compiled into the base binary; this manifest is a descriptive mirror of the frontend registration in apps/desktop/frontend/src/plugins/music/ and the native commands in apps/desktop/backend/src/music/.",
+	"contributions": {
+		"formats": [],
+		"previewers": [],
+		"operations": [],
+		"pipelines": [],
+		"search_facets": [],
+		"settings": [],
+		"workflows": [
+			{
+				"type": "music",
+				"label": "Music Library",
+				"tools": ["albums", "artists", "player"]
+			}
+		],
+		"automation_steps": []
+	}
+}
