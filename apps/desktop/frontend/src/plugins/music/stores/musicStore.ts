@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! State for the Music Library workflow: the loaded album/artist tree, the
-//! browse view, and the now-playing track + queue. Transport status itself
-//! comes from the native player hook (`useNativeAudio`); this store only tracks
-//! *what* should be playing and the queue for next/previous.
+//! State for the Music Library: the loaded album/artist tree, the browse view,
+//! and playback (now-playing + queue, shuffle, repeat). The queue uses an
+//! order-index model — `queue` holds the base track order and `order` is a
+//! permutation of indices into it — so toggling shuffle just rebuilds `order`
+//! while keeping the current track, and repeat is a property of advancing.
+//! Transport status itself comes from the native player hook; this store tracks
+//! *what* should play and the order.
 
 import { create } from "zustand";
 import { api, type MusicAlbum, type MusicLibrary, type MusicTrack } from "@/lib/tauri";
@@ -11,37 +14,76 @@ export type MusicView = "albums" | "artists";
 
 export type PlaybackStatus = "idle" | "loaded" | "playing" | "paused" | "ended" | "error";
 
+export type RepeatMode = "off" | "all" | "one";
+
 export type MusicScope = {
 	underPath: string | null;
 	formats: string[] | null;
 };
+
+function identityOrder(n: number): number[] {
+	return Array.from({ length: n }, (_, i) => i);
+}
+
+/// A shuffled permutation of [0, n) with `first` placed at the front, so play
+/// continues from the current track when shuffle is turned on.
+function shuffledOrder(n: number, first: number): number[] {
+	const rest: number[] = [];
+	for (let i = 0; i < n; i++) if (i !== first) rest.push(i);
+	for (let i = rest.length - 1; i > 0; i--) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[rest[i], rest[j]] = [rest[j], rest[i]];
+	}
+	return [first, ...rest];
+}
+
+type Playback = {
+	queue: MusicTrack[];
+	order: number[];
+	orderPos: number;
+	nowPlaying: MusicTrack | null;
+};
+
+function buildPlayback(tracks: MusicTrack[], startIndex: number, shuffle: boolean): Playback {
+	const n = tracks.length;
+	if (n === 0) return { queue: [], order: [], orderPos: -1, nowPlaying: null };
+	const idx = Math.max(0, Math.min(startIndex, n - 1));
+	const order = shuffle ? shuffledOrder(n, idx) : identityOrder(n);
+	const orderPos = shuffle ? 0 : idx;
+	return { queue: tracks, order, orderPos, nowPlaying: tracks[order[orderPos]] };
+}
 
 type MusicState = {
 	library: MusicLibrary | null;
 	loading: boolean;
 	error: string | null;
 	view: MusicView;
-	/// Album the user has drilled into (null = grid). Resolved against the
-	/// loaded library by `useSelectedAlbum`.
+	/// Album the user has drilled into (null = grid).
 	selectedAlbumId: string | null;
 
-	// Now-playing + queue (consumed by the PlayerBar).
-	nowPlaying: MusicTrack | null;
+	// Playback
 	queue: MusicTrack[];
-	queueIndex: number;
-	/// Mirrors the native player's status so the track list can show a
-	/// playing indicator without threading the player hook through the tree.
+	order: number[];
+	orderPos: number;
+	nowPlaying: MusicTrack | null;
+	shuffle: boolean;
+	repeat: RepeatMode;
 	playbackStatus: PlaybackStatus;
+	queueOpen: boolean;
 
 	load: (scope: MusicScope) => Promise<void>;
 	setView: (v: MusicView) => void;
 	selectAlbum: (id: string | null) => void;
-	/// Start a track within a queue (typically its album's track list).
-	playTrack: (track: MusicTrack, queue: MusicTrack[]) => void;
+
+	playTrack: (track: MusicTrack, tracks: MusicTrack[]) => void;
 	playAlbum: (album: MusicAlbum) => void;
 	playAlbumShuffled: (album: MusicAlbum) => void;
+	toggleShuffle: () => void;
+	cycleRepeat: () => void;
+	toggleQueue: () => void;
 	next: () => void;
 	prev: () => void;
+	jumpTo: (orderPos: number) => void;
 	hasNext: () => boolean;
 	hasPrev: () => boolean;
 	setPlaybackStatus: (s: PlaybackStatus) => void;
@@ -53,10 +95,15 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 	error: null,
 	view: "albums",
 	selectedAlbumId: null,
-	nowPlaying: null,
+
 	queue: [],
-	queueIndex: -1,
+	order: [],
+	orderPos: -1,
+	nowPlaying: null,
+	shuffle: false,
+	repeat: "off",
 	playbackStatus: "idle",
+	queueOpen: false,
 
 	load: async (scope) => {
 		set({ loading: true, error: null });
@@ -71,45 +118,73 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 	setView: (view) => set({ view, selectedAlbumId: null }),
 	selectAlbum: (selectedAlbumId) => set({ selectedAlbumId }),
 
-	playTrack: (track, queue) => {
-		const idx = queue.findIndex((t) => t.asset_id === track.asset_id);
-		set({ nowPlaying: track, queue, queueIndex: idx < 0 ? 0 : idx });
+	playTrack: (track, tracks) => {
+		const i = tracks.findIndex((t) => t.asset_id === track.asset_id);
+		set(buildPlayback(tracks, i < 0 ? 0 : i, get().shuffle));
 	},
 
-	playAlbum: (album) => {
-		if (album.tracks.length === 0) return;
-		set({ nowPlaying: album.tracks[0], queue: album.tracks, queueIndex: 0 });
-	},
+	playAlbum: (album) => set({ shuffle: false, ...buildPlayback(album.tracks, 0, false) }),
 
-	playAlbumShuffled: (album) => {
-		if (album.tracks.length === 0) return;
-		const shuffled = [...album.tracks];
-		for (let i = shuffled.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+	playAlbumShuffled: (album) => set({ shuffle: true, ...buildPlayback(album.tracks, 0, true) }),
+
+	toggleShuffle: () => {
+		const { queue, order, orderPos, shuffle } = get();
+		const nextShuffle = !shuffle;
+		if (order.length === 0) {
+			set({ shuffle: nextShuffle });
+			return;
 		}
-		set({ nowPlaying: shuffled[0], queue: shuffled, queueIndex: 0 });
+		const currentIdx = order[orderPos];
+		if (nextShuffle) {
+			set({ shuffle: true, order: shuffledOrder(queue.length, currentIdx), orderPos: 0 });
+		} else {
+			set({ shuffle: false, order: identityOrder(queue.length), orderPos: currentIdx });
+		}
 	},
+
+	cycleRepeat: () => {
+		const modes: RepeatMode[] = ["off", "all", "one"];
+		set({ repeat: modes[(modes.indexOf(get().repeat) + 1) % modes.length] });
+	},
+
+	toggleQueue: () => set((s) => ({ queueOpen: !s.queueOpen })),
 
 	next: () => {
-		const { queue, queueIndex } = get();
-		if (queueIndex < 0 || queueIndex + 1 >= queue.length) return;
-		const i = queueIndex + 1;
-		set({ nowPlaying: queue[i], queueIndex: i });
+		const { order, orderPos, repeat, queue } = get();
+		if (order.length === 0) return;
+		let pos = orderPos + 1;
+		if (pos >= order.length) {
+			if (repeat === "all") pos = 0;
+			else return;
+		}
+		set({ orderPos: pos, nowPlaying: queue[order[pos]] });
 	},
 
 	prev: () => {
-		const { queue, queueIndex } = get();
-		if (queueIndex <= 0) return;
-		const i = queueIndex - 1;
-		set({ nowPlaying: queue[i], queueIndex: i });
+		const { order, orderPos, repeat, queue } = get();
+		if (order.length === 0) return;
+		let pos = orderPos - 1;
+		if (pos < 0) {
+			if (repeat === "all") pos = order.length - 1;
+			else return;
+		}
+		set({ orderPos: pos, nowPlaying: queue[order[pos]] });
+	},
+
+	jumpTo: (pos) => {
+		const { order, queue } = get();
+		if (pos < 0 || pos >= order.length) return;
+		set({ orderPos: pos, nowPlaying: queue[order[pos]] });
 	},
 
 	hasNext: () => {
-		const { queue, queueIndex } = get();
-		return queueIndex >= 0 && queueIndex + 1 < queue.length;
+		const { order, orderPos, repeat } = get();
+		return order.length > 0 && (orderPos + 1 < order.length || repeat === "all");
 	},
-	hasPrev: () => get().queueIndex > 0,
+	hasPrev: () => {
+		const { order, orderPos, repeat } = get();
+		return order.length > 0 && (orderPos > 0 || repeat === "all");
+	},
 
 	setPlaybackStatus: (playbackStatus) => set({ playbackStatus }),
 }));

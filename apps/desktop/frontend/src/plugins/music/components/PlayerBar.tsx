@@ -5,10 +5,13 @@
 
 import { useEffect, useState } from "react";
 import {
+	HiArrowPath,
+	HiArrowsRightLeft,
 	HiBackward,
 	HiForward,
 	HiPause,
 	HiPlay,
+	HiQueueList,
 	HiSpeakerWave,
 	HiSpeakerXMark,
 } from "react-icons/hi2";
@@ -32,6 +35,12 @@ export function PlayerBar() {
 	const hasNext = useMusicStore((s) => s.hasNext);
 	const hasPrev = useMusicStore((s) => s.hasPrev);
 	const setPlaybackStatus = useMusicStore((s) => s.setPlaybackStatus);
+	const shuffle = useMusicStore((s) => s.shuffle);
+	const toggleShuffle = useMusicStore((s) => s.toggleShuffle);
+	const repeat = useMusicStore((s) => s.repeat);
+	const cycleRepeat = useMusicStore((s) => s.cycleRepeat);
+	const queueOpen = useMusicStore((s) => s.queueOpen);
+	const toggleQueue = useMusicStore((s) => s.toggleQueue);
 
 	const [volume, setVolume] = useState(1);
 	const volumeDb = volumeToDb(volume);
@@ -45,10 +54,17 @@ export function PlayerBar() {
 		if (path && player.loadedPath === path) player.play();
 	}, [player.loadedPath, path, player.play]);
 
-	// Auto-advance to the next track when the current one ends.
+	// On track end: repeat-one replays in place; otherwise advance the queue
+	// (next() wraps when repeat-all is on).
 	useEffect(() => {
-		if (player.status === "ended" && hasNext()) next();
-	}, [player.status, hasNext, next]);
+		if (player.status !== "ended") return;
+		if (repeat === "one") {
+			player.seekTo(0);
+			player.play();
+		} else if (hasNext()) {
+			next();
+		}
+	}, [player.status, repeat, hasNext, next, player.seekTo, player.play]);
 
 	// Mirror status into the store so the track list can show the playing mark.
 	useEffect(() => {
@@ -92,6 +108,14 @@ export function PlayerBar() {
 			<div className="flex shrink-0 items-center gap-1">
 				<button
 					type="button"
+					className={`btn btn-ghost btn-sm btn-circle ${shuffle ? "text-primary" : ""}`}
+					onClick={toggleShuffle}
+					title={shuffle ? "Shuffle: on" : "Shuffle: off"}
+				>
+					<HiArrowsRightLeft className="size-4" />
+				</button>
+				<button
+					type="button"
 					className="btn btn-ghost btn-sm btn-circle"
 					disabled={!hasPrev()}
 					onClick={prev}
@@ -115,6 +139,19 @@ export function PlayerBar() {
 					title="Next"
 				>
 					<HiForward className="size-4" />
+				</button>
+				<button
+					type="button"
+					className={`btn btn-ghost btn-sm btn-circle relative ${
+						repeat !== "off" ? "text-primary" : ""
+					}`}
+					onClick={cycleRepeat}
+					title={`Repeat: ${repeat}`}
+				>
+					<HiArrowPath className="size-4" />
+					{repeat === "one" && (
+						<span className="absolute right-1.5 top-1 text-[8px] font-bold leading-none">1</span>
+					)}
 				</button>
 			</div>
 
@@ -143,7 +180,15 @@ export function PlayerBar() {
 				</span>
 			</div>
 
-			{/* Volume */}
+			{/* Queue + volume */}
+			<button
+				type="button"
+				className={`btn btn-ghost btn-sm btn-circle shrink-0 ${queueOpen ? "text-primary" : ""}`}
+				onClick={toggleQueue}
+				title="Queue"
+			>
+				<HiQueueList className="size-4" />
+			</button>
 			<div className="flex w-28 shrink-0 items-center gap-1">
 				<button
 					type="button"
