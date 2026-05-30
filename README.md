@@ -20,7 +20,7 @@ Garnet's base install is a basic multi-format DAM: it catalogs, previews, search
 
 ![Library browser grouped by format](.github/assets/garnet-screenshot-core-formatgroups.png)
 
-![Modal for adding custom workspaces](.github/assets/garnet-screenshot-core-workspaces.png)
+![Modal for adding custom workspaces](.github/assets/garnet-screenshot-core-addworkspace.png)
 
 Register any number of folders as **library roots** and Garnet indexes them in place, tracking files across moves and renames by content hash and rescanning automatically as the folders change on disk.
 
