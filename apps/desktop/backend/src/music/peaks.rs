@@ -111,6 +111,44 @@ fn get_audio_peaks_sync(
 	Ok(peaks)
 }
 
+/// Pre-compute + cache peaks for a set of tracks in the background, so the
+/// waveform is ready the instant a track is first played. Fire-and-forget: one
+/// low-priority blocking task walks the list, skipping already-cached files and
+/// decoding the rest sequentially (so it never saturates the CPU). Uses the
+/// same key (mtime-less, default bucket count) the on-demand path uses, so the
+/// warmed entries are cache hits for `get_audio_peaks`.
+#[tauri::command]
+pub fn prewarm_peaks(paths: Vec<String>) -> Result<(), String> {
+	let buckets = DEFAULT_PEAKS;
+	let dir = cache_dir()?;
+	tauri::async_runtime::spawn_blocking(move || {
+		let mut warmed = 0usize;
+		for path in &paths {
+			let cache_file = dir.join(format!("{}.json", cache_key(path, None, buckets)));
+			if cache_file.exists() {
+				continue;
+			}
+			match compute_peaks(Path::new(path), buckets) {
+				Ok(peaks) => {
+					if let Ok(bytes) = serde_json::to_vec(&PeaksFile {
+						version: PEAKS_VERSION,
+						buckets,
+						peaks,
+					}) {
+						let _ = std::fs::write(&cache_file, bytes);
+						warmed += 1;
+					}
+				}
+				Err(e) => tracing::debug!("prewarm peaks failed for {path}: {e}"),
+			}
+		}
+		if warmed > 0 {
+			tracing::info!("prewarmed peaks for {warmed} track(s)");
+		}
+	});
+	Ok(())
+}
+
 /// Decode the file and bucket it into `target` (or fewer, for very short files)
 /// abs-max peaks.
 fn compute_peaks(audio_path: &Path, target: usize) -> Result<Vec<f32>, PeaksError> {

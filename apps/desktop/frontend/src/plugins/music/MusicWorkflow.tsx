@@ -16,7 +16,7 @@ import {
 	HiXMark,
 } from "react-icons/hi2";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import type { MusicAlbum, Workspace } from "@/lib/tauri";
+import { api, type MusicAlbum, type Workspace } from "@/lib/tauri";
 import { workspaceScopeQuery } from "@/lib/workspaceConfig";
 import { AlbumDetailView } from "@/plugins/music/components/AlbumDetailView";
 import { AlbumGrid } from "@/plugins/music/components/AlbumGrid";
@@ -61,6 +61,14 @@ export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
 	useEffect(() => {
 		void load({ underPath, formats: formatsKey ? formatsKey.split(",") : null });
 	}, [underPath, formatsKey, load]);
+
+	// Warm the waveform-peaks cache in the background once the library loads, so
+	// first-play of any track is instant (the backend skips already-cached ones).
+	useEffect(() => {
+		if (!library) return;
+		const paths = library.albums.flatMap((a) => a.tracks.map((t) => t.abs_path));
+		if (paths.length > 0) void api.prewarmPeaks(paths);
+	}, [library]);
 
 	const selectedAlbum =
 		selectedAlbumId && library

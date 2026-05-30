@@ -317,6 +317,9 @@ export const api = {
 	/// cached on first call. Feeds wavesurfer's peaks-only render path.
 	getAudioPeaks: (absPath: string, mtime: number | null, buckets?: number) =>
 		invoke<number[]>("get_audio_peaks", { absPath, mtime, buckets }),
+	/// Background-warm the peaks cache for a set of tracks so first-play is
+	/// instant. Fire-and-forget; skips already-cached files.
+	prewarmPeaks: (paths: string[]) => invoke<void>("prewarm_peaks", { paths }),
 	// Native audio transport (Music Library). The Rust engine owns playback;
 	// position/state come back as `audio:position` / `audio:state` events.
 	audioLoad: (path: string, volumeDb?: number) =>

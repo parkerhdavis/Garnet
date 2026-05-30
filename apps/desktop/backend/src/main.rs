@@ -44,7 +44,7 @@ use library::{
 };
 use music::{
 	audio_load, audio_pause, audio_play, audio_seek, audio_set_volume, audio_stop,
-	get_audio_peaks, list_music_library, load_album_art,
+	get_audio_peaks, list_music_library, load_album_art, prewarm_peaks,
 };
 use native_metadata::list_asset_metadata;
 use plugins::list_plugins;
@@ -315,6 +315,7 @@ fn main() {
 			audio_stop,
 			audio_set_volume,
 			get_audio_peaks,
+			prewarm_peaks,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");

@@ -14,7 +14,7 @@ pub use art::load_album_art;
 pub use audio::{
 	audio_load, audio_pause, audio_play, audio_seek, audio_set_volume, audio_stop,
 };
-pub use peaks::get_audio_peaks;
+pub use peaks::{get_audio_peaks, prewarm_peaks};
 
 use crate::AppState;
 use rusqlite::{Connection, ToSql};
