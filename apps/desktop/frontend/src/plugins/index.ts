@@ -6,3 +6,4 @@
 
 import "@/plugins/core";
 import "@/plugins/texturing";
+import "@/plugins/music";

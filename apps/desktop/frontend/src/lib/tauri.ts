@@ -85,6 +85,42 @@ export type AssetMetadata = {
 	value: string;
 };
 
+/** One audio track in the Music Library, derived from an audio asset + its
+ *  `audio.*` metadata. Field names mirror the Rust `music::Track`. */
+export type MusicTrack = {
+	asset_id: number;
+	abs_path: string;
+	title: string;
+	artist: string;
+	album: string;
+	album_artist: string;
+	track_no: number | null;
+	disc_no: number | null;
+	duration_secs: number | null;
+	year: number | null;
+	format: string | null;
+	has_cover: boolean;
+};
+
+/** An album: tracks grouped by (album_artist, album). `cover_abs_path` is a
+ *  representative track used to source the cover image. */
+export type MusicAlbum = {
+	id: string;
+	album: string;
+	album_artist: string;
+	year: number | null;
+	track_count: number;
+	total_duration_secs: number;
+	cover_asset_id: number;
+	cover_abs_path: string;
+	tracks: MusicTrack[];
+};
+
+export type MusicLibrary = {
+	albums: MusicAlbum[];
+	track_count: number;
+};
+
 /** A single user-editable metadata entry: one key plus an ordered list of
  *  values. Tags are not a separate type — they're just an entry whose key is
  *  the string `"tags"`. */
@@ -267,6 +303,13 @@ export const api = {
 		invoke<void>("update_workspace_config", { id, config }),
 	deleteWorkspace: (id: number) => invoke<void>("delete_workspace", { id }),
 	listPlugins: () => invoke<PluginManifest[]>("list_plugins"),
+	/// Music Library: in-scope audio assets grouped into an album/artist tree.
+	listMusicLibrary: (underPath: string | null, formats: string[] | null) =>
+		invoke<MusicLibrary>("list_music_library", { underPath, formats }),
+	/// Resolve album art (embedded → folder cover); returns a cached PNG's
+	/// absolute path (wrap in convertFileSrc) or null.
+	loadAlbumArt: (absPath: string, mtime: number | null, size?: number) =>
+		invoke<string | null>("load_album_art", { absPath, mtime, size }),
 	getMediaPort: () => invoke<number>("get_media_port"),
 	renameAsset: (assetId: number, newName: string) =>
 		invoke<AssetOpResult>("rename_asset", { assetId, newName }),

@@ -24,10 +24,9 @@ import type {
 const ALWAYS_ON = new Set(["core"]);
 
 /// Applied when `enabled_plugins` is null (fresh install / never configured).
-/// The 3D Texturing plugin ships on so its functionality is discoverable out
-/// of the box; users can disable it from the Plugins page. (Flipping this to
-/// opt-in is a one-line change — see the commit-10 default-enabled decision.)
-const DEFAULT_ENABLED = ["texturing"];
+/// First-party plugins ship on so their functionality is discoverable out of
+/// the box; users can disable any of them from the Plugins page.
+const DEFAULT_ENABLED = ["texturing", "music"];
 
 type PluginsState = {
 	/// User-configurable enabled ids (excludes always-on `core`). A new Set
