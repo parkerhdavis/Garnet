@@ -13,6 +13,7 @@ mod image_io;
 mod indexer;
 mod library;
 mod media_server;
+mod music;
 mod native_metadata;
 mod pinned_sources;
 mod plugins;
@@ -41,6 +42,7 @@ use image_io::{
 use library::{
 	list_library_roots, register_library_root, remove_library_root, scan_library_root,
 };
+use music::{list_music_library, load_album_art};
 use native_metadata::list_asset_metadata;
 use plugins::list_plugins;
 use pinned_sources::{list_pinned_sources, pin_source, unpin_source};
@@ -292,6 +294,8 @@ fn main() {
 			load_user_presets,
 			save_user_preset,
 			delete_user_preset,
+			list_music_library,
+			load_album_art,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
