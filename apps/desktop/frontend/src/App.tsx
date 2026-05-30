@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Component, type ReactNode, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import {
+	HashRouter,
+	Navigate,
+	Route,
+	Routes,
+	useLocation,
+	useNavigate,
+} from "react-router-dom";
 import { api, type ScanReport } from "@/lib/tauri";
 import { emitThumbnailReady, type ThumbnailReady } from "@/lib/thumbnailBus";
 import { useBgTasksStore } from "@/stores/bgTasksStore";
@@ -46,6 +53,7 @@ export default function App() {
 	return (
 		<ErrorBoundary>
 			<HashRouter>
+				<RouteMemory />
 				<Routes>
 					<Route element={<Layout />}>
 						<Route index element={<LibraryPage />} />
@@ -340,6 +348,46 @@ function usePrefsRefreshBridge() {
 		}
 		void useAssetsStore.getState().refresh();
 	}, [bucket, first]);
+}
+
+/// Remembers the last visited route and restores it on the next launch, so the
+/// app reopens where you left off instead of always landing on the library.
+/// Lives inside HashRouter so it can use the router hooks. Persisted to
+/// localStorage (pure UX state the frontend owns, like prefsStore).
+const LAST_ROUTE_KEY = "garnet:last-route";
+
+function RouteMemory() {
+	const location = useLocation();
+	const navigate = useNavigate();
+	const restored = useRef(false);
+
+	// Restore once, on first mount.
+	useEffect(() => {
+		if (restored.current) return;
+		restored.current = true;
+		let saved: string | null = null;
+		try {
+			saved = localStorage.getItem(LAST_ROUTE_KEY);
+		} catch {
+			// localStorage unavailable — skip restore.
+		}
+		const current = location.pathname + location.search;
+		if (saved && saved !== current && saved !== "/") {
+			navigate(saved, { replace: true });
+		}
+	}, [location.pathname, location.search, navigate]);
+
+	// Persist on every change (after the initial restore has run).
+	useEffect(() => {
+		if (!restored.current) return;
+		try {
+			localStorage.setItem(LAST_ROUTE_KEY, location.pathname + location.search);
+		} catch {
+			// Ignore quota/availability errors — non-essential.
+		}
+	}, [location.pathname, location.search]);
+
+	return null;
 }
 
 function Splash({ fadeOut }: { fadeOut: boolean }) {
