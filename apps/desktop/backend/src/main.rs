@@ -8,6 +8,7 @@ mod blend_preview;
 mod db;
 mod editor;
 mod garnet_metadata;
+mod image_io;
 mod indexer;
 mod library;
 mod media_server;
@@ -26,6 +27,10 @@ use editor::{commit_edit, preview_edit};
 use garnet_metadata::{
 	add_garnet_metadata_value, list_garnet_metadata, list_garnet_metadata_values_for_key,
 	remove_garnet_metadata_key, remove_garnet_metadata_value, set_garnet_metadata_key,
+};
+use image_io::{
+	list_directory, list_image_files, load_image_as_base64, load_image_channel, load_image_info,
+	load_image_with_preview, save_viewport,
 };
 use library::{
 	list_library_roots, register_library_root, remove_library_root, scan_library_root,
@@ -249,6 +254,13 @@ fn main() {
 			rename_workspace,
 			update_workspace_config,
 			delete_workspace,
+			load_image_info,
+			load_image_with_preview,
+			load_image_as_base64,
+			load_image_channel,
+			list_directory,
+			list_image_files,
+			save_viewport,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
