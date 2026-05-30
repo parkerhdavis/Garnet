@@ -4,6 +4,7 @@
 
 mod asset_ops;
 mod assets;
+mod automations;
 mod blend_preview;
 mod db;
 mod editor;
@@ -23,6 +24,10 @@ mod workspaces;
 
 use asset_ops::{move_asset, move_file, rename_asset, restore_from_trash, trash_asset};
 use assets::{get_asset, list_asset_formats, list_assets};
+use automations::{
+	delete_automation_preset, load_automation_presets, preview_automation, run_automation,
+	save_automation_preset,
+};
 use editor::{commit_edit, preview_edit};
 use garnet_metadata::{
 	add_garnet_metadata_value, list_garnet_metadata, list_garnet_metadata_values_for_key,
@@ -261,6 +266,11 @@ fn main() {
 			list_directory,
 			list_image_files,
 			save_viewport,
+			preview_automation,
+			run_automation,
+			save_automation_preset,
+			load_automation_presets,
+			delete_automation_preset,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
