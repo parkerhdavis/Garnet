@@ -10,6 +10,7 @@ import {
 	useNavigate,
 } from "react-router-dom";
 import { api, type ScanReport } from "@/lib/tauri";
+import { pickFileToPreview } from "@/lib/ephemeral";
 import { emitThumbnailReady, type ThumbnailReady } from "@/lib/thumbnailBus";
 import { useBgTasksStore } from "@/stores/bgTasksStore";
 import { useBootStore } from "@/stores/bootStore";
@@ -59,6 +60,13 @@ export default function App() {
 						<Route index element={<LibraryPage />} />
 						<Route path="asset/:id" element={<AssetDetailPage />} />
 						<Route path="edit/:id" element={<EditorPage />} />
+
+						{/* Ad-hoc ("ephemeral") open: a single file outside any
+						    library root, addressed by `?path=` instead of an
+						    integer id. The same pages mount in ephemeral mode and
+						    branch on `isEphemeral(asset)` for id-only features. */}
+						<Route path="preview" element={<AssetDetailPage />} />
+						<Route path="edit" element={<EditorPage />} />
 
 						<Route path="workspaces" element={<WorkspacesPage />} />
 						<Route path="workspaces/:id" element={<WorkspaceRoute />} />
@@ -262,8 +270,10 @@ function useGlobalHotkeys() {
 		}
 
 		function onAssetDetailPage(): boolean {
-			// HashRouter stores the route in the URL fragment as `#/asset/123`.
-			return window.location.hash.startsWith("#/asset/");
+			// HashRouter stores the route in the URL fragment as `#/asset/123`
+			// (catalog) or `#/preview?path=…` (ad-hoc). Escape closes both.
+			const h = window.location.hash;
+			return h.startsWith("#/asset/") || h.startsWith("#/preview");
 		}
 
 		function onKey(e: KeyboardEvent) {
@@ -312,6 +322,15 @@ function useGlobalHotkeys() {
 			// browsers report the shifted character (`Z`, not `z`), so a
 			// case-sensitive compare would miss Ctrl+Shift+Z.
 			const key = e.key.toLowerCase();
+
+			// ---- Ctrl/Cmd+O opens a loose file ad-hoc (ephemeral preview). ----
+			if (key === "o" && !e.shiftKey && !e.altKey) {
+				e.preventDefault();
+				// Outside the HashRouter context here, so pickFileToPreview
+				// falls back to setting window.location.hash itself.
+				void pickFileToPreview();
+				return;
+			}
 
 			// ---- Ctrl/Cmd+D deselects all (in addition to Esc above). ----
 			if (key === "d" && !e.shiftKey && !e.altKey) {

@@ -235,6 +235,11 @@ export const api = {
 	scanLibraryRoot: (id: number) => invoke<void>("scan_library_root", { id }),
 	listAssets: (query: AssetQuery) => invoke<AssetPage>("list_assets", { query }),
 	getAsset: (id: number) => invoke<Asset>("get_asset", { id }),
+	/// Stat a single on-disk file and describe it as an ephemeral asset
+	/// (id = -1, not in the catalog). Backs the ad-hoc "open a loose file"
+	/// flow; `root_path`/`relative_path` are the file's parent dir + name so
+	/// `absPathFor` reconstructs the real path.
+	describeFile: (path: string) => invoke<Asset>("describe_file", { path }),
 	listAssetFormats: (rootId: number | null) =>
 		invoke<FormatCount[]>("list_asset_formats", { rootId }),
 	listAssetMetadata: (assetId: number) =>

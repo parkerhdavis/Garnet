@@ -9,14 +9,14 @@
 //! prefs store to decide between native save-dialog vs. overwrite.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { HiArrowLeft, HiCheck, HiNoSymbol } from "react-icons/hi2";
 import CropOverlay, { type CropRect } from "@/components/CropOverlay";
 import EditorCanvas from "@/components/EditorCanvas";
 import { EditorTools } from "@/components/EditorTools";
-import { api, type Asset } from "@/lib/tauri";
+import { api, mediaUrl, type Asset } from "@/lib/tauri";
 import { absPathFor, basename, dirname } from "@/lib/paths";
 import {
 	type Operation,
@@ -32,12 +32,22 @@ const SUPPORTED_EXTS = new Set([
 
 export function EditorPage() {
 	const { id: idParam } = useParams();
+	const [searchParams] = useSearchParams();
+	const pathParam = searchParams.get("path");
+	// Ad-hoc mode: editing a loose file addressed by `?path=` rather than an
+	// integer catalog id. The save flow is path-only (commit_edit), so the
+	// only ephemeral-specific bit is loading + how the original is sourced.
+	const ephemeral = pathParam !== null;
 	const navigate = useNavigate();
 	const [asset, setAsset] = useState<Asset | null>(null);
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [savedAt, setSavedAt] = useState<string | null>(null);
 	const [sourceDims, setSourceDims] = useState<{ w: number; h: number } | null>(null);
+	// URL the canvas loads the original through: asset:// (convertFileSrc) for
+	// catalog files; the loopback media server for ephemeral files, which may
+	// sit outside the asset:// scope allow-list. Resolved async (media URL).
+	const [originalUrl, setOriginalUrl] = useState("");
 
 	const sourcePath = useEditorStore((s) => s.sourcePath);
 	const previewUrl = useEditorStore((s) => s.previewUrl);
@@ -61,13 +71,15 @@ export function EditorPage() {
 
 	useEffect(() => {
 		let cancelled = false;
-		const id = Number(idParam);
-		if (Number.isNaN(id)) {
-			setLoadError("invalid asset id");
-			return;
-		}
-		void api
-			.getAsset(id)
+		setLoadError(null);
+
+		const fetchAsset = ephemeral
+			? api.describeFile(pathParam as string)
+			: Number.isNaN(Number(idParam))
+				? Promise.reject(new Error("invalid asset id"))
+				: api.getAsset(Number(idParam));
+
+		void fetchAsset
 			.then((a) => {
 				if (cancelled) return;
 				const ext = a.format?.toLowerCase() ?? "";
@@ -83,7 +95,28 @@ export function EditorPage() {
 		return () => {
 			cancelled = true;
 		};
-	}, [idParam]);
+	}, [idParam, pathParam, ephemeral]);
+
+	// Resolve the original-image URL: catalog files use asset:// directly;
+	// ephemeral files route through the media server (path may be out of
+	// asset:// scope). Both the canvas and the dimension probe read this.
+	useEffect(() => {
+		if (!absPath) {
+			setOriginalUrl("");
+			return;
+		}
+		let cancelled = false;
+		if (ephemeral) {
+			void mediaUrl(absPath).then((u) => {
+				if (!cancelled) setOriginalUrl(u);
+			});
+		} else {
+			setOriginalUrl(convertFileSrc(absPath));
+		}
+		return () => {
+			cancelled = true;
+		};
+	}, [absPath, ephemeral]);
 
 	// Hand the asset to the editor store. Clearing the undo stack on entry
 	// scopes Ctrl+Z to this session — actions from the library page would
@@ -101,14 +134,14 @@ export function EditorPage() {
 	// Capture the original image's dimensions once it loads. Used by the
 	// crop / resize / corner-round tools to seed sensible defaults.
 	useEffect(() => {
-		if (!absPath) {
+		if (!originalUrl) {
 			setSourceDims(null);
 			return;
 		}
 		const img = new Image();
 		img.onload = () => setSourceDims({ w: img.naturalWidth, h: img.naturalHeight });
-		img.src = convertFileSrc(absPath);
-	}, [absPath]);
+		img.src = originalUrl;
+	}, [originalUrl]);
 
 	// `\` peek/toggle. Hold = peek original while down; tap (no movement)
 	// toggles edited/original. We treat any keyup within ~250ms of keydown
@@ -237,7 +270,7 @@ export function EditorPage() {
 	// satisfy React's hook-ordering rule, even when an early-return
 	// branch below skips the canvas.
 	const showingOriginal = viewMode === "original";
-	const originalSrc = asset ? convertFileSrc(absPath) : "";
+	const originalSrc = originalUrl;
 	const { backendOps, cssOps } = useMemo(() => splitOps(pendingOps), [pendingOps]);
 	const curveLut = useMemo(() => lastLutIn(cssOps), [cssOps]);
 	const wbScale = useMemo(() => accumulateWhiteBalance(cssOps), [cssOps]);
@@ -315,7 +348,7 @@ export function EditorPage() {
 		);
 	}
 
-	if (!asset) {
+	if (!asset || !originalUrl) {
 		return (
 			<div className="flex-1 p-12 text-center text-base-content/60 text-sm">Loading…</div>
 		);

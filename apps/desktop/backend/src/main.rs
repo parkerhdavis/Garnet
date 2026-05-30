@@ -25,7 +25,7 @@ mod watcher;
 mod workspaces;
 
 use asset_ops::{move_asset, move_file, rename_asset, restore_from_trash, trash_asset};
-use assets::{get_asset, list_asset_formats, list_assets};
+use assets::{describe_file, get_asset, list_asset_formats, list_assets};
 use automations::{
 	delete_automation_preset, load_automation_presets, preview_automation, run_automation,
 	save_automation_preset,
@@ -248,6 +248,7 @@ fn main() {
 			scan_library_root,
 			list_assets,
 			get_asset,
+			describe_file,
 			list_asset_formats,
 			rename_asset,
 			move_asset,
