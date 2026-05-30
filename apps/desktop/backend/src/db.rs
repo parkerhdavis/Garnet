@@ -225,6 +225,27 @@ pub static MIGRATIONS: &[(i64, &str)] = &[
 		    ON assets(has_animation) WHERE has_animation IS NOT NULL;
 		",
 	),
+	(
+		7,
+		"
+		-- User-created workspaces. `type` selects the interior: 'library' for
+		-- the base filtered-view, or a plugin-provided workflow type (e.g.
+		-- 'texturing'). `config` is opaque type-specific JSON owned by whatever
+		-- renders the interior — kept as TEXT so workflows can evolve their
+		-- stored state without a schema migration. `icon` is an optional UI
+		-- icon id (the frontend falls back to a per-type default when null).
+		CREATE TABLE workspaces (
+			id         INTEGER PRIMARY KEY,
+			name       TEXT    NOT NULL,
+			type       TEXT    NOT NULL,
+			icon       TEXT,
+			config     TEXT    NOT NULL DEFAULT '{}',
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			created_at INTEGER NOT NULL
+		);
+		CREATE INDEX workspaces_by_sort ON workspaces(sort_order, id);
+		",
+	),
 ];
 
 #[cfg(test)]

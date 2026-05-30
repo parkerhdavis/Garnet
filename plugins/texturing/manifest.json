@@ -1,0 +1,26 @@
+{
+	"$schema": "https://garnet.dev/schemas/plugin-manifest-v0.json",
+	"identity": "com.parkerhdavis.garnet.texturing",
+	"version": "0.1.0",
+	"name": "3D Texturing",
+	"description": "Channel packing, normal-map operations, texture-size analysis, and material preview for game-art texture workflows. Garnet's first plugin, compiled into the base binary; this manifest is a descriptive mirror of the frontend registration in apps/desktop/frontend/src/plugins/texturing/.",
+	"contributions": {
+		"formats": [],
+		"previewers": [],
+		"operations": [],
+		"pipelines": [],
+		"search_facets": [],
+		"settings": [],
+		"workflows": [
+			{
+				"type": "texturing",
+				"label": "3D Texturing",
+				"tools": ["pack", "adjust", "size", "preview"]
+			}
+		],
+		"automation_steps": [
+			{ "type": "flip-green", "label": "Flip Green (DX↔GL)" },
+			{ "type": "normalize", "label": "Normalize" }
+		]
+	}
+}

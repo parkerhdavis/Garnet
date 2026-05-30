@@ -4,11 +4,9 @@
 //! the navigation shell feels real while the underlying behavior is built.
 
 import {
-	HiBolt,
 	HiCog6Tooth,
 	HiFolder,
 	HiInformationCircle,
-	HiPuzzlePiece,
 	HiSquares2X2,
 	HiSwatch,
 } from "react-icons/hi2";
@@ -23,27 +21,6 @@ export function WorkspacesPage() {
 			icon={HiSquares2X2}
 			description="User-defined collections that combine manually-added assets with filter-rule
                 automatic membership (e.g., 'every video in this folder')."
-		/>
-	);
-}
-
-export function PluginsPage() {
-	return (
-		<StubPage
-			title="Plugins"
-			icon={HiPuzzlePiece}
-			description="Install, configure, and remove first-party plugins. The plugin API is a
-                Phase 2 deliverable; today this is a manager shell awaiting the loader."
-		/>
-	);
-}
-
-export function AutomationsPage() {
-	return (
-		<StubPage
-			title="Automations"
-			icon={HiBolt}
-			description="Saved sequences of operations the user can name and reuse. Phase 2."
 		/>
 	);
 }

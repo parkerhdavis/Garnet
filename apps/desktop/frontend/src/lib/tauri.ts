@@ -37,6 +37,28 @@ export type PluginManifest = {
 	};
 };
 
+/** Backend app settings (settings.json). Mirrors `settings::AppSettings`.
+ *  Window fields are managed by the backend; `enabled_plugins` is the
+ *  user-toggled set of compiled-in plugins (null = never configured). */
+export type AppSettings = {
+	window_width?: number | null;
+	window_height?: number | null;
+	enabled_plugins?: string[] | null;
+};
+
+/** A user-created workspace. `type` selects the interior: "library" for the
+ *  base filtered-view, or a plugin-provided workflow type (e.g. "texturing").
+ *  `config` is opaque type-specific JSON owned by the interior. */
+export type Workspace = {
+	id: number;
+	name: string;
+	type: string;
+	icon: string | null;
+	config: Record<string, unknown>;
+	sort_order: number;
+	created_at: number;
+};
+
 export type Asset = {
 	id: number;
 	root_id: number;
@@ -162,6 +184,8 @@ export type TrashResult = {
 };
 
 export const api = {
+	loadSettings: () => invoke<AppSettings>("load_settings"),
+	saveSettings: (settings: AppSettings) => invoke<void>("save_settings", { settings }),
 	registerLibraryRoot: (path: string) =>
 		invoke<LibraryRoot>("register_library_root", { path }),
 	listLibraryRoots: () => invoke<LibraryRoot[]>("list_library_roots"),
@@ -227,6 +251,18 @@ export const api = {
 	pinSource: (absPath: string, name?: string | null) =>
 		invoke<PinnedSource>("pin_source", { absPath, name: name ?? null }),
 	unpinSource: (id: number) => invoke<void>("unpin_source", { id }),
+	listWorkspaces: () => invoke<Workspace[]>("list_workspaces"),
+	createWorkspace: (name: string, type: string, icon?: string | null) =>
+		invoke<Workspace>("create_workspace", {
+			name,
+			workspaceType: type,
+			icon: icon ?? null,
+		}),
+	renameWorkspace: (id: number, name: string) =>
+		invoke<void>("rename_workspace", { id, name }),
+	updateWorkspaceConfig: (id: number, config: Record<string, unknown>) =>
+		invoke<void>("update_workspace_config", { id, config }),
+	deleteWorkspace: (id: number) => invoke<void>("delete_workspace", { id }),
 	listPlugins: () => invoke<PluginManifest[]>("list_plugins"),
 	getMediaPort: () => invoke<number>("get_media_port"),
 	renameAsset: (assetId: number, newName: string) =>

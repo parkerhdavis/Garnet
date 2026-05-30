@@ -4,10 +4,12 @@
 
 mod asset_ops;
 mod assets;
+mod automations;
 mod blend_preview;
 mod db;
 mod editor;
 mod garnet_metadata;
+mod image_io;
 mod indexer;
 mod library;
 mod media_server;
@@ -16,15 +18,25 @@ mod pinned_sources;
 mod plugins;
 mod settings;
 mod startup_timing;
+mod texturing;
 mod thumbnails;
 mod watcher;
+mod workspaces;
 
 use asset_ops::{move_asset, move_file, rename_asset, restore_from_trash, trash_asset};
 use assets::{get_asset, list_asset_formats, list_assets};
+use automations::{
+	delete_automation_preset, load_automation_presets, preview_automation, run_automation,
+	save_automation_preset,
+};
 use editor::{commit_edit, preview_edit};
 use garnet_metadata::{
 	add_garnet_metadata_value, list_garnet_metadata, list_garnet_metadata_values_for_key,
 	remove_garnet_metadata_key, remove_garnet_metadata_value, set_garnet_metadata_key,
+};
+use image_io::{
+	list_directory, list_image_files, load_image_as_base64, load_image_channel, load_image_info,
+	load_image_with_preview, save_viewport,
 };
 use library::{
 	list_library_roots, register_library_root, remove_library_root, scan_library_root,
@@ -33,12 +45,20 @@ use native_metadata::list_asset_metadata;
 use plugins::list_plugins;
 use pinned_sources::{list_pinned_sources, pin_source, unpin_source};
 use settings::{load_settings, save_settings};
+use texturing::{
+	blend_normals, delete_user_preset, export_normal_result, export_packed, export_swizzled,
+	export_unpacked, flip_normal_green, get_builtin_presets, height_to_normal, load_user_presets,
+	normalize_map, pack_channels, save_user_preset, swizzle_channels, unpack_channels,
+};
 use startup_timing::{
 	finalize_startup_timings, get_startup_timings, mark_startup_phase, StartupTimings,
 	StartupTimingsState,
 };
 use std::sync::{Arc, Mutex};
 use thumbnails::{ensure_thumbnail, get_thumbnail, save_model_thumbnail};
+use workspaces::{
+	create_workspace, delete_workspace, list_workspaces, rename_workspace, update_workspace_config,
+};
 use tauri::Manager;
 use tracing_subscriber::EnvFilter;
 
@@ -240,6 +260,38 @@ fn main() {
 			get_media_port,
 			preview_edit,
 			commit_edit,
+			list_workspaces,
+			create_workspace,
+			rename_workspace,
+			update_workspace_config,
+			delete_workspace,
+			load_image_info,
+			load_image_with_preview,
+			load_image_as_base64,
+			load_image_channel,
+			list_directory,
+			list_image_files,
+			save_viewport,
+			preview_automation,
+			run_automation,
+			save_automation_preset,
+			load_automation_presets,
+			delete_automation_preset,
+			pack_channels,
+			export_packed,
+			unpack_channels,
+			export_unpacked,
+			swizzle_channels,
+			export_swizzled,
+			flip_normal_green,
+			height_to_normal,
+			blend_normals,
+			normalize_map,
+			export_normal_result,
+			get_builtin_presets,
+			load_user_presets,
+			save_user_preset,
+			delete_user_preset,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
