@@ -97,7 +97,11 @@ export function WorkspaceSettingsDialog({
 					)}
 
 					<div className="flex justify-end gap-2 mt-1">
-						<button type="button" className="btn btn-sm btn-ghost" onClick={onClose}>
+						<button
+							type="button"
+							className="btn btn-sm btn-ghost"
+							onClick={onClose}
+						>
 							Cancel
 						</button>
 						<button

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Fragment, useMemo } from "react";
-import { HiArrowsUpDown, HiBarsArrowDown, HiBarsArrowUp } from "react-icons/hi2";
+import {
+	HiArrowsUpDown,
+	HiBarsArrowDown,
+	HiBarsArrowUp,
+} from "react-icons/hi2";
 import type { Asset, AssetSortBy, SortDir } from "@/lib/tauri";
 import { openContextMenu } from "@/components/ContextMenu";
 import { buildAssetContextMenu } from "@/lib/assetContextMenu";
@@ -30,19 +34,44 @@ export function AssetList({ assets, sortBy, sortDir, onSort, onOpen }: Props) {
 					<table className="table table-sm table-zebra">
 						<thead>
 							<tr>
-								<SortHeader by="path" current={sortBy} dir={sortDir} onClick={onSort}>
+								<SortHeader
+									by="path"
+									current={sortBy}
+									dir={sortDir}
+									onClick={onSort}
+								>
 									Path
 								</SortHeader>
-								<SortHeader by="root" current={sortBy} dir={sortDir} onClick={onSort}>
+								<SortHeader
+									by="root"
+									current={sortBy}
+									dir={sortDir}
+									onClick={onSort}
+								>
 									Source
 								</SortHeader>
-								<SortHeader by="format" current={sortBy} dir={sortDir} onClick={onSort}>
+								<SortHeader
+									by="format"
+									current={sortBy}
+									dir={sortDir}
+									onClick={onSort}
+								>
 									Format
 								</SortHeader>
-								<SortHeader by="size" current={sortBy} dir={sortDir} onClick={onSort}>
+								<SortHeader
+									by="size"
+									current={sortBy}
+									dir={sortDir}
+									onClick={onSort}
+								>
 									Size
 								</SortHeader>
-								<SortHeader by="mtime" current={sortBy} dir={sortDir} onClick={onSort}>
+								<SortHeader
+									by="mtime"
+									current={sortBy}
+									dir={sortDir}
+									onClick={onSort}
+								>
 									Modified
 								</SortHeader>
 							</tr>
@@ -142,7 +171,9 @@ function AssetRow({
 				)}
 			</td>
 			<td className="tabular-nums">{formatSize(asset.size)}</td>
-			<td className="text-xs text-base-content/70">{formatTime(asset.mtime)}</td>
+			<td className="text-xs text-base-content/70">
+				{formatTime(asset.mtime)}
+			</td>
 		</tr>
 	);
 }
@@ -161,7 +192,11 @@ function SortHeader({
 	children: React.ReactNode;
 }) {
 	const active = by === current;
-	const Icon = !active ? HiArrowsUpDown : dir === "asc" ? HiBarsArrowUp : HiBarsArrowDown;
+	const Icon = !active
+		? HiArrowsUpDown
+		: dir === "asc"
+			? HiBarsArrowUp
+			: HiBarsArrowDown;
 	return (
 		<th>
 			<button

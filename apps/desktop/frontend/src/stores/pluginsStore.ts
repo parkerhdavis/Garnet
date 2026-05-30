@@ -101,7 +101,9 @@ export function enabledGlobals(): React.ComponentType[] {
 
 /// The enabled workflow for a given workspace type, or undefined if no plugin
 /// provides it or the owning plugin is disabled.
-export function workflowForType(type: string): WorkflowContribution | undefined {
+export function workflowForType(
+	type: string,
+): WorkflowContribution | undefined {
 	const isEnabled = usePluginsStore.getState().isEnabled;
 	const match = allWorkflows().find(
 		(w) => w.contribution.workspaceType === type && isEnabled(w.pluginId),

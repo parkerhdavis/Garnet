@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState, useCallback } from "react";
-import type { PBRSceneConfig, PBRSceneStatus } from "@/plugins/texturing/types/pbr";
+import type {
+	PBRSceneConfig,
+	PBRSceneStatus,
+} from "@/plugins/texturing/types/pbr";
 import { PBRSceneManager } from "@/plugins/texturing/preview/pbr/PBRSceneManager";
 
 export function useThreeScene(

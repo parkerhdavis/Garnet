@@ -10,7 +10,13 @@ export interface GpuFormat {
 }
 
 /** Block-compressed size: ceil(w/blockW) * ceil(h/blockH) * bytesPerBlock */
-function blockSize(w: number, h: number, blockW: number, blockH: number, bytesPerBlock: number): number {
+function blockSize(
+	w: number,
+	h: number,
+	blockW: number,
+	blockH: number,
+	bytesPerBlock: number,
+): number {
 	return Math.ceil(w / blockW) * Math.ceil(h / blockH) * bytesPerBlock;
 }
 
@@ -90,7 +96,10 @@ export const GPU_FORMATS: GpuFormat[] = [
 ];
 
 /** Compute all mip level dimensions from a base resolution */
-export function computeMipLevels(width: number, height: number): { width: number; height: number }[] {
+export function computeMipLevels(
+	width: number,
+	height: number,
+): { width: number; height: number }[] {
 	const levels: { width: number; height: number }[] = [];
 	let w = width;
 	let h = height;
@@ -104,15 +113,23 @@ export function computeMipLevels(width: number, height: number): { width: number
 }
 
 /** Compute total byte size for a format across all mip levels */
-export function computeTotalWithMips(format: GpuFormat, width: number, height: number): number {
+export function computeTotalWithMips(
+	format: GpuFormat,
+	width: number,
+	height: number,
+): number {
 	const levels = computeMipLevels(width, height);
-	return levels.reduce((sum, lvl) => sum + format.sizeBytes(lvl.width, lvl.height), 0);
+	return levels.reduce(
+		(sum, lvl) => sum + format.sizeBytes(lvl.width, lvl.height),
+		0,
+	);
 }
 
 /** Format a byte count as a human-readable string */
 export function formatBytes(bytes: number): string {
 	if (bytes < 1024) return `${bytes} B`;
 	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-	if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+	if (bytes < 1024 * 1024 * 1024)
+		return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 	return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }

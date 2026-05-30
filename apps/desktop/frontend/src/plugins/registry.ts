@@ -22,7 +22,9 @@ const plugins = new Map<string, GarnetPlugin>();
 /// happens under dev hot-reload, never in a normal run).
 export function registerPlugin(plugin: GarnetPlugin): void {
 	if (plugins.has(plugin.id)) {
-		console.warn(`Plugin "${plugin.id}" registered more than once; overwriting.`);
+		console.warn(
+			`Plugin "${plugin.id}" registered more than once; overwriting.`,
+		);
 	}
 	plugins.set(plugin.id, plugin);
 }

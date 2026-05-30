@@ -24,7 +24,8 @@ registerPlugin({
 			workspaceType: "music",
 			label: "Music Library",
 			icon: HiMusicalNote,
-			description: "An album/artist music browser with a built-in player and waveform.",
+			description:
+				"An album/artist music browser with a built-in player and waveform.",
 			Component: MusicWorkflow,
 			usesWorkingFolder: true,
 			defaultFileFilters: AUDIO_FORMATS.join(" "),

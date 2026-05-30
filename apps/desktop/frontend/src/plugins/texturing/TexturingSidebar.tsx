@@ -34,7 +34,8 @@ const MODULES: { id: TexturingModuleId; label: string; icon: IconType }[] = [
 	{ id: "preview", label: "Preview", icon: HiCube },
 ];
 
-const HEADING = "text-xs uppercase tracking-wider text-base-content/45 font-semibold";
+const HEADING =
+	"text-xs uppercase tracking-wider text-base-content/45 font-semibold";
 
 function basename(path: string): string {
 	return path.split(/[\\/]/).pop() ?? path;
@@ -65,13 +66,18 @@ export function TexturingSidebar({
 		}
 		let cancelled = false;
 		setLoading(true);
-		void invoke<string[]>("list_image_files", { dir: rootFolder, recursive: false })
+		void invoke<string[]>("list_image_files", {
+			dir: rootFolder,
+			recursive: false,
+		})
 			.then((all) => {
 				if (cancelled) return;
 				const exts = parseFileFilters(fileFilters);
 				setFiles(
 					exts
-						? all.filter((p) => exts.includes((p.split(".").pop() ?? "").toLowerCase()))
+						? all.filter((p) =>
+								exts.includes((p.split(".").pop() ?? "").toLowerCase()),
+							)
 						: all,
 				);
 			})
@@ -87,12 +93,18 @@ export function TexturingSidebar({
 	}, [rootFolder, fileFilters]);
 
 	async function chooseInputFolder() {
-		const picked = await open({ directory: true, defaultPath: rootFolder ?? undefined });
+		const picked = await open({
+			directory: true,
+			defaultPath: rootFolder ?? undefined,
+		});
 		if (typeof picked === "string") ws?.setRootFolder(picked);
 	}
 
 	async function chooseOutputFolder() {
-		const picked = await open({ directory: true, defaultPath: outputDir ?? undefined });
+		const picked = await open({
+			directory: true,
+			defaultPath: outputDir ?? undefined,
+		});
 		if (typeof picked === "string") ws?.setOutputDir(picked);
 	}
 
@@ -102,7 +114,9 @@ export function TexturingSidebar({
 			<div className="px-3 py-2.5 border-b border-base-300 flex items-center gap-2 shrink-0">
 				<HiCube className="size-4 text-base-content/60 shrink-0" />
 				<div className="min-w-0">
-					<div className="text-sm font-semibold truncate leading-tight">{workspaceName}</div>
+					<div className="text-sm font-semibold truncate leading-tight">
+						{workspaceName}
+					</div>
 					<div className="text-[10px] text-base-content/50">3D Texturing</div>
 				</div>
 			</div>
@@ -168,7 +182,9 @@ export function TexturingSidebar({
 						</div>
 						<div className="flex-1 overflow-y-auto min-h-0 px-1">
 							{loading ? (
-								<div className="px-2 py-1 text-xs text-base-content/40">Loading…</div>
+								<div className="px-2 py-1 text-xs text-base-content/40">
+									Loading…
+								</div>
 							) : files.length === 0 ? (
 								<div className="px-2 py-1 text-xs text-base-content/40">
 									No matching images.
@@ -180,7 +196,10 @@ export function TexturingSidebar({
 										type="button"
 										draggable
 										onDragStart={(e) => {
-											e.dataTransfer.setData("application/garnet-filepath", path);
+											e.dataTransfer.setData(
+												"application/garnet-filepath",
+												path,
+											);
 											e.dataTransfer.effectAllowed = "copy";
 										}}
 										onClick={() => setSelected(path)}

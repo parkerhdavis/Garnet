@@ -10,11 +10,28 @@ import TilingPreviewPanel from "@/plugins/texturing/preview/TilingPreviewPanel";
 import { LuGrid3X3, LuBox } from "react-icons/lu";
 
 // Lazy-load the 3D material panel so three.js stays out of the main bundle.
-const MaterialPreviewPanel = lazy(() => import("@/plugins/texturing/preview/MaterialPreviewPanel"));
+const MaterialPreviewPanel = lazy(
+	() => import("@/plugins/texturing/preview/MaterialPreviewPanel"),
+);
 
-const submodules: { id: PreviewSubmodule; label: string; description: string; icon: React.ReactNode }[] = [
-	{ id: "2d", label: "2D Preview", description: "Tile a texture in a grid to check seamlessness.", icon: <LuGrid3X3 size={15} /> },
-	{ id: "3d", label: "3D Preview", description: "Preview materials on 3D geometry with PBR lighting.", icon: <LuBox size={15} /> },
+const submodules: {
+	id: PreviewSubmodule;
+	label: string;
+	description: string;
+	icon: React.ReactNode;
+}[] = [
+	{
+		id: "2d",
+		label: "2D Preview",
+		description: "Tile a texture in a grid to check seamlessness.",
+		icon: <LuGrid3X3 size={15} />,
+	},
+	{
+		id: "3d",
+		label: "3D Preview",
+		description: "Preview materials on 3D geometry with PBR lighting.",
+		icon: <LuBox size={15} />,
+	},
 ];
 
 export default function PreviewTools() {
@@ -27,28 +44,41 @@ export default function PreviewTools() {
 	const tilingRef = useRef<PreviewPanelHandle>(null);
 	const materialRef = useRef<PreviewPanelHandle>(null);
 
-	const exportDisabled = activeSubmodule === "2d"
-		? !tilingInputPath
-		: !Object.values(materialTexturePaths).some(Boolean);
+	const exportDisabled =
+		activeSubmodule === "2d"
+			? !tilingInputPath
+			: !Object.values(materialTexturePaths).some(Boolean);
 
-	const handleExport = useCallback(async (config: ExportConfig) => {
-		const panelRef = activeSubmodule === "2d" ? tilingRef : materialRef;
-		const data = panelRef.current?.captureViewport();
-		if (!data) {
-			console.error("Nothing to export — load a texture first");
-			return;
-		}
+	const handleExport = useCallback(
+		async (config: ExportConfig) => {
+			const panelRef = activeSubmodule === "2d" ? tilingRef : materialRef;
+			const data = panelRef.current?.captureViewport();
+			if (!data) {
+				console.error("Nothing to export — load a texture first");
+				return;
+			}
 
-		const ext = config.format === "png8" || config.format === "png16" ? ".png"
-			: config.format === "tga" ? ".tga"
-			: config.format === "jpeg" ? ".jpg"
-			: ".png";
-		const outputPath = `${config.directory}/${config.filename}${ext}`;
+			const ext =
+				config.format === "png8" || config.format === "png16"
+					? ".png"
+					: config.format === "tga"
+						? ".tga"
+						: config.format === "jpeg"
+							? ".jpg"
+							: ".png";
+			const outputPath = `${config.directory}/${config.filename}${ext}`;
 
-		await invoke("save_viewport", { data, outputPath, format: config.format });
-	}, [activeSubmodule]);
+			await invoke("save_viewport", {
+				data,
+				outputPath,
+				format: config.format,
+			});
+		},
+		[activeSubmodule],
+	);
 
-	const defaultFilename = activeSubmodule === "2d" ? "tiling_preview" : "material_preview";
+	const defaultFilename =
+		activeSubmodule === "2d" ? "tiling_preview" : "material_preview";
 
 	return (
 		<div className="flex flex-col h-full">

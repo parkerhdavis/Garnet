@@ -8,11 +8,22 @@
 //! *what* should play and the order.
 
 import { create } from "zustand";
-import { api, type MusicAlbum, type MusicLibrary, type MusicTrack } from "@/lib/tauri";
+import {
+	api,
+	type MusicAlbum,
+	type MusicLibrary,
+	type MusicTrack,
+} from "@/lib/tauri";
 
 export type MusicView = "albums" | "artists";
 
-export type PlaybackStatus = "idle" | "loaded" | "playing" | "paused" | "ended" | "error";
+export type PlaybackStatus =
+	| "idle"
+	| "loaded"
+	| "playing"
+	| "paused"
+	| "ended"
+	| "error";
 
 export type RepeatMode = "off" | "all" | "one";
 
@@ -44,13 +55,22 @@ type Playback = {
 	nowPlaying: MusicTrack | null;
 };
 
-function buildPlayback(tracks: MusicTrack[], startIndex: number, shuffle: boolean): Playback {
+function buildPlayback(
+	tracks: MusicTrack[],
+	startIndex: number,
+	shuffle: boolean,
+): Playback {
 	const n = tracks.length;
 	if (n === 0) return { queue: [], order: [], orderPos: -1, nowPlaying: null };
 	const idx = Math.max(0, Math.min(startIndex, n - 1));
 	const order = shuffle ? shuffledOrder(n, idx) : identityOrder(n);
 	const orderPos = shuffle ? 0 : idx;
-	return { queue: tracks, order, orderPos, nowPlaying: tracks[order[orderPos]] };
+	return {
+		queue: tracks,
+		order,
+		orderPos,
+		nowPlaying: tracks[order[orderPos]],
+	};
 }
 
 type MusicState = {
@@ -58,6 +78,14 @@ type MusicState = {
 	loading: boolean;
 	error: string | null;
 	view: MusicView;
+
+	// Workspace context. `activeWorkspaceId` is the music workspace currently
+	// mounted (set by MusicWorkflow); `playbackWorkspaceId` is captured from it
+	// when playback starts, so the global player bar can navigate back to the
+	// exact workspace the now-playing track came from (its scope is guaranteed
+	// to contain that album/artist).
+	activeWorkspaceId: number | null;
+	playbackWorkspaceId: number | null;
 
 	// Playback
 	queue: MusicTrack[];
@@ -71,6 +99,7 @@ type MusicState = {
 
 	load: (scope: MusicScope) => Promise<void>;
 	setView: (v: MusicView) => void;
+	setActiveWorkspace: (id: number | null) => void;
 
 	playTrack: (track: MusicTrack, tracks: MusicTrack[]) => void;
 	playAlbum: (album: MusicAlbum) => void;
@@ -92,6 +121,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 	error: null,
 	view: "albums",
 
+	activeWorkspaceId: null,
+	playbackWorkspaceId: null,
+
 	queue: [],
 	order: [],
 	orderPos: -1,
@@ -104,7 +136,10 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 	load: async (scope) => {
 		set({ loading: true, error: null });
 		try {
-			const library = await api.listMusicLibrary(scope.underPath, scope.formats);
+			const library = await api.listMusicLibrary(
+				scope.underPath,
+				scope.formats,
+			);
 			set({ library, loading: false });
 		} catch (e) {
 			set({ error: String(e), loading: false });
@@ -113,14 +148,29 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
 	setView: (view) => set({ view }),
 
+	setActiveWorkspace: (activeWorkspaceId) => set({ activeWorkspaceId }),
+
 	playTrack: (track, tracks) => {
 		const i = tracks.findIndex((t) => t.asset_id === track.asset_id);
-		set(buildPlayback(tracks, i < 0 ? 0 : i, get().shuffle));
+		set({
+			playbackWorkspaceId: get().activeWorkspaceId,
+			...buildPlayback(tracks, i < 0 ? 0 : i, get().shuffle),
+		});
 	},
 
-	playAlbum: (album) => set({ shuffle: false, ...buildPlayback(album.tracks, 0, false) }),
+	playAlbum: (album) =>
+		set({
+			shuffle: false,
+			playbackWorkspaceId: get().activeWorkspaceId,
+			...buildPlayback(album.tracks, 0, false),
+		}),
 
-	playAlbumShuffled: (album) => set({ shuffle: true, ...buildPlayback(album.tracks, 0, true) }),
+	playAlbumShuffled: (album) =>
+		set({
+			shuffle: true,
+			playbackWorkspaceId: get().activeWorkspaceId,
+			...buildPlayback(album.tracks, 0, true),
+		}),
 
 	toggleShuffle: () => {
 		const { queue, order, orderPos, shuffle } = get();
@@ -131,9 +181,17 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 		}
 		const currentIdx = order[orderPos];
 		if (nextShuffle) {
-			set({ shuffle: true, order: shuffledOrder(queue.length, currentIdx), orderPos: 0 });
+			set({
+				shuffle: true,
+				order: shuffledOrder(queue.length, currentIdx),
+				orderPos: 0,
+			});
 		} else {
-			set({ shuffle: false, order: identityOrder(queue.length), orderPos: currentIdx });
+			set({
+				shuffle: false,
+				order: identityOrder(queue.length),
+				orderPos: currentIdx,
+			});
 		}
 	},
 
@@ -174,7 +232,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
 	hasNext: () => {
 		const { order, orderPos, repeat } = get();
-		return order.length > 0 && (orderPos + 1 < order.length || repeat === "all");
+		return (
+			order.length > 0 && (orderPos + 1 < order.length || repeat === "all")
+		);
 	},
 	hasPrev: () => {
 		const { order, orderPos, repeat } = get();

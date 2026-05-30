@@ -19,7 +19,10 @@ export function WorkingFolderFields({
 	onFileFilters: (v: string) => void;
 }) {
 	async function pickFolder() {
-		const picked = await open({ directory: true, defaultPath: rootFolder ?? undefined });
+		const picked = await open({
+			directory: true,
+			defaultPath: rootFolder ?? undefined,
+		});
 		if (typeof picked === "string") onRootFolder(picked);
 	}
 
@@ -48,7 +51,11 @@ export function WorkingFolderFields({
 							<HiXMark className="size-4" />
 						</button>
 					)}
-					<button type="button" className="btn btn-sm" onClick={() => void pickFolder()}>
+					<button
+						type="button"
+						className="btn btn-sm"
+						onClick={() => void pickFolder()}
+					>
 						<HiFolderOpen className="size-4" />
 						Choose…
 					</button>

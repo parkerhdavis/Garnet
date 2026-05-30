@@ -34,7 +34,9 @@ export default function ExportPanel({
 }: ExportPanelProps) {
 	// Default the export directory to the workspace's working output folder.
 	const outputDir = useTexturingWorkspace()?.outputDir ?? null;
-	const [format, setFormat] = useState<ExportFormat>(defaultFormat ?? formats[0]);
+	const [format, setFormat] = useState<ExportFormat>(
+		defaultFormat ?? formats[0],
+	);
 	const [directory, setDirectory] = useState(outputDir ?? "");
 	const [filename, setFilename] = useState(filenameDefault);
 	const [exporting, setExporting] = useState(false);
@@ -46,7 +48,10 @@ export default function ExportPanel({
 	}, [outputDir]);
 
 	const handlePickDir = useCallback(async () => {
-		const result = await open({ directory: true, defaultPath: directory || undefined });
+		const result = await open({
+			directory: true,
+			defaultPath: directory || undefined,
+		});
 		if (typeof result === "string") setDirectory(result);
 	}, [directory]);
 

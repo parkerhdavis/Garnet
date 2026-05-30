@@ -24,7 +24,11 @@ export function NewWorkspaceDialog({
 }: {
 	open: boolean;
 	onClose: () => void;
-	onCreate: (name: string, type: string, opts: NewWorkspaceOptions) => Promise<void>;
+	onCreate: (
+		name: string,
+		type: string,
+		opts: NewWorkspaceOptions,
+	) => Promise<void>;
 }) {
 	// Re-derive the type list when plugin enable-state changes.
 	usePluginsStore((s) => s.enabledIds);
@@ -130,14 +134,18 @@ export function NewWorkspaceDialog({
 								onFileFilters={setFileFilters}
 							/>
 							<p className="text-[11px] text-base-content/45 -mt-1">
-								Optional. You can change these later from the workspace's right-click
-								menu → Settings.
+								Optional. You can change these later from the workspace's
+								right-click menu → Settings.
 							</p>
 						</>
 					)}
 
 					<div className="flex justify-end gap-2 mt-1">
-						<button type="button" className="btn btn-sm btn-ghost" onClick={onClose}>
+						<button
+							type="button"
+							className="btn btn-sm btn-ghost"
+							onClick={onClose}
+						>
 							Cancel
 						</button>
 						<button
@@ -168,7 +176,9 @@ function TypeOption({
 	return (
 		<label
 			className={`flex items-start gap-3 p-3 rounded border cursor-pointer transition-colors ${
-				selected ? "border-primary bg-primary/5" : "border-base-300 hover:bg-base-200"
+				selected
+					? "border-primary bg-primary/5"
+					: "border-base-300 hover:bg-base-200"
 			}`}
 		>
 			<input

@@ -17,7 +17,8 @@ export default function UnpackPanel() {
 			<div className="px-3 pt-3 pb-2 border-b border-base-300 shrink-0">
 				<div className="text-sm font-semibold text-base-content">Unpack</div>
 				<div className="text-xs text-base-content/40 mt-0.5 leading-snug">
-					Load a packed RGBA texture and extract each channel as a separate grayscale image.
+					Load a packed RGBA texture and extract each channel as a separate
+					grayscale image.
 				</div>
 			</div>
 

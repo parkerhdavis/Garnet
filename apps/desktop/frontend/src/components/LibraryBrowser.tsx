@@ -4,6 +4,7 @@
 //! (LibraryPage, which layers route-derived filters on top) and a Library
 //! workspace (LibraryWorkspaceView, which layers a saved filter on top).
 
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
 import { HiDocumentArrowUp, HiFolderPlus, HiXMark } from "react-icons/hi2";
@@ -16,12 +17,56 @@ import { useAssetsStore } from "@/stores/assetsStore";
 import { useLibraryStore } from "@/stores/libraryStore";
 
 export function LibraryBrowser() {
-	const { assets, loading, error, viewMode, sortBy, sortDir, setSort } =
-		useAssetsStore();
+	const {
+		assets,
+		total,
+		loading,
+		loadingMore,
+		resetNonce,
+		loadMore,
+		error,
+		viewMode,
+		sortBy,
+		sortDir,
+		setSort,
+	} = useAssetsStore();
 	const { roots, loading: rootsLoading } = useLibraryStore();
 	const navigate = useNavigate();
 
 	const noRoots = !rootsLoading && roots.length === 0;
+	const hasMore = assets.length < total;
+
+	// Infinite scroll: a sentinel just past the last asset, watched by an
+	// IntersectionObserver rooted on the scroll pane. When it enters view (plus
+	// a prefetch margin), `nearBottom` flips and the effect below streams in the
+	// next page — repeating as the list grows until the sentinel scrolls out of
+	// range or the library is exhausted. Replaces the old Prev/Next strip.
+	const scrollRef = useRef<HTMLDivElement>(null);
+	const sentinelRef = useRef<HTMLDivElement>(null);
+	const [nearBottom, setNearBottom] = useState(false);
+
+	useEffect(() => {
+		const root = scrollRef.current;
+		const sentinel = sentinelRef.current;
+		if (!root || !sentinel) return;
+		const obs = new IntersectionObserver(
+			(entries) => setNearBottom(entries[0]?.isIntersecting ?? false),
+			{ root, rootMargin: "800px 0px" },
+		);
+		obs.observe(sentinel);
+		return () => obs.disconnect();
+	}, []);
+
+	useEffect(() => {
+		if (nearBottom && hasMore && !loading && !loadingMore) void loadMore();
+	}, [nearBottom, hasMore, loading, loadingMore, assets.length, loadMore]);
+
+	// Jump back to the top whenever the query is reset (a filter/sort change),
+	// so a new result set starts from the first row rather than wherever the
+	// previous (now-replaced) list happened to be scrolled.
+	useEffect(() => {
+		scrollRef.current?.scrollTo({ top: 0 });
+	}, [resetNonce]);
 
 	function openAsset(asset: Asset) {
 		navigate(`/asset/${asset.id}`);
@@ -57,11 +102,13 @@ export function LibraryBrowser() {
 				</div>
 			)}
 
-			<div className="flex-1 min-h-0 overflow-auto">
+			<div ref={scrollRef} className="flex-1 min-h-0 overflow-auto">
 				{noRoots ? (
 					<EmptyNoRoots onOpenFile={handleOpenFile} />
 				) : loading && assets.length === 0 ? (
-					<div className="p-12 text-center text-base-content/60 text-sm">Loading…</div>
+					<div className="p-12 text-center text-base-content/60 text-sm">
+						Loading…
+					</div>
 				) : assets.length === 0 ? (
 					<EmptyNoMatches />
 				) : viewMode === "grid" ? (
@@ -75,6 +122,15 @@ export function LibraryBrowser() {
 						onOpen={openAsset}
 					/>
 				)}
+
+				{/* Infinite-scroll sentinel + spinner. Kept just inside the
+				    scroll pane so the observer's prefetch margin can reach it. */}
+				<div ref={sentinelRef} aria-hidden className="h-px" />
+				{loadingMore && (
+					<div className="flex justify-center py-4" aria-live="polite">
+						<span className="loading loading-spinner loading-sm text-base-content/50" />
+					</div>
+				)}
 			</div>
 		</motion.div>
 	);
@@ -87,15 +143,20 @@ function EmptyNoRoots({ onOpenFile }: { onOpenFile: () => void }) {
 				<div className="card-body items-center text-center py-12">
 					<h2 className="card-title">No library roots yet</h2>
 					<p className="text-base-content/70 max-w-md">
-						Garnet indexes files where they already live. Add a folder in Settings to
-						start cataloging — or open a single file ad-hoc without adding it.
+						Garnet indexes files where they already live. Add a folder in
+						Settings to start cataloging — or open a single file ad-hoc without
+						adding it.
 					</p>
 					<div className="flex flex-wrap items-center justify-center gap-2 mt-4">
 						<Link to="/settings" className="btn btn-primary">
 							<HiFolderPlus className="size-4" />
 							Go to Settings
 						</Link>
-						<button type="button" className="btn btn-ghost" onClick={onOpenFile}>
+						<button
+							type="button"
+							className="btn btn-ghost"
+							onClick={onOpenFile}
+						>
 							<HiDocumentArrowUp className="size-4" />
 							Open a file
 						</button>

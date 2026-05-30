@@ -82,7 +82,8 @@ export function FilterBar() {
 
 	const activeSizePreset =
 		SIZE_PRESETS.findIndex((p) => p.min === sizeMin && p.max === sizeMax) ?? 0;
-	const activeDatePreset = DATE_PRESETS.findIndex((p) => p.from === mtimeFrom) ?? 0;
+	const activeDatePreset =
+		DATE_PRESETS.findIndex((p) => p.from === mtimeFrom) ?? 0;
 
 	const anyFilterActive =
 		formats.length > 0 ||
@@ -182,7 +183,9 @@ export function FilterBar() {
 						<button
 							type="button"
 							className="btn btn-sm join-item"
-							onClick={() => void setGroupDir(groupDir === "asc" ? "desc" : "asc")}
+							onClick={() =>
+								void setGroupDir(groupDir === "asc" ? "desc" : "asc")
+							}
 							aria-label={`Group order ${groupDir === "asc" ? "ascending" : "descending"}`}
 							title={`Group order ${groupDir === "asc" ? "ascending" : "descending"}`}
 						>

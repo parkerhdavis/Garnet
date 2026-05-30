@@ -145,7 +145,10 @@ interface EditorState {
 	/// with the same `type` is replaced — used by slider drags so each
 	/// slider only contributes one entry to the pipeline (and one undo
 	/// step) rather than one per frame.
-	pushOp: (op: Operation, opts?: { replaceLastOfType?: boolean }) => Promise<void>;
+	pushOp: (
+		op: Operation,
+		opts?: { replaceLastOfType?: boolean },
+	) => Promise<void>;
 	/// Pop the trailing op (used by undo).
 	popOp: () => Promise<void>;
 	/// Replace the entire op list (used by redo restoring a full state).

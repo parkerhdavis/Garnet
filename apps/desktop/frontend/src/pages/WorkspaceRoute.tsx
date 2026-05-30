@@ -47,9 +47,12 @@ export function WorkspaceRoute() {
 				<div className="size-16 rounded-full bg-base-100 border border-base-300 flex items-center justify-center text-base-content/40 mb-5">
 					<HiPuzzlePiece className="size-7" />
 				</div>
-				<h1 className="text-xl font-semibold tracking-tight">{workspace.name}</h1>
+				<h1 className="text-xl font-semibold tracking-tight">
+					{workspace.name}
+				</h1>
 				<p className="text-sm text-base-content/60 mt-2 max-w-md">
-					This workspace needs the “{workspace.type}” plugin, which isn’t enabled.
+					This workspace needs the “{workspace.type}” plugin, which isn’t
+					enabled.
 				</p>
 				<Link to="/functions/plugins" className="btn btn-sm btn-primary mt-5">
 					Open Plugins

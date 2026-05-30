@@ -48,7 +48,9 @@ export default function CurveEditor({
 	onChangeCommit,
 	histogramBins,
 }: CurveEditorProps) {
-	const [points, setPoints] = useState<CurvePoint[]>(initialPoints ?? DEFAULT_POINTS);
+	const [points, setPoints] = useState<CurvePoint[]>(
+		initialPoints ?? DEFAULT_POINTS,
+	);
 	const svgRef = useRef<SVGSVGElement>(null);
 	const dragRef = useRef<{ index: number; isEndpoint: boolean } | null>(null);
 
@@ -74,7 +76,8 @@ export default function CurveEditor({
 	const histogramBars = useMemo(() => {
 		if (!histogramBins) return null;
 		let max = 0;
-		for (let i = 1; i < 255; i++) if (histogramBins[i] > max) max = histogramBins[i];
+		for (let i = 1; i < 255; i++)
+			if (histogramBins[i] > max) max = histogramBins[i];
 		const cap = Math.max(max * 2, 1);
 		const bars: { x: number; y: number; w: number; h: number }[] = [];
 		const barW = width / 256;
@@ -91,7 +94,10 @@ export default function CurveEditor({
 		return bars;
 	}, [histogramBins, width, height]);
 
-	function localCoords(e: { clientX: number; clientY: number }): { x: number; y: number } | null {
+	function localCoords(e: { clientX: number; clientY: number }): {
+		x: number;
+		y: number;
+	} | null {
 		const svg = svgRef.current;
 		if (!svg) return null;
 		const rect = svg.getBoundingClientRect();
@@ -104,7 +110,10 @@ export default function CurveEditor({
 	function onPointDown(index: number, e: React.PointerEvent<SVGCircleElement>) {
 		e.stopPropagation();
 		(e.target as Element).setPointerCapture?.(e.pointerId);
-		dragRef.current = { index, isEndpoint: index === 0 || index === points.length - 1 };
+		dragRef.current = {
+			index,
+			isEndpoint: index === 0 || index === points.length - 1,
+		};
 	}
 
 	function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
@@ -187,7 +196,6 @@ export default function CurveEditor({
 			{/* Histogram */}
 			{histogramBars?.map((b, i) => (
 				<rect
-					// biome-ignore lint/suspicious/noArrayIndexKey: histogram bars are positional
 					key={i}
 					x={b.x}
 					y={b.y}
@@ -199,8 +207,18 @@ export default function CurveEditor({
 			{/* Grid: quarters */}
 			{[0.25, 0.5, 0.75].map((t) => (
 				<g key={t} stroke="rgba(255,255,255,0.08)" strokeWidth={1}>
-					<line x1={PAD + t * width} y1={PAD} x2={PAD + t * width} y2={PAD + height} />
-					<line x1={PAD} y1={PAD + t * height} x2={PAD + width} y2={PAD + t * height} />
+					<line
+						x1={PAD + t * width}
+						y1={PAD}
+						x2={PAD + t * width}
+						y2={PAD + height}
+					/>
+					<line
+						x1={PAD}
+						y1={PAD + t * height}
+						x2={PAD + width}
+						y2={PAD + t * height}
+					/>
 				</g>
 			))}
 			{/* Outer frame + identity diagonal */}
@@ -223,16 +241,10 @@ export default function CurveEditor({
 				strokeDasharray="3 3"
 			/>
 			{/* The curve */}
-			<path
-				d={pathD}
-				fill="none"
-				stroke="currentColor"
-				strokeWidth={2}
-			/>
+			<path d={pathD} fill="none" stroke="currentColor" strokeWidth={2} />
 			{/* Control points */}
 			{points.map((p, i) => (
 				<circle
-					// biome-ignore lint/suspicious/noArrayIndexKey: point identity is positional
 					key={i}
 					cx={xToSvg(p.x)}
 					cy={yToSvg(p.y)}
@@ -303,7 +315,8 @@ function monotonicTangents(xs: number[], ys: number[]): number[] {
 	if (n === 0) return [];
 	if (n === 1) return [0];
 	const d: number[] = new Array(n - 1);
-	for (let i = 0; i < n - 1; i++) d[i] = (ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]);
+	for (let i = 0; i < n - 1; i++)
+		d[i] = (ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]);
 	const m: number[] = new Array(n);
 	m[0] = d[0];
 	m[n - 1] = d[n - 2];
@@ -329,7 +342,12 @@ function monotonicTangents(xs: number[], ys: number[]): number[] {
 	return m;
 }
 
-function evalSpline(xs: number[], ys: number[], ms: number[], x: number): number {
+function evalSpline(
+	xs: number[],
+	ys: number[],
+	ms: number[],
+	x: number,
+): number {
 	const n = xs.length;
 	if (n === 0) return 0;
 	if (x <= xs[0]) return ys[0];

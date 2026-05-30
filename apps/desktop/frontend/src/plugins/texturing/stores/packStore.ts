@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import type { ImageInfo, ImageWithPreview, ChannelSource } from "@/plugins/texturing/types";
+import type {
+	ImageInfo,
+	ImageWithPreview,
+	ChannelSource,
+} from "@/plugins/texturing/types";
 import { channelSourceToIndex } from "@/plugins/texturing/types";
 
 // --- Shared types ---
@@ -41,10 +45,14 @@ const SWIZZLE_DEFAULTS: SwizzleMappings = {
 
 function isSwizzleIdentity(mappings: SwizzleMappings): boolean {
 	return (
-		mappings.r.source === "r" && !mappings.r.invert &&
-		mappings.g.source === "g" && !mappings.g.invert &&
-		mappings.b.source === "b" && !mappings.b.invert &&
-		mappings.a.source === "a" && !mappings.a.invert
+		mappings.r.source === "r" &&
+		!mappings.r.invert &&
+		mappings.g.source === "g" &&
+		!mappings.g.invert &&
+		mappings.b.source === "b" &&
+		!mappings.b.invert &&
+		mappings.a.source === "a" &&
+		!mappings.a.invert
 	);
 }
 
@@ -95,7 +103,10 @@ const ROLE_KEYWORDS: Record<string, string[]> = {
 function keywordsForLabel(label: string): string[] {
 	const lower = label.toLowerCase().replace(/[\s_-]+/g, "");
 	for (const [role, keywords] of Object.entries(ROLE_KEYWORDS)) {
-		if (lower === role || keywords.some((kw) => lower === kw || lower.includes(kw))) {
+		if (
+			lower === role ||
+			keywords.some((kw) => lower === kw || lower.includes(kw))
+		) {
 			return keywords;
 		}
 	}
@@ -142,7 +153,11 @@ interface PackStoreState {
 	unpackLoading: boolean;
 	loadUnpackInput: (path: string) => Promise<void>;
 	clearUnpackInput: () => void;
-	exportUnpackChannel: (channel: SlotName, outputPath: string, format: string) => Promise<void>;
+	exportUnpackChannel: (
+		channel: SlotName,
+		outputPath: string,
+		format: string,
+	) => Promise<void>;
 
 	// Swizzle
 	swizzleInputPath: string | null;
@@ -160,7 +175,12 @@ interface PackStoreState {
 	exportSwizzled: (outputPath: string, format: string) => Promise<void>;
 
 	// Pack
-	packChannels: { r: ChannelSlot | null; g: ChannelSlot | null; b: ChannelSlot | null; a: ChannelSlot | null };
+	packChannels: {
+		r: ChannelSlot | null;
+		g: ChannelSlot | null;
+		b: ChannelSlot | null;
+		a: ChannelSlot | null;
+	};
 	packLoadingChannels: { r: boolean; g: boolean; b: boolean; a: boolean };
 	packPreview: string | null;
 	packPreviewLoading: boolean;
@@ -199,8 +219,14 @@ export const usePackStore = create<PackStoreState>((set, get) => ({
 		set({ unpackLoading: true });
 		try {
 			const [result, channels] = await Promise.all([
-				invoke<ImageWithPreview>("load_image_with_preview", { path, maxPreviewSize: 512 }),
-				invoke<UnpackChannelPreviews>("unpack_channels", { path, maxPreviewSize: 512 }),
+				invoke<ImageWithPreview>("load_image_with_preview", {
+					path,
+					maxPreviewSize: 512,
+				}),
+				invoke<UnpackChannelPreviews>("unpack_channels", {
+					path,
+					maxPreviewSize: 512,
+				}),
 			]);
 			set({
 				unpackInputPath: path,
@@ -249,7 +275,10 @@ export const usePackStore = create<PackStoreState>((set, get) => ({
 	loadSwizzleInput: async (path) => {
 		set({ swizzleInputLoading: true });
 		try {
-			const result = await invoke<ImageWithPreview>("load_image_with_preview", { path, maxPreviewSize: 512 });
+			const result = await invoke<ImageWithPreview>("load_image_with_preview", {
+				path,
+				maxPreviewSize: 512,
+			});
 			set({
 				swizzleInputPath: path,
 				swizzleInputInfo: result.info,
@@ -287,7 +316,10 @@ export const usePackStore = create<PackStoreState>((set, get) => ({
 		set((s) => ({
 			swizzleMappings: {
 				...s.swizzleMappings,
-				[channel]: { ...s.swizzleMappings[channel], invert: !s.swizzleMappings[channel].invert },
+				[channel]: {
+					...s.swizzleMappings[channel],
+					invert: !s.swizzleMappings[channel].invert,
+				},
 			},
 		}));
 		get().regenerateSwizzlePreview();
@@ -366,11 +398,16 @@ export const usePackStore = create<PackStoreState>((set, get) => ({
 			packLoadingChannels: { ...s.packLoadingChannels, [slot]: true },
 		}));
 		try {
-			const result = await invoke<ImageWithPreview>("load_image_with_preview", { path: filePath, maxPreviewSize: 128 });
+			const result = await invoke<ImageWithPreview>("load_image_with_preview", {
+				path: filePath,
+				maxPreviewSize: 128,
+			});
 
 			const { packPresetLabels } = get();
 			const invertKey = `${slot}_invert` as keyof PresetLabels;
-			const defaultInvert = packPresetLabels ? Boolean(packPresetLabels[invertKey]) : false;
+			const defaultInvert = packPresetLabels
+				? Boolean(packPresetLabels[invertKey])
+				: false;
 
 			set((s) => ({
 				packChannels: {
@@ -474,7 +511,8 @@ export const usePackStore = create<PackStoreState>((set, get) => ({
 		packDebounce = setTimeout(async () => {
 			const { packChannels, packTargetResolution } = get();
 
-			const hasSource = packChannels.r || packChannels.g || packChannels.b || packChannels.a;
+			const hasSource =
+				packChannels.r || packChannels.g || packChannels.b || packChannels.a;
 			if (!hasSource) {
 				set({ packPreview: null, packPreviewLoading: false });
 				return;
@@ -554,4 +592,11 @@ export const usePackStore = create<PackStoreState>((set, get) => ({
 	},
 }));
 
-export type { PackSubmodule, SlotName, ChannelSlot, PresetLabels, PackingPreset, SwizzleMapping };
+export type {
+	PackSubmodule,
+	SlotName,
+	ChannelSlot,
+	PresetLabels,
+	PackingPreset,
+	SwizzleMapping,
+};

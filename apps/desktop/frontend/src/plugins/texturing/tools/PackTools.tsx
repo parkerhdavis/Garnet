@@ -11,10 +11,30 @@ import PresetsConfigPanel from "@/plugins/texturing/pack/PresetsConfigPanel";
 import type { ExportConfig } from "@/plugins/texturing/types";
 import { LuScanLine, LuShuffle, LuLayers, LuSettings } from "react-icons/lu";
 
-const submodules: { id: PackSubmodule; label: string; description: string; icon: React.ReactNode }[] = [
-	{ id: "unpack", label: "Unpack", description: "Extract individual channels from a packed texture.", icon: <LuScanLine size={15} /> },
-	{ id: "swizzle", label: "Swizzle", description: "Remap channels within a single image.", icon: <LuShuffle size={15} /> },
-	{ id: "pack", label: "Pack", description: "Combine separate textures into RGBA channels.", icon: <LuLayers size={15} /> },
+const submodules: {
+	id: PackSubmodule;
+	label: string;
+	description: string;
+	icon: React.ReactNode;
+}[] = [
+	{
+		id: "unpack",
+		label: "Unpack",
+		description: "Extract individual channels from a packed texture.",
+		icon: <LuScanLine size={15} />,
+	},
+	{
+		id: "swizzle",
+		label: "Swizzle",
+		description: "Remap channels within a single image.",
+		icon: <LuShuffle size={15} />,
+	},
+	{
+		id: "pack",
+		label: "Pack",
+		description: "Combine separate textures into RGBA channels.",
+		icon: <LuLayers size={15} />,
+	},
 ];
 
 export default function PackTools() {
@@ -33,52 +53,77 @@ export default function PackTools() {
 
 	const exportDisabled = (() => {
 		switch (activeSubmodule) {
-			case "unpack": return unpackChannelPreviews.r === null;
-			case "swizzle": return swizzleResultPreview === null;
-			case "pack": return !(packChannels.r || packChannels.g || packChannels.b || packChannels.a);
+			case "unpack":
+				return unpackChannelPreviews.r === null;
+			case "swizzle":
+				return swizzleResultPreview === null;
+			case "pack":
+				return !(
+					packChannels.r ||
+					packChannels.g ||
+					packChannels.b ||
+					packChannels.a
+				);
 		}
 	})();
 
-	const handleExport = useCallback(async (config: ExportConfig) => {
-		try {
-			const ext = config.format === "png8" || config.format === "png16" ? ".png"
-				: config.format === "tga" ? ".tga"
-				: config.format === "jpeg" ? ".jpg"
-				: ".png";
+	const handleExport = useCallback(
+		async (config: ExportConfig) => {
+			try {
+				const ext =
+					config.format === "png8" || config.format === "png16"
+						? ".png"
+						: config.format === "tga"
+							? ".tga"
+							: config.format === "jpeg"
+								? ".jpg"
+								: ".png";
 
-			switch (usePackStore.getState().activeSubmodule) {
-				case "unpack":
-					await Promise.all(
-						(["r", "g", "b", "a"] as const).map((ch) =>
-							exportUnpackChannel(ch, `${config.directory}/${config.filename}_${ch}${ext}`, config.format),
-						),
-					);
-					break;
-				case "swizzle": {
-					const outputPath = `${config.directory}/${config.filename}${ext}`;
-					await exportSwizzled(outputPath, config.format);
-					break;
+				switch (usePackStore.getState().activeSubmodule) {
+					case "unpack":
+						await Promise.all(
+							(["r", "g", "b", "a"] as const).map((ch) =>
+								exportUnpackChannel(
+									ch,
+									`${config.directory}/${config.filename}_${ch}${ext}`,
+									config.format,
+								),
+							),
+						);
+						break;
+					case "swizzle": {
+						const outputPath = `${config.directory}/${config.filename}${ext}`;
+						await exportSwizzled(outputPath, config.format);
+						break;
+					}
+					case "pack": {
+						const outputPath = `${config.directory}/${config.filename}${ext}`;
+						await exportPacked(outputPath, config.format);
+						break;
+					}
 				}
-				case "pack": {
-					const outputPath = `${config.directory}/${config.filename}${ext}`;
-					await exportPacked(outputPath, config.format);
-					break;
-				}
+			} catch (err) {
+				console.error(`Export failed: ${err}`);
 			}
-		} catch (err) {
-			console.error(`Export failed: ${err}`);
-		}
-	}, [exportUnpackChannel, exportSwizzled, exportPacked]);
+		},
+		[exportUnpackChannel, exportSwizzled, exportPacked],
+	);
 
-	const defaultFilename = activeSubmodule === "unpack" ? "unpacked"
-		: activeSubmodule === "swizzle" ? "swizzled"
-		: "packed";
+	const defaultFilename =
+		activeSubmodule === "unpack"
+			? "unpacked"
+			: activeSubmodule === "swizzle"
+				? "swizzled"
+				: "packed";
 
 	return (
 		<div className="flex flex-col h-full">
 			<div className="flex flex-1 min-h-0">
 				{/* Left control area — sidebar + content + export */}
-				<div className="flex flex-col shrink-0 border-r border-base-300" style={{ width: "calc(13rem + 18rem)" }}>
+				<div
+					className="flex flex-col shrink-0 border-r border-base-300"
+					style={{ width: "calc(13rem + 18rem)" }}
+				>
 					{/* Interior sidebar + submodule content */}
 					<div className="flex flex-1 min-h-0">
 						{/* Interior sidebar */}
@@ -93,7 +138,10 @@ export default function PackTools() {
 									<button
 										key={sub.id}
 										type="button"
-										onClick={() => { setSubmodule(sub.id); setShowPresets(false); }}
+										onClick={() => {
+											setSubmodule(sub.id);
+											setShowPresets(false);
+										}}
 										className={`flex flex-col gap-0.5 px-2.5 py-2 rounded text-left cursor-pointer transition-colors ${
 											activeSubmodule === sub.id && !showPresets
 												? "text-primary bg-primary/10 font-medium"
@@ -121,7 +169,9 @@ export default function PackTools() {
 											: "text-base-content/60 hover:text-base-content hover:bg-base-300/50"
 									}`}
 								>
-									<span className="shrink-0 opacity-70"><LuSettings size={15} /></span>
+									<span className="shrink-0 opacity-70">
+										<LuSettings size={15} />
+									</span>
 									<span className="text-sm">Manage Presets</span>
 								</button>
 							</div>
@@ -180,14 +230,16 @@ function UnpackPreview() {
 	return (
 		<div className="flex-1 min-w-0 grid grid-cols-2 grid-rows-2">
 			{channelLabels.map((ch) => (
-				<div key={ch.key} className="relative border-b border-r border-base-300 last:border-r-0">
-					<div className={`absolute top-2 left-2 z-10 text-xs ${ch.color} bg-base-200/80 px-2 py-0.5 rounded font-medium`}>
+				<div
+					key={ch.key}
+					className="relative border-b border-r border-base-300 last:border-r-0"
+				>
+					<div
+						className={`absolute top-2 left-2 z-10 text-xs ${ch.color} bg-base-200/80 px-2 py-0.5 rounded font-medium`}
+					>
 						{ch.label}
 					</div>
-					<TexturePreview
-						imageData={previews[ch.key]}
-						className="h-full"
-					/>
+					<TexturePreview imageData={previews[ch.key]} className="h-full" />
 				</div>
 			))}
 		</div>
@@ -241,10 +293,7 @@ function PackPreview() {
 					<span className="loading loading-spinner loading-md text-primary" />
 				</div>
 			)}
-			<TexturePreview
-				imageData={preview}
-				className="h-full"
-			/>
+			<TexturePreview imageData={preview} className="h-full" />
 		</div>
 	);
 }

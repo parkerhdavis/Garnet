@@ -33,7 +33,9 @@ const AUTOROTATE_SPEED = 0.6; // radians/sec for static models
 function kindFor(format: string | null): ModelKind | null {
 	if (!format) return null;
 	const e = format.toLowerCase();
-	return (MODEL_KINDS as readonly string[]).includes(e) ? (e as ModelKind) : null;
+	return (MODEL_KINDS as readonly string[]).includes(e)
+		? (e as ModelKind)
+		: null;
 }
 
 type Props = {
@@ -177,7 +179,10 @@ export function Live3DPreview({ absPath, format }: Props) {
 	return <div ref={containerRef} className="absolute inset-0" />;
 }
 
-async function loadModel(url: string, kind: ModelKind): Promise<THREE.Object3D | null> {
+async function loadModel(
+	url: string,
+	kind: ModelKind,
+): Promise<THREE.Object3D | null> {
 	try {
 		switch (kind) {
 			case "gltf":
@@ -222,12 +227,20 @@ async function loadModel(url: string, kind: ModelKind): Promise<THREE.Object3D |
 	}
 }
 
-function readAnimations(object: THREE.Object3D, kind: ModelKind): THREE.AnimationClip[] {
+function readAnimations(
+	object: THREE.Object3D,
+	kind: ModelKind,
+): THREE.AnimationClip[] {
 	// GLTFLoader returns `{scene, animations}` — we only have `scene` here, so
 	// animations on glTF aren't accessible from the Object3D alone. FBXLoader
 	// puts them on the Group itself.
-	const animatedRoot = object as unknown as { animations?: THREE.AnimationClip[] };
-	if (Array.isArray(animatedRoot.animations) && animatedRoot.animations.length > 0) {
+	const animatedRoot = object as unknown as {
+		animations?: THREE.AnimationClip[];
+	};
+	if (
+		Array.isArray(animatedRoot.animations) &&
+		animatedRoot.animations.length > 0
+	) {
 		return animatedRoot.animations;
 	}
 	// glTF: the loader stores animations on the returned `gltf` object, not on
@@ -238,12 +251,19 @@ function readAnimations(object: THREE.Object3D, kind: ModelKind): THREE.Animatio
 	return [];
 }
 
-function frameCamera(object: THREE.Object3D, camera: THREE.PerspectiveCamera): void {
+function frameCamera(
+	object: THREE.Object3D,
+	camera: THREE.PerspectiveCamera,
+): void {
 	const box = new THREE.Box3().setFromObject(object);
 	object.traverse((c) => {
 		if (c instanceof THREE.Bone) {
 			const p = new THREE.Vector3().setFromMatrixPosition(c.matrixWorld);
-			if (Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)) {
+			if (
+				Number.isFinite(p.x) &&
+				Number.isFinite(p.y) &&
+				Number.isFinite(p.z)
+			) {
 				box.expandByPoint(p);
 			}
 		}

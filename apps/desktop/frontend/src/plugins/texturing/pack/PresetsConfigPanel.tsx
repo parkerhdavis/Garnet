@@ -93,15 +93,18 @@ export default function PresetsConfigPanel() {
 		}
 	}, [form, loadAllPresets, refreshPackerPresets]);
 
-	const handleDeletePreset = useCallback(async (name: string) => {
-		try {
-			await invoke("delete_user_preset", { name });
-			await loadAllPresets();
-			await refreshPackerPresets();
-		} catch (err) {
-			console.error("Failed to delete preset:", err);
-		}
-	}, [loadAllPresets, refreshPackerPresets]);
+	const handleDeletePreset = useCallback(
+		async (name: string) => {
+			try {
+				await invoke("delete_user_preset", { name });
+				await loadAllPresets();
+				await refreshPackerPresets();
+			} catch (err) {
+				console.error("Failed to delete preset:", err);
+			}
+		},
+		[loadAllPresets, refreshPackerPresets],
+	);
 
 	return (
 		<div className="p-6 max-w-lg space-y-8">
@@ -111,25 +114,37 @@ export default function PresetsConfigPanel() {
 
 				{/* Built-in presets */}
 				<div className="space-y-1.5 mb-4">
-					<p className="text-xs text-base-content/50 font-medium uppercase tracking-wider">Built-in</p>
+					<p className="text-xs text-base-content/50 font-medium uppercase tracking-wider">
+						Built-in
+					</p>
 					{builtinPresets.map((p) => (
 						<div key={p.name} className="flex items-baseline gap-2 text-sm">
 							<span className="font-medium text-base-content/80">{p.name}</span>
-							<span className="text-xs text-base-content/40">{p.description}</span>
+							<span className="text-xs text-base-content/40">
+								{p.description}
+							</span>
 						</div>
 					))}
 				</div>
 
 				{/* User presets */}
 				<div className="space-y-1.5 mb-3">
-					<p className="text-xs text-base-content/50 font-medium uppercase tracking-wider">Custom</p>
+					<p className="text-xs text-base-content/50 font-medium uppercase tracking-wider">
+						Custom
+					</p>
 					{userPresets.length === 0 && (
-						<p className="text-xs text-base-content/30">No custom presets yet.</p>
+						<p className="text-xs text-base-content/30">
+							No custom presets yet.
+						</p>
 					)}
 					{userPresets.map((p) => (
 						<div key={p.name} className="flex items-center gap-2 text-sm">
-							<span className="font-medium text-base-content/80 flex-1">{p.name}</span>
-							<span className="text-xs text-base-content/40 flex-1">{p.description}</span>
+							<span className="font-medium text-base-content/80 flex-1">
+								{p.name}
+							</span>
+							<span className="text-xs text-base-content/40 flex-1">
+								{p.description}
+							</span>
 							<button
 								type="button"
 								onClick={() => handleDeletePreset(p.name)}
@@ -155,18 +170,24 @@ export default function PresetsConfigPanel() {
 						<input
 							type="text"
 							value={form.description}
-							onChange={(e) => setForm({ ...form, description: e.target.value })}
+							onChange={(e) =>
+								setForm({ ...form, description: e.target.value })
+							}
 							placeholder="Brief description"
 							className="input input-xs input-bordered w-full"
 						/>
 						<div className="grid grid-cols-4 gap-1.5">
 							{channelSlots.map((ch) => (
 								<div key={ch.key} className="flex flex-col gap-1">
-									<label className="text-xs font-bold text-base-content/50">{ch.label}</label>
+									<label className="text-xs font-bold text-base-content/50">
+										{ch.label}
+									</label>
 									<input
 										type="text"
 										value={form[ch.key]}
-										onChange={(e) => setForm({ ...form, [ch.key]: e.target.value })}
+										onChange={(e) =>
+											setForm({ ...form, [ch.key]: e.target.value })
+										}
 										placeholder="Label"
 										className="input input-xs input-bordered w-full"
 									/>
@@ -174,7 +195,9 @@ export default function PresetsConfigPanel() {
 										<input
 											type="checkbox"
 											checked={form[ch.invertKey]}
-											onChange={(e) => setForm({ ...form, [ch.invertKey]: e.target.checked })}
+											onChange={(e) =>
+												setForm({ ...form, [ch.invertKey]: e.target.checked })
+											}
 											className="checkbox checkbox-xs checkbox-primary"
 										/>
 										<span className="text-xs text-base-content/40">Invert</span>
@@ -193,7 +216,10 @@ export default function PresetsConfigPanel() {
 							</button>
 							<button
 								type="button"
-								onClick={() => { setShowForm(false); setForm(emptyForm); }}
+								onClick={() => {
+									setShowForm(false);
+									setForm(emptyForm);
+								}}
 								className="btn btn-ghost btn-xs"
 							>
 								Cancel

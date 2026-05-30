@@ -48,50 +48,58 @@ export default function TexturePreview({
 	const imageRef = useRef<HTMLImageElement | null>(null);
 	const originalDataRef = useRef<ImageData | null>(null);
 
-	const drawImage = useCallback((img: HTMLImageElement, channel: SoloChannel) => {
-		const canvas = canvasRef.current;
-		if (!canvas) return;
-		canvas.width = img.width;
-		canvas.height = img.height;
-		const ctx = canvas.getContext("2d");
-		if (!ctx) return;
-		ctx.drawImage(img, 0, 0);
-		if (channel === "all") return;
+	const drawImage = useCallback(
+		(img: HTMLImageElement, channel: SoloChannel) => {
+			const canvas = canvasRef.current;
+			if (!canvas) return;
+			canvas.width = img.width;
+			canvas.height = img.height;
+			const ctx = canvas.getContext("2d");
+			if (!ctx) return;
+			ctx.drawImage(img, 0, 0);
+			if (channel === "all") return;
 
-		if (!originalDataRef.current) {
-			originalDataRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
-		}
-		const data = new ImageData(
-			new Uint8ClampedArray(originalDataRef.current.data),
-			canvas.width,
-			canvas.height,
-		);
-		const px = data.data;
-		for (let i = 0; i < px.length; i += 4) {
-			let val: number;
-			switch (channel) {
-				case "r":
-					val = px[i];
-					break;
-				case "g":
-					val = px[i + 1];
-					break;
-				case "b":
-					val = px[i + 2];
-					break;
-				case "a":
-					val = px[i + 3];
-					break;
-				default:
-					val = 0;
+			if (!originalDataRef.current) {
+				originalDataRef.current = ctx.getImageData(
+					0,
+					0,
+					canvas.width,
+					canvas.height,
+				);
 			}
-			px[i] = val;
-			px[i + 1] = val;
-			px[i + 2] = val;
-			px[i + 3] = 255;
-		}
-		ctx.putImageData(data, 0, 0);
-	}, []);
+			const data = new ImageData(
+				new Uint8ClampedArray(originalDataRef.current.data),
+				canvas.width,
+				canvas.height,
+			);
+			const px = data.data;
+			for (let i = 0; i < px.length; i += 4) {
+				let val: number;
+				switch (channel) {
+					case "r":
+						val = px[i];
+						break;
+					case "g":
+						val = px[i + 1];
+						break;
+					case "b":
+						val = px[i + 2];
+						break;
+					case "a":
+						val = px[i + 3];
+						break;
+					default:
+						val = 0;
+				}
+				px[i] = val;
+				px[i + 1] = val;
+				px[i + 2] = val;
+				px[i + 3] = 255;
+			}
+			ctx.putImageData(data, 0, 0);
+		},
+		[],
+	);
 
 	// Load image when imageData changes.
 	useEffect(() => {
@@ -113,7 +121,9 @@ export default function TexturePreview({
 				});
 			}
 		};
-		img.src = imageData.startsWith("data:") ? imageData : `data:image/png;base64,${imageData}`;
+		img.src = imageData.startsWith("data:")
+			? imageData
+			: `data:image/png;base64,${imageData}`;
 		// Only re-run when the image data changes (matches Packi).
 	}, [imageData]);
 
@@ -146,7 +156,12 @@ export default function TexturePreview({
 		(e: React.MouseEvent) => {
 			if (e.button !== 0) return;
 			setIsPanning(true);
-			panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+			panStart.current = {
+				x: e.clientX,
+				y: e.clientY,
+				panX: pan.x,
+				panY: pan.y,
+			};
 		},
 		[pan],
 	);
@@ -156,7 +171,10 @@ export default function TexturePreview({
 			if (!isPanning) return;
 			const dx = e.clientX - panStart.current.x;
 			const dy = e.clientY - panStart.current.y;
-			updateView(zoom, { x: panStart.current.panX + dx, y: panStart.current.panY + dy });
+			updateView(zoom, {
+				x: panStart.current.panX + dx,
+				y: panStart.current.panY + dy,
+			});
 		},
 		[isPanning, zoom, updateView],
 	);
@@ -202,7 +220,9 @@ export default function TexturePreview({
 								type="button"
 								onClick={() => setSoloChannel(ch.id)}
 								className={`btn btn-xs h-6 min-h-0 px-2 font-mono text-xs ${
-									soloChannel === ch.id ? "btn-primary" : `btn-ghost ${ch.color ?? ""}`
+									soloChannel === ch.id
+										? "btn-primary"
+										: `btn-ghost ${ch.color ?? ""}`
 								}`}
 							>
 								{ch.label}

@@ -26,7 +26,9 @@ import { useUndoStore } from "@/stores/undoStore";
 /// editor-transform-tools-todo.md` for resume notes.
 const TRANSFORM_TOOLS_ENABLED = true;
 
-export function EditorTools({ sourceDims }: { sourceDims: { w: number; h: number } | null }) {
+export function EditorTools({
+	sourceDims,
+}: { sourceDims: { w: number; h: number } | null }) {
 	return (
 		<aside className="w-72 shrink-0 border-l border-base-300 bg-base-100 overflow-y-auto">
 			<Section
@@ -34,12 +36,49 @@ export function EditorTools({ sourceDims }: { sourceDims: { w: number; h: number
 				icon={<HiSwatch className="size-3.5" />}
 				last={!TRANSFORM_TOOLS_ENABLED}
 			>
-				<AdjustSlider type="adjust_hue" label="Hue" min={-180} max={180} step={1} unit="°" />
-				<AdjustSlider type="adjust_saturation" label="Saturation" min={-1} max={1} step={0.01} />
-				<AdjustSlider type="adjust_brightness" label="Brightness" min={-1} max={1} step={0.01} />
-				<AdjustSlider type="adjust_contrast" label="Contrast" min={-1} max={1} step={0.01} />
-				<AdjustSlider type="adjust_temperature" label="Temperature" min={-1} max={1} step={0.01} />
-				<AdjustSlider type="adjust_tint" label="Tint" min={-1} max={1} step={0.01} />
+				<AdjustSlider
+					type="adjust_hue"
+					label="Hue"
+					min={-180}
+					max={180}
+					step={1}
+					unit="°"
+				/>
+				<AdjustSlider
+					type="adjust_saturation"
+					label="Saturation"
+					min={-1}
+					max={1}
+					step={0.01}
+				/>
+				<AdjustSlider
+					type="adjust_brightness"
+					label="Brightness"
+					min={-1}
+					max={1}
+					step={0.01}
+				/>
+				<AdjustSlider
+					type="adjust_contrast"
+					label="Contrast"
+					min={-1}
+					max={1}
+					step={0.01}
+				/>
+				<AdjustSlider
+					type="adjust_temperature"
+					label="Temperature"
+					min={-1}
+					max={1}
+					step={0.01}
+				/>
+				<AdjustSlider
+					type="adjust_tint"
+					label="Tint"
+					min={-1}
+					max={1}
+					step={0.01}
+				/>
 				<div className="pt-2">
 					<div className="text-[10px] uppercase tracking-wider text-base-content/45 font-semibold mb-1.5">
 						Luminance curve
@@ -54,7 +93,10 @@ export function EditorTools({ sourceDims }: { sourceDims: { w: number; h: number
 						<CropTool sourceDims={sourceDims} />
 					</Section>
 
-					<Section title="Resize" icon={<HiSquare2Stack className="size-3.5" />}>
+					<Section
+						title="Resize"
+						icon={<HiSquare2Stack className="size-3.5" />}
+					>
 						<ResizeTool sourceDims={sourceDims} />
 					</Section>
 
@@ -62,7 +104,11 @@ export function EditorTools({ sourceDims }: { sourceDims: { w: number; h: number
 						<RotateTool />
 					</Section>
 
-					<Section title="Corner round" icon={<HiSparkles className="size-3.5" />} last>
+					<Section
+						title="Corner round"
+						icon={<HiSparkles className="size-3.5" />}
+						last
+					>
 						<CornerRoundTool sourceDims={sourceDims} />
 					</Section>
 				</>
@@ -457,7 +503,9 @@ const CROP_PRESETS: { label: string; ratio: number }[] = [
 	{ label: "2:3", ratio: 2 / 3 },
 ];
 
-function CropTool({ sourceDims }: { sourceDims: { w: number; h: number } | null }) {
+function CropTool({
+	sourceDims,
+}: { sourceDims: { w: number; h: number } | null }) {
 	const pendingOps = useEditorStore((s) => s.pendingOps);
 	const setOps = useEditorStore((s) => s.setOps);
 	const setCropEditMode = useEditorStore((s) => s.setCropEditMode);
@@ -578,7 +626,9 @@ function centeredCropForAspect(
 	};
 }
 
-function ResizeTool({ sourceDims }: { sourceDims: { w: number; h: number } | null }) {
+function ResizeTool({
+	sourceDims,
+}: { sourceDims: { w: number; h: number } | null }) {
 	const [w, setW] = useState(sourceDims?.w.toString() ?? "");
 	const [h, setH] = useState(sourceDims?.h.toString() ?? "");
 	const [pct, setPct] = useState("100");
@@ -646,7 +696,11 @@ function ResizeTool({ sourceDims }: { sourceDims: { w: number; h: number } | nul
 			) : (
 				<NumberField label="%" value={pct} onChange={setPct} />
 			)}
-			<button type="button" className="btn btn-xs btn-block mt-1" onClick={apply}>
+			<button
+				type="button"
+				className="btn btn-xs btn-block mt-1"
+				onClick={apply}
+			>
 				Apply resize
 			</button>
 		</>
@@ -663,7 +717,7 @@ function RotateTool() {
 		const existing = before.find((o) => o.type === "rotate") as
 			| Extract<Operation, { type: "rotate" }>
 			| undefined;
-		const summed = (((existing?.angle ?? 0) + deg) % 360 + 360) % 360;
+		const summed = ((((existing?.angle ?? 0) + deg) % 360) + 360) % 360;
 		const withoutRotate = before.filter((o) => o.type !== "rotate");
 		const next: Operation[] =
 			summed === 0
@@ -722,17 +776,22 @@ function RotateTool() {
 	);
 }
 
-function CornerRoundTool({ sourceDims }: { sourceDims: { w: number; h: number } | null }) {
+function CornerRoundTool({
+	sourceDims,
+}: { sourceDims: { w: number; h: number } | null }) {
 	const pendingOps = useEditorStore((s) => s.pendingOps);
 	const pushOp = useEditorStore((s) => s.pushOp);
 	const setOps = useEditorStore((s) => s.setOps);
 	const undoPush = useUndoStore((s) => s.push);
-	const maxR = sourceDims ? Math.floor(Math.min(sourceDims.w, sourceDims.h) / 2) : 256;
+	const maxR = sourceDims
+		? Math.floor(Math.min(sourceDims.w, sourceDims.h) / 2)
+		: 256;
 
 	const currentRadius = (() => {
 		for (let i = pendingOps.length - 1; i >= 0; i--) {
 			if (pendingOps[i].type === "corner_round") {
-				return (pendingOps[i] as Extract<Operation, { type: "corner_round" }>).radius;
+				return (pendingOps[i] as Extract<Operation, { type: "corner_round" }>)
+					.radius;
 			}
 		}
 		return 0;
@@ -755,7 +814,10 @@ function CornerRoundTool({ sourceDims }: { sourceDims: { w: number; h: number } 
 	function commitTyped(v: number) {
 		const clamped = Math.max(0, Math.min(maxR, Math.floor(v)));
 		const before = useEditorStore.getState().pendingOps;
-		void pushOp({ type: "corner_round", radius: clamped }, { replaceLastOfType: true });
+		void pushOp(
+			{ type: "corner_round", radius: clamped },
+			{ replaceLastOfType: true },
+		);
 		queueMicrotask(() => {
 			const after = useEditorStore.getState().pendingOps;
 			if (sameOps(before, after)) return;
@@ -799,7 +861,10 @@ function CornerRoundTool({ sourceDims }: { sourceDims: { w: number; h: number } 
 				}}
 				onChange={(e) => {
 					const v = Math.max(0, Math.floor(Number(e.target.value)));
-					void pushOp({ type: "corner_round", radius: v }, { replaceLastOfType: true });
+					void pushOp(
+						{ type: "corner_round", radius: v },
+						{ replaceLastOfType: true },
+					);
 				}}
 				onPointerUp={() => {
 					const before = beforeOpsRef.current;
@@ -829,7 +894,9 @@ function NumberField({
 }) {
 	return (
 		<label className="flex flex-col gap-0.5">
-			<span className="text-[10px] uppercase tracking-wider text-base-content/55">{label}</span>
+			<span className="text-[10px] uppercase tracking-wider text-base-content/55">
+				{label}
+			</span>
 			<input
 				type="number"
 				className="input input-xs input-bordered w-full font-mono text-[11px]"

@@ -23,7 +23,9 @@ type TexturingWorkspaceValue = {
 	setOutputDir: (path: string | null) => void;
 };
 
-const TexturingWorkspaceContext = createContext<TexturingWorkspaceValue | null>(null);
+const TexturingWorkspaceContext = createContext<TexturingWorkspaceValue | null>(
+	null,
+);
 
 /// Returns the active texturing workspace's working-dir state, or null when
 /// used outside a texturing workspace (the shared UI degrades gracefully).
@@ -43,7 +45,8 @@ export function TexturingWorkspaceProvider({
 	const rootFolder = getWorkingFolder(workspace);
 	const fileFilters = getFileFilters(workspace);
 	const tx = getWorkflowConfig(workspace, "texturing");
-	const outputDir = typeof tx.outputDir === "string" && tx.outputDir ? tx.outputDir : null;
+	const outputDir =
+		typeof tx.outputDir === "string" && tx.outputDir ? tx.outputDir : null;
 
 	const value = useMemo<TexturingWorkspaceValue>(
 		() => ({

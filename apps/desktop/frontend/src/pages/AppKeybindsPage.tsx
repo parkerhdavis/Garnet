@@ -36,7 +36,9 @@ export function AppKeybindsPage() {
 									))}
 								</ul>
 								{cat.hint && (
-									<p className="text-xs text-base-content/55 mt-1">{cat.hint}</p>
+									<p className="text-xs text-base-content/55 mt-1">
+										{cat.hint}
+									</p>
 								)}
 							</div>
 						</section>
@@ -54,7 +56,9 @@ function KeybindRow({ item }: { item: Keybind }) {
 			<span className="flex items-center gap-1 shrink-0">
 				{item.keys.map((k, i) => (
 					<span key={`${k}-${i}`} className="flex items-center gap-1">
-						{i > 0 && <span className="text-[10px] text-base-content/40">+</span>}
+						{i > 0 && (
+							<span className="text-[10px] text-base-content/40">+</span>
+						)}
 						<kbd className="kbd kbd-sm">{k}</kbd>
 					</span>
 				))}

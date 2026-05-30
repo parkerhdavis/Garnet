@@ -35,8 +35,8 @@ export function PluginsPage() {
 					<div>
 						<h1 className="text-xl font-semibold tracking-tight">Plugins</h1>
 						<p className="text-sm text-base-content/60">
-							First-party plugins add per-media-type tools. Enable one to surface
-							its workspace type and automation steps.
+							First-party plugins add per-media-type tools. Enable one to
+							surface its workspace type and automation steps.
 						</p>
 					</div>
 				</header>
@@ -90,11 +90,15 @@ function PluginRow({
 					<div className="flex items-center gap-2">
 						<h2 className="text-base font-medium truncate">{plugin.name}</h2>
 						{plugin.version && (
-							<span className="badge badge-ghost badge-sm">v{plugin.version}</span>
+							<span className="badge badge-ghost badge-sm">
+								v{plugin.version}
+							</span>
 						)}
 					</div>
 					{plugin.description && (
-						<p className="text-sm text-base-content/65 mt-1">{plugin.description}</p>
+						<p className="text-sm text-base-content/65 mt-1">
+							{plugin.description}
+						</p>
 					)}
 					{contributions.length > 0 && (
 						<p className="text-xs text-base-content/45 mt-2">

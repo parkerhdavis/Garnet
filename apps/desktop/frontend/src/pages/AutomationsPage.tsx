@@ -69,7 +69,8 @@ export function AutomationsPage() {
 	// enabled) so a step from a since-disabled plugin still renders.
 	const contributionByType = useMemo(() => {
 		const map = new Map<string, AutomationStepContribution>();
-		for (const { contribution } of allAutomationSteps()) map.set(contribution.type, contribution);
+		for (const { contribution } of allAutomationSteps())
+			map.set(contribution.type, contribution);
 		return map;
 	}, []);
 
@@ -77,7 +78,8 @@ export function AutomationsPage() {
 	const paletteGroups = useMemo(() => {
 		const groups = new Map<string, AutomationStepContribution[]>();
 		for (const c of enabledAutomationSteps()) {
-			const key = c.group === "base" ? "Base" : (getPlugin(c.group)?.name ?? c.group);
+			const key =
+				c.group === "base" ? "Base" : (getPlugin(c.group)?.name ?? c.group);
 			const arr = groups.get(key) ?? [];
 			arr.push(c);
 			groups.set(key, arr);
@@ -146,10 +148,12 @@ export function AutomationsPage() {
 					<HiBolt className="size-5 text-base-content/70" />
 				</div>
 				<div className="flex-1 min-w-0">
-					<h1 className="text-lg font-semibold tracking-tight leading-tight">Automations</h1>
+					<h1 className="text-lg font-semibold tracking-tight leading-tight">
+						Automations
+					</h1>
 					<p className="text-xs text-base-content/55">
-						Bulk-process image files through a reusable pipeline. Non-destructive —
-						always writes to a separate output folder.
+						Bulk-process image files through a reusable pipeline.
+						Non-destructive — always writes to a separate output folder.
 					</p>
 				</div>
 				<PresetMenu
@@ -168,14 +172,29 @@ export function AutomationsPage() {
 						<span className="text-xs font-semibold text-base-content/50 flex-1">
 							Input ({inputFiles.length})
 						</span>
-						<button type="button" onClick={handleAddFiles} className="btn btn-ghost btn-xs" title="Add files">
+						<button
+							type="button"
+							onClick={handleAddFiles}
+							className="btn btn-ghost btn-xs"
+							title="Add files"
+						>
 							<HiPlus className="size-4" />
 						</button>
-						<button type="button" onClick={handleAddFolder} className="btn btn-ghost btn-xs" title="Add folder">
+						<button
+							type="button"
+							onClick={handleAddFolder}
+							className="btn btn-ghost btn-xs"
+							title="Add folder"
+						>
 							<HiFolderOpen className="size-4" />
 						</button>
 						{inputFiles.length > 0 && (
-							<button type="button" onClick={clearFiles} className="btn btn-ghost btn-xs text-error" title="Clear all">
+							<button
+								type="button"
+								onClick={clearFiles}
+								className="btn btn-ghost btn-xs text-error"
+								title="Clear all"
+							>
 								<HiTrash className="size-4" />
 							</button>
 						)}
@@ -187,7 +206,9 @@ export function AutomationsPage() {
 							checked={recursive}
 							onChange={(e) => setRecursive(e.target.checked)}
 						/>
-						<span className="text-xs text-base-content/50">Include subfolders</span>
+						<span className="text-xs text-base-content/50">
+							Include subfolders
+						</span>
 					</label>
 					<div className="flex-1 overflow-y-auto">
 						{inputFiles.length === 0 ? (
@@ -201,7 +222,10 @@ export function AutomationsPage() {
 							</button>
 						) : (
 							inputFiles.map((f, i) => (
-								<div key={f} className="flex items-center gap-1 px-2 py-1 hover:bg-base-200 group">
+								<div
+									key={f}
+									className="flex items-center gap-1 px-2 py-1 hover:bg-base-200 group"
+								>
 									<span className="text-xs truncate flex-1" title={f}>
 										{f.split(/[\\/]/).pop()}
 									</span>
@@ -221,15 +245,27 @@ export function AutomationsPage() {
 				{/* Pipeline */}
 				<div className="w-72 shrink-0 flex flex-col border-r border-base-300">
 					<div className="p-2 border-b border-base-300 flex items-center gap-1">
-						<span className="text-xs font-semibold text-base-content/50 flex-1">Pipeline</span>
+						<span className="text-xs font-semibold text-base-content/50 flex-1">
+							Pipeline
+						</span>
 						<div className="dropdown dropdown-end">
-							<button type="button" tabIndex={0} className="btn btn-ghost btn-xs" title="Add step">
+							<button
+								type="button"
+								tabIndex={0}
+								className="btn btn-ghost btn-xs"
+								title="Add step"
+							>
 								<HiPlus className="size-4" />
 							</button>
-							<ul tabIndex={0} className="dropdown-content menu p-1 shadow bg-base-200 rounded-box w-48 z-20">
+							<ul
+								tabIndex={0}
+								className="dropdown-content menu p-1 shadow bg-base-200 rounded-box w-48 z-20"
+							>
 								{paletteGroups.map(([groupLabel, steps]) => (
 									<li key={groupLabel}>
-										<h2 className="menu-title text-[10px] uppercase py-1">{groupLabel}</h2>
+										<h2 className="menu-title text-[10px] uppercase py-1">
+											{groupLabel}
+										</h2>
 										<ul>
 											{steps.map((st) => {
 												const Icon = st.icon;
@@ -239,7 +275,10 @@ export function AutomationsPage() {
 															type="button"
 															className="text-xs"
 															onClick={() =>
-																addStep({ type: st.type, params: st.defaultParams() })
+																addStep({
+																	type: st.type,
+																	params: st.defaultParams(),
+																})
 															}
 														>
 															<Icon className="size-3.5" />
@@ -271,7 +310,9 @@ export function AutomationsPage() {
 									>
 										<div className="flex items-center justify-between mb-1">
 											<div className="flex items-center gap-1.5 min-w-0">
-												{Icon && <Icon className="size-3.5 shrink-0 text-base-content/60" />}
+												{Icon && (
+													<Icon className="size-3.5 shrink-0 text-base-content/60" />
+												)}
 												<span className="text-xs font-semibold truncate">
 													{c?.label ?? step.type}
 												</span>
@@ -321,7 +362,9 @@ export function AutomationsPage() {
 				<div className="flex-1 flex flex-col min-w-0">
 					<div className="p-3 border-b border-base-300 space-y-2">
 						<div className="flex gap-2 items-center">
-							<span className="text-xs font-semibold text-base-content/50">Output:</span>
+							<span className="text-xs font-semibold text-base-content/50">
+								Output:
+							</span>
 							<input
 								type="text"
 								value={outputDir ?? ""}
@@ -329,7 +372,11 @@ export function AutomationsPage() {
 								placeholder="Select output directory…"
 								className="input input-xs input-bordered flex-1 font-mono"
 							/>
-							<button type="button" onClick={handlePickOutputDir} className="btn btn-ghost btn-xs">
+							<button
+								type="button"
+								onClick={handlePickOutputDir}
+								className="btn btn-ghost btn-xs"
+							>
 								<HiFolderOpen className="size-4" />
 							</button>
 						</div>
@@ -355,7 +402,9 @@ export function AutomationsPage() {
 								checked={continueOnError}
 								onChange={(e) => setContinueOnError(e.target.checked)}
 							/>
-							<span className="text-xs text-base-content/50">Continue on error</span>
+							<span className="text-xs text-base-content/50">
+								Continue on error
+							</span>
 						</label>
 					</div>
 
@@ -372,19 +421,36 @@ export function AutomationsPage() {
 								</thead>
 								<tbody>
 									{previewItems.map((item, i) => {
-										const done = running ? progress != null && i < progress.current : result != null;
-										const failure = result?.failed.find((f) => f.path === item.input_path);
-										const active = running && progress != null && i === progress.current;
+										const done = running
+											? progress != null && i < progress.current
+											: result != null;
+										const failure = result?.failed.find(
+											(f) => f.path === item.input_path,
+										);
+										const active =
+											running && progress != null && i === progress.current;
 										return (
-											<tr key={item.input_path} className={failure ? "bg-error/5" : ""}>
+											<tr
+												key={item.input_path}
+												className={failure ? "bg-error/5" : ""}
+											>
 												{(running || result) && (
 													<td className="w-6 px-1">
-														{done && !failure && <HiCheck className="size-3 text-success" />}
-														{failure && <HiXMark className="size-3 text-error" />}
-														{active && <span className="loading loading-spinner loading-xs" />}
+														{done && !failure && (
+															<HiCheck className="size-3 text-success" />
+														)}
+														{failure && (
+															<HiXMark className="size-3 text-error" />
+														)}
+														{active && (
+															<span className="loading loading-spinner loading-xs" />
+														)}
 													</td>
 												)}
-												<td className="truncate max-w-32 text-xs" title={item.input_path}>
+												<td
+													className="truncate max-w-32 text-xs"
+													title={item.input_path}
+												>
 													{item.input_path.split(/[\\/]/).pop()}
 												</td>
 												<td className="text-xs font-mono">
@@ -425,10 +491,17 @@ export function AutomationsPage() {
 							)}
 							{result && !running && (
 								<p className="text-xs">
-									<span className="text-success font-semibold">{result.processed}</span> processed
+									<span className="text-success font-semibold">
+										{result.processed}
+									</span>{" "}
+									processed
 									{result.failed.length > 0 && (
 										<span>
-											, <span className="text-error font-semibold">{result.failed.length}</span> failed
+											,{" "}
+											<span className="text-error font-semibold">
+												{result.failed.length}
+											</span>{" "}
+											failed
 										</span>
 									)}
 								</p>
@@ -460,9 +533,17 @@ function PresetMenu({
 				Presets
 				<HiChevronDown className="size-3" />
 			</button>
-			<ul tabIndex={0} className="dropdown-content menu p-1 shadow bg-base-200 rounded-box w-56 z-20">
+			<ul
+				tabIndex={0}
+				className="dropdown-content menu p-1 shadow bg-base-200 rounded-box w-56 z-20"
+			>
 				<li>
-					<button type="button" className="text-xs" onClick={onSave} disabled={!canSave}>
+					<button
+						type="button"
+						className="text-xs"
+						onClick={onSave}
+						disabled={!canSave}
+					>
 						<HiPlus className="size-3.5" />
 						Save current pipeline…
 					</button>
@@ -471,7 +552,11 @@ function PresetMenu({
 				{presets.map((p) => (
 					<li key={p.name}>
 						<div className="flex items-center gap-1 text-xs">
-							<button type="button" className="flex-1 text-left" onClick={() => onApply(p)}>
+							<button
+								type="button"
+								className="flex-1 text-left"
+								onClick={() => onApply(p)}
+							>
 								{p.name}
 							</button>
 							<button

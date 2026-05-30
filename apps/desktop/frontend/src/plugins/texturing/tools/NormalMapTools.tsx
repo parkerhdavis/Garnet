@@ -14,10 +14,22 @@ import {
 } from "@/plugins/texturing/stores/normalStore";
 
 const OPERATIONS: { id: NormalOperation; label: string; hint: string }[] = [
-	{ id: "flip", label: "Flip Green", hint: "Swap DirectX ↔ OpenGL convention." },
-	{ id: "height-to-normal", label: "Height → Normal", hint: "Sobel from a grayscale heightmap." },
+	{
+		id: "flip",
+		label: "Flip Green",
+		hint: "Swap DirectX ↔ OpenGL convention.",
+	},
+	{
+		id: "height-to-normal",
+		label: "Height → Normal",
+		hint: "Sobel from a grayscale heightmap.",
+	},
 	{ id: "blend", label: "Blend", hint: "Reoriented normal-map blend (RNM)." },
-	{ id: "normalize", label: "Normalize", hint: "Re-normalize vectors to unit length." },
+	{
+		id: "normalize",
+		label: "Normalize",
+		hint: "Re-normalize vectors to unit length.",
+	},
 ];
 
 const EXPORT_FORMATS: ExportFormat[] = ["png8", "png16", "tga"];
@@ -51,7 +63,9 @@ export default function NormalMapTools() {
 			<div className="w-64 shrink-0 flex flex-col border-r border-base-300 overflow-y-auto">
 				<div className="p-3 space-y-3">
 					<div>
-						<span className="text-xs font-semibold text-base-content/50 mb-1 block">Input</span>
+						<span className="text-xs font-semibold text-base-content/50 mb-1 block">
+							Input
+						</span>
 						<DropZone
 							label="Normal map / heightmap"
 							filePath={inputPath}
@@ -79,7 +93,9 @@ export default function NormalMapTools() {
 									}`}
 								>
 									<div className="text-xs font-medium">{op.label}</div>
-									<div className="text-[10px] text-base-content/50">{op.hint}</div>
+									<div className="text-[10px] text-base-content/50">
+										{op.hint}
+									</div>
 								</button>
 							))}
 						</div>

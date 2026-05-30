@@ -135,11 +135,7 @@ export function ContextMenuRoot() {
 				{items.map((item, i) => {
 					if (item.kind === "separator") {
 						return (
-							<div
-								key={i}
-								className="my-1 h-px bg-base-300"
-								role="separator"
-							/>
+							<div key={i} className="my-1 h-px bg-base-300" role="separator" />
 						);
 					}
 					const { label, icon: Icon, onClick, disabled, danger } = item;

@@ -44,7 +44,16 @@ const IDLE_TEARDOWN_MS = 30_000;
 const IDLE_SCHEDULE_TIMEOUT_MS = 500;
 
 const MODEL_KINDS = [
-	"gltf", "glb", "obj", "stl", "ply", "fbx", "usd", "usda", "usdc", "usdz",
+	"gltf",
+	"glb",
+	"obj",
+	"stl",
+	"ply",
+	"fbx",
+	"usd",
+	"usda",
+	"usdc",
+	"usdz",
 ] as const;
 type ModelKind = (typeof MODEL_KINDS)[number];
 
@@ -61,7 +70,9 @@ type Job = {
 function detectKind(format: string | null): ModelKind | null {
 	if (!format) return null;
 	const e = format.toLowerCase();
-	return (MODEL_KINDS as readonly string[]).includes(e) ? (e as ModelKind) : null;
+	return (MODEL_KINDS as readonly string[]).includes(e)
+		? (e as ModelKind)
+		: null;
 }
 
 function jobKey(absPath: string, mtime: number | null, size: number): string {
@@ -318,7 +329,10 @@ class Thumbnailer {
 	private async loadModel(
 		url: string,
 		kind: ModelKind,
-	): Promise<{ object: THREE.Object3D; animations: THREE.AnimationClip[] } | null> {
+	): Promise<{
+		object: THREE.Object3D;
+		animations: THREE.AnimationClip[];
+	} | null> {
 		const loaders = this.loaders!;
 		try {
 			switch (kind) {
@@ -473,7 +487,11 @@ function logDiagnostics(
 		if (c instanceof THREE.Bone) {
 			bones++;
 			v.setFromMatrixPosition(c.matrixWorld);
-			if (!Number.isFinite(v.x) || !Number.isFinite(v.y) || !Number.isFinite(v.z)) {
+			if (
+				!Number.isFinite(v.x) ||
+				!Number.isFinite(v.y) ||
+				!Number.isFinite(v.z)
+			) {
 				nanBones++;
 			}
 		}
@@ -510,7 +528,10 @@ function settleSkinnedMeshes(object: THREE.Object3D): void {
 	});
 }
 
-function frameObjectInCamera(object: THREE.Object3D, camera: THREE.PerspectiveCamera): void {
+function frameObjectInCamera(
+	object: THREE.Object3D,
+	camera: THREE.PerspectiveCamera,
+): void {
 	// For meshes, Box3.setFromObject works fine. For skinned content, the
 	// box is computed from bind-pose vertex positions and can disagree
 	// dramatically with where the model actually renders. Union with bone
@@ -521,7 +542,11 @@ function frameObjectInCamera(object: THREE.Object3D, camera: THREE.PerspectiveCa
 	object.traverse((c) => {
 		if (c instanceof THREE.Bone) {
 			const p = new THREE.Vector3().setFromMatrixPosition(c.matrixWorld);
-			if (Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)) {
+			if (
+				Number.isFinite(p.x) &&
+				Number.isFinite(p.y) &&
+				Number.isFinite(p.z)
+			) {
 				box.expandByPoint(p);
 			}
 		}

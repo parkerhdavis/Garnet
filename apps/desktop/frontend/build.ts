@@ -9,8 +9,8 @@
  *   TAURI_DEBUG  — when truthy, skips minification and enables sourcemaps
  */
 
-import { cp, rm, mkdir } from "fs/promises";
-import { existsSync } from "fs";
+import { cp, rm, mkdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 
 const DIST = "dist";
 const isDebug = !!process.env.TAURI_DEBUG;
@@ -29,9 +29,12 @@ await mkdir(DIST, { recursive: true });
 console.log("  -> Building CSS...");
 const cssProc = Bun.spawn(
 	[
-		"bunx", "@tailwindcss/cli",
-		"-i", "src/styles/index.css",
-		"-o", `${DIST}/styles.css`,
+		"bunx",
+		"@tailwindcss/cli",
+		"-i",
+		"src/styles/index.css",
+		"-o",
+		`${DIST}/styles.css`,
 		...(isDebug ? [] : ["--minify"]),
 	],
 	{ stdout: "inherit", stderr: "inherit" },
@@ -56,12 +59,16 @@ const mainResult = await Bun.build({
 	// (Three.js, the offscreen thumbnailer) get parsed on initial page load
 	// even though they're never used until the user opens a 3D asset.
 	splitting: true,
-	naming: { entry: "[name].js", chunk: "[name]-[hash].js", asset: "[name]-[hash][ext]" },
+	naming: {
+		entry: "[name].js",
+		chunk: "[name]-[hash].js",
+		asset: "[name]-[hash][ext]",
+	},
 	minify: !isDebug,
 	sourcemap: isDebug ? "linked" : "none",
 	define: {
 		"process.env.NODE_ENV": isDebug ? '"development"' : '"production"',
-		"__APP_VERSION__": JSON.stringify(pkg.version),
+		__APP_VERSION__: JSON.stringify(pkg.version),
 	},
 });
 if (!mainResult.success) {

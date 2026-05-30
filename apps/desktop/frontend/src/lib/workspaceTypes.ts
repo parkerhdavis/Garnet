@@ -49,7 +49,13 @@ export function workspaceTypeMeta(type: string): WorkspaceTypeMeta {
 			defaultFileFilters: w.contribution.defaultFileFilters,
 		};
 	}
-	return { type, label: type, icon: HiSquares2X2, description: "", usesWorkingFolder: true };
+	return {
+		type,
+		label: type,
+		icon: HiSquares2X2,
+		description: "",
+		usesWorkingFolder: true,
+	};
 }
 
 /// The workspace types a user can create right now: the base Library type plus

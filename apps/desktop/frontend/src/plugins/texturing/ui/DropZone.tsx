@@ -73,7 +73,9 @@ export default function DropZone({
 					compact ? "p-2" : "p-4"
 				}`}
 			>
-				<span className={`text-base-content/40 ${compact ? "text-xs" : "text-sm"}`}>
+				<span
+					className={`text-base-content/40 ${compact ? "text-xs" : "text-sm"}`}
+				>
 					Importing…
 				</span>
 				<progress className="progress progress-primary w-full" />
@@ -92,7 +94,11 @@ export default function DropZone({
 				onDrop={handleDrop}
 			>
 				<img
-					src={thumbnail.startsWith("data:") ? thumbnail : `data:image/png;base64,${thumbnail}`}
+					src={
+						thumbnail.startsWith("data:")
+							? thumbnail
+							: `data:image/png;base64,${thumbnail}`
+					}
 					alt={filename ?? ""}
 					className={`rounded object-cover bg-base-300 ${compact ? "size-8" : "size-12"}`}
 				/>
@@ -128,7 +134,11 @@ export default function DropZone({
 			} ${compact ? "p-2" : "p-4"}`}
 		>
 			<HiArrowUpTray className={compact ? "size-3.5" : "size-5"} />
-			<span className={`text-base-content/40 ${compact ? "text-xs" : "text-sm"}`}>{label}</span>
+			<span
+				className={`text-base-content/40 ${compact ? "text-xs" : "text-sm"}`}
+			>
+				{label}
+			</span>
 		</button>
 	);
 }

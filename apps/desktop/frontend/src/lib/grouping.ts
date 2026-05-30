@@ -26,7 +26,10 @@ const DAY_SECS = 86_400;
  *  which matches how the backend captures NOW when building the query. Small
  *  drift between the two clocks is harmless (the asset stays in the same run
  *  even if its label changes by one). */
-export function mtimeBucket(mtime: number | null): { key: number; label: string } {
+export function mtimeBucket(mtime: number | null): {
+	key: number;
+	label: string;
+} {
 	if (mtime === null) return { key: 4, label: "Unknown date" };
 	const now = Math.floor(Date.now() / 1000);
 	if (mtime >= now - DAY_SECS) return { key: 0, label: "Today" };
@@ -44,14 +47,22 @@ function folderOf(rel: string): string {
  *  `key` is what's compared between rows to detect group boundaries; `label`
  *  is the heading shown to the user. */
 export function groupOf(
-	asset: { root_path: string; relative_path: string; format: string | null; mtime: number | null },
+	asset: {
+		root_path: string;
+		relative_path: string;
+		format: string | null;
+		mtime: number | null;
+	},
 	groupBy: AssetGroupBy,
 ): { key: string; label: string } | null {
 	switch (groupBy) {
 		case "none":
 			return null;
 		case "root":
-			return { key: `r:${asset.root_path}`, label: abbreviatePath(asset.root_path) };
+			return {
+				key: `r:${asset.root_path}`,
+				label: abbreviatePath(asset.root_path),
+			};
 		case "folder": {
 			const folder = folderOf(asset.relative_path);
 			const slash = folder.lastIndexOf("/");

@@ -32,30 +32,81 @@ import { useBgTasksStore } from "@/stores/bgTasksStore";
 import { awaitBootReady } from "@/stores/bootStore";
 
 const RASTER_EXTS = new Set([
-	"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp",
+	"png",
+	"jpg",
+	"jpeg",
+	"gif",
+	"bmp",
+	"tif",
+	"tiff",
+	"webp",
 ]);
 const ANIMATED_IMAGE_EXTS = new Set(["gif"]);
-const VIDEO_EXTS = new Set([
-	"mp4", "mov", "mkv", "avi", "webm", "m4v", "wmv",
-]);
+const VIDEO_EXTS = new Set(["mp4", "mov", "mkv", "avi", "webm", "m4v", "wmv"]);
 const AUDIO_EXTS = new Set([
-	"mp3", "wav", "flac", "ogg", "aiff", "m4a", "opus",
+	"mp3",
+	"wav",
+	"flac",
+	"ogg",
+	"aiff",
+	"m4a",
+	"opus",
 ]);
 const MODEL_EXTS = new Set([
-	"fbx", "obj", "gltf", "glb", "usd", "usda", "usdc", "usdz", "stl", "blend", "dae", "3ds", "ply",
+	"fbx",
+	"obj",
+	"gltf",
+	"glb",
+	"usd",
+	"usda",
+	"usdc",
+	"usdz",
+	"stl",
+	"blend",
+	"dae",
+	"3ds",
+	"ply",
 ]);
 /// Subset the frontend's Three.js thumbnailer can render. Other model
 /// formats stay on the cube-icon fallback.
 const RENDERABLE_MODEL_EXTS = new Set([
-	"gltf", "glb", "obj", "stl", "ply", "fbx", "usd", "usda", "usdc", "usdz",
+	"gltf",
+	"glb",
+	"obj",
+	"stl",
+	"ply",
+	"fbx",
+	"usd",
+	"usda",
+	"usdc",
+	"usdz",
 ]);
 /// `.blend` doesn't render in Three.js, but the backend extracts the
 /// preview Blender saves into the file header. From the AssetThumbnail's
 /// perspective it's just another backend-thumbnail format like images.
 const BLEND_EXTS = new Set(["blend"]);
 const CODE_EXTS = new Set([
-	"json", "xml", "yaml", "yml", "toml", "js", "ts", "tsx", "jsx", "py", "rs",
-	"go", "java", "cs", "cpp", "c", "h", "sh", "html", "css", "md",
+	"json",
+	"xml",
+	"yaml",
+	"yml",
+	"toml",
+	"js",
+	"ts",
+	"tsx",
+	"jsx",
+	"py",
+	"rs",
+	"go",
+	"java",
+	"cs",
+	"cpp",
+	"c",
+	"h",
+	"sh",
+	"html",
+	"css",
+	"md",
 ]);
 
 const HOVER_PLAYBACK_DELAY_MS = 600;
@@ -63,13 +114,16 @@ const HOVER_PLAYBACK_DELAY_MS = 600;
 // Lazy-loaded so the three.js stack stays in its own chunk and only loads
 // on first hover. Shares the chunk with ModelPreview + modelThumbnailer.
 const Live3DPreview = lazy(() =>
-	import("@/components/Live3DPreview").then((m) => ({ default: m.Live3DPreview })),
+	import("@/components/Live3DPreview").then((m) => ({
+		default: m.Live3DPreview,
+	})),
 );
 
 function fallbackIconFor(format: string | null) {
 	if (!format) return HiOutlineDocument;
 	const f = format.toLowerCase();
-	if (RASTER_EXTS.has(f) || ["svg", "avif", "ico"].includes(f)) return HiOutlinePhoto;
+	if (RASTER_EXTS.has(f) || ["svg", "avif", "ico"].includes(f))
+		return HiOutlinePhoto;
 	if (VIDEO_EXTS.has(f)) return HiOutlineFilm;
 	if (AUDIO_EXTS.has(f)) return HiOutlineMusicalNote;
 	if (MODEL_EXTS.has(f)) return HiOutlineCube;
@@ -87,7 +141,8 @@ function isHoverPlayable(asset: Asset): "video" | "image" | "model" | null {
 	// meaningful clip to play. NULL (= not yet classified) is treated as
 	// "don't bother" so the static thumbnail isn't disrupted by spinning
 	// up a WebGL context that probably won't show anything moving.
-	if (RENDERABLE_MODEL_EXTS.has(f) && asset.has_animation === true) return "model";
+	if (RENDERABLE_MODEL_EXTS.has(f) && asset.has_animation === true)
+		return "model";
 	return null;
 }
 
@@ -100,7 +155,12 @@ type Props = {
 	liveOnHover?: boolean;
 };
 
-export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover = false }: Props) {
+export function AssetThumbnail({
+	asset,
+	size = 240,
+	className = "",
+	liveOnHover = false,
+}: Props) {
 	const [src, setSrc] = useState<string | null>(null);
 	const [failed, setFailed] = useState(false);
 	const [hovering, setHovering] = useState(false);
@@ -149,7 +209,8 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 			},
 		);
 
-		api.getThumbnail(absPath, asset.mtime, size)
+		api
+			.getThumbnail(absPath, asset.mtime, size)
 			.then(async (path) => {
 				if (cancelled) return;
 				if (path) {
@@ -243,12 +304,22 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 		return () => {
 			cancelled = true;
 		};
-	}, [showLive, playable, asset.id, asset.mtime, asset.relative_path, asset.root_path]);
+	}, [
+		showLive,
+		playable,
+		asset.id,
+		asset.mtime,
+		asset.relative_path,
+		asset.root_path,
+	]);
 
 	const onEnter = () => {
 		if (!liveOnHover || playable === null) return;
 		if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-		hoverTimerRef.current = setTimeout(() => setHovering(true), HOVER_PLAYBACK_DELAY_MS);
+		hoverTimerRef.current = setTimeout(
+			() => setHovering(true),
+			HOVER_PLAYBACK_DELAY_MS,
+		);
 	};
 	const onLeave = () => {
 		if (hoverTimerRef.current) {
@@ -263,9 +334,10 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 		};
 	}, []);
 
-	const wrapperProps = liveOnHover && playable !== null
-		? { onMouseEnter: onEnter, onMouseLeave: onLeave }
-		: {};
+	const wrapperProps =
+		liveOnHover && playable !== null
+			? { onMouseEnter: onEnter, onMouseLeave: onLeave }
+			: {};
 
 	// Absolute-positioning the media element inside a relative wrapper keeps
 	// the wrapper's size authoritative; without this, vertical/non-standard
@@ -277,8 +349,14 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 	if (showLive && liveSrc) {
 		if (playable === "video") {
 			content = (
-				// biome-ignore lint/a11y/useMediaCaption: thumbnail preview, no captions track available
-				<video src={liveSrc} autoPlay muted loop playsInline className={mediaCls} />
+				<video
+					src={liveSrc}
+					autoPlay
+					muted
+					loop
+					playsInline
+					className={mediaCls}
+				/>
 			);
 		} else if (playable === "model") {
 			content = (
@@ -293,11 +371,17 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 				</Suspense>
 			);
 		} else {
-			content = <img src={liveSrc} alt={asset.relative_path} className={mediaCls} />;
+			content = (
+				<img src={liveSrc} alt={asset.relative_path} className={mediaCls} />
+			);
 		}
 	} else if (src) {
 		content = (
-			<img src={src} alt={asset.relative_path} className={`${mediaCls} ${className}`} />
+			<img
+				src={src}
+				alt={asset.relative_path}
+				className={`${mediaCls} ${className}`}
+			/>
 		);
 	} else if (failed) {
 		const Icon = fallbackIconFor(asset.format);
@@ -307,13 +391,17 @@ export function AssetThumbnail({ asset, size = 240, className = "", liveOnHover 
 			>
 				<Icon className="size-12" />
 				{asset.format && (
-					<span className="mt-1 text-xs uppercase tracking-wide">{asset.format}</span>
+					<span className="mt-1 text-xs uppercase tracking-wide">
+						{asset.format}
+					</span>
 				)}
 			</div>
 		);
 	} else {
 		content = (
-			<div className={`absolute inset-0 flex items-center justify-center ${className}`}>
+			<div
+				className={`absolute inset-0 flex items-center justify-center ${className}`}
+			>
 				<span className="loading loading-spinner loading-sm opacity-40" />
 			</div>
 		);

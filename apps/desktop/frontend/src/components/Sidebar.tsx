@@ -53,7 +53,10 @@ import {
 import { confirm } from "@/components/ConfirmDialog";
 import { openContextMenu } from "@/components/ContextMenu";
 import { pickFileToPreview } from "@/lib/ephemeral";
-import { NewWorkspaceDialog, type NewWorkspaceOptions } from "@/components/NewWorkspaceDialog";
+import {
+	NewWorkspaceDialog,
+	type NewWorkspaceOptions,
+} from "@/components/NewWorkspaceDialog";
 import { WorkspaceSettingsDialog } from "@/components/WorkspaceSettingsDialog";
 import { prompt } from "@/components/PromptDialog";
 import type { PinnedSource, Workspace } from "@/lib/tauri";
@@ -63,7 +66,13 @@ import { usePinnedSourcesStore } from "@/stores/pinnedSourcesStore";
 import { useWorkspacesStore } from "@/stores/workspacesStore";
 
 export function Sidebar() {
-	const { sources, refresh, pin, unpin, error: pinError } = usePinnedSourcesStore();
+	const {
+		sources,
+		refresh,
+		pin,
+		unpin,
+		error: pinError,
+	} = usePinnedSourcesStore();
 	const roots = useLibraryStore((s) => s.roots);
 	const workspaces = useWorkspacesStore((s) => s.workspaces);
 	const refreshWorkspaces = useWorkspacesStore((s) => s.refresh);
@@ -75,7 +84,9 @@ export function Sidebar() {
 	const params = useParams<{ id?: string }>();
 	const activeSourceId = params.id ? Number(params.id) : null;
 	const [newWorkspaceOpen, setNewWorkspaceOpen] = useState(false);
-	const [settingsWorkspace, setSettingsWorkspace] = useState<Workspace | null>(null);
+	const [settingsWorkspace, setSettingsWorkspace] = useState<Workspace | null>(
+		null,
+	);
 
 	useEffect(() => {
 		void refresh();
@@ -117,7 +128,8 @@ export function Sidebar() {
 			danger: true,
 		});
 		if (!ok) return;
-		if (params.id && Number(params.id) === ws.id) navigate("/", { replace: true });
+		if (params.id && Number(params.id) === ws.id)
+			navigate("/", { replace: true });
 		await removeWorkspace(ws.id);
 	}
 
@@ -221,7 +233,7 @@ export function Sidebar() {
 				</div>
 			</Link>
 
-			<nav className="flex-1 overflow-y-auto py-3 px-2 divide-y divide-base-300 [&>*]:py-6 [&>*:first-child]:pt-1 [&>*:last-child]:pb-2">
+			<nav className="flex-1 overflow-y-auto py-3 px-2 divide-y divide-base-300 [&>*]:py-6 [&>*:first-child]:pt-1 [&>*:first-child]:pb-2 [&>*:last-child]:pb-2">
 				{/* Ad-hoc open: deliberately above Workspaces and outside the
 				    Library group — it's a one-off "look at this loose file,"
 				    not a curation of the library (cf. Pin source). */}
@@ -281,10 +293,18 @@ export function Sidebar() {
 					</NavSection>
 
 					<NavSection title="Types">
-						<NavItem to="/types/images" icon={HiPhoto}>Images</NavItem>
-						<NavItem to="/types/videos" icon={HiFilm}>Videos</NavItem>
-						<NavItem to="/types/audio" icon={HiMusicalNote}>Audio</NavItem>
-						<NavItem to="/types/models" icon={HiCube}>Models</NavItem>
+						<NavItem to="/types/images" icon={HiPhoto}>
+							Images
+						</NavItem>
+						<NavItem to="/types/videos" icon={HiFilm}>
+							Videos
+						</NavItem>
+						<NavItem to="/types/audio" icon={HiMusicalNote}>
+							Audio
+						</NavItem>
+						<NavItem to="/types/models" icon={HiCube}>
+							Models
+						</NavItem>
 						<NavItem to="/types/animations" icon={HiSparkles}>
 							Animations
 						</NavItem>
@@ -348,7 +368,10 @@ export function Sidebar() {
 	);
 }
 
-function NavGroup({ title, children }: { title: string; children: React.ReactNode }) {
+function NavGroup({
+	title,
+	children,
+}: { title: string; children: React.ReactNode }) {
 	return (
 		<div>
 			<div className="text-xs uppercase tracking-wider text-base-content/70 px-2 mb-4 font-bold">
@@ -359,7 +382,10 @@ function NavGroup({ title, children }: { title: string; children: React.ReactNod
 	);
 }
 
-function NavSection({ title, children }: { title: string; children: React.ReactNode }) {
+function NavSection({
+	title,
+	children,
+}: { title: string; children: React.ReactNode }) {
 	return (
 		<div>
 			<div className="text-[10px] uppercase tracking-wider text-base-content/40 px-3 mb-1 font-semibold">

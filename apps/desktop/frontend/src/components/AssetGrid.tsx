@@ -7,7 +7,7 @@ import { openContextMenu } from "@/components/ContextMenu";
 import { buildAssetContextMenu } from "@/lib/assetContextMenu";
 import { groupOf } from "@/lib/grouping";
 import { basename, formatSize } from "@/lib/paths";
-import { useAssetsStore } from "@/stores/assetsStore";
+import { PAGE_SIZE, useAssetsStore } from "@/stores/assetsStore";
 import { useIsSelected, useSelectionStore } from "@/stores/selectionStore";
 
 type Props = {
@@ -16,8 +16,10 @@ type Props = {
 };
 
 // Stagger tile entry by a small per-index delay so the grid feels like it's
-// settling in rather than appearing all at once. Capped so a 60-tile page
-// finishes within ~500ms even at full count.
+// settling in rather than appearing all at once. Keyed to the index *within
+// its page* (so each infinite-scroll page gets its own settle-in sweep instead
+// of every appended tile popping at the capped delay), and capped so a full
+// page finishes within ~500ms.
 const STAGGER_PER_INDEX = 0.012;
 const STAGGER_MAX = 0.5;
 
@@ -33,7 +35,10 @@ export function AssetGrid({ assets, onOpen }: Props) {
 	return (
 		<div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 p-4">
 			{assets.map((asset, i) => {
-				const delay = Math.min(i * STAGGER_PER_INDEX, STAGGER_MAX);
+				const delay = Math.min(
+					(i % PAGE_SIZE) * STAGGER_PER_INDEX,
+					STAGGER_MAX,
+				);
 				const group = groupOf(asset, groupBy);
 				const showHeader = group !== null && group.key !== prevKey;
 				if (group) prevKey = group.key;
@@ -55,7 +60,10 @@ export function AssetGrid({ assets, onOpen }: Props) {
 	);
 }
 
-function GroupHeader({ label, firstInPage }: { label: string; firstInPage: boolean }) {
+function GroupHeader({
+	label,
+	firstInPage,
+}: { label: string; firstInPage: boolean }) {
 	return (
 		<div className={`col-span-full ${firstInPage ? "" : "mt-3"}`}>
 			<div className="flex items-center gap-3">

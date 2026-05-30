@@ -30,6 +30,13 @@ export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
 	const library = useMusicStore((s) => s.library);
 	const view = useMusicStore((s) => s.view);
 	const setView = useMusicStore((s) => s.setView);
+	const setActiveWorkspace = useMusicStore((s) => s.setActiveWorkspace);
+
+	// Record this as the active music workspace so playback started here is
+	// attributed to it — the global player bar navigates back to it on click.
+	useEffect(() => {
+		setActiveWorkspace(workspace.id);
+	}, [workspace.id, setActiveWorkspace]);
 
 	// Browse navigation lives in the URL (?album / ?artist) so the back gesture
 	// pops album → artist → grid (instead of leaving the workspace) and the
@@ -59,14 +66,19 @@ export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
 	const underPath = scope.underPath;
 	const formatsKey = scope.formats?.join(",") ?? "";
 	useEffect(() => {
-		void load({ underPath, formats: formatsKey ? formatsKey.split(",") : null });
+		void load({
+			underPath,
+			formats: formatsKey ? formatsKey.split(",") : null,
+		});
 	}, [underPath, formatsKey, load]);
 
 	// Warm the waveform-peaks cache in the background once the library loads, so
 	// first-play of any track is instant (the backend skips already-cached ones).
 	useEffect(() => {
 		if (!library) return;
-		const paths = library.albums.flatMap((a) => a.tracks.map((t) => t.abs_path));
+		const paths = library.albums.flatMap((a) =>
+			a.tracks.map((t) => t.abs_path),
+		);
 		if (paths.length > 0) void api.prewarmPeaks(paths);
 	}, [library]);
 
@@ -80,7 +92,8 @@ export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
 	const filteredAlbums = useMemo(() => {
 		if (!library) return [];
 		let albums = library.albums;
-		if (artistFilter) albums = albums.filter((a) => a.album_artist === artistFilter);
+		if (artistFilter)
+			albums = albums.filter((a) => a.album_artist === artistFilter);
 		if (q) {
 			albums = albums.filter(
 				(a) =>
@@ -100,7 +113,9 @@ export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
 		<div className="flex-1 min-h-0 flex flex-col min-w-0">
 			<header className="flex items-center gap-3 border-b border-base-300 bg-base-100 px-4 py-2.5 shrink-0">
 				<div className="min-w-0 flex-1">
-					<h1 className="truncate text-sm font-semibold leading-tight">{workspace.name}</h1>
+					<h1 className="truncate text-sm font-semibold leading-tight">
+						{workspace.name}
+					</h1>
 					<div className="text-[11px] text-base-content/55">
 						{library
 							? `${library.albums.length} ${library.albums.length === 1 ? "album" : "albums"} · ${library.track_count} ${library.track_count === 1 ? "track" : "tracks"}`
@@ -120,13 +135,21 @@ export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
 								className="grow"
 							/>
 							{search && (
-								<button type="button" onClick={() => setSearch("")} title="Clear">
+								<button
+									type="button"
+									onClick={() => setSearch("")}
+									title="Clear"
+								>
 									<HiXMark className="size-3.5 text-base-content/50" />
 								</button>
 							)}
 						</label>
 						{artistFilter ? (
-							<button type="button" className="btn btn-xs gap-1" onClick={goBack}>
+							<button
+								type="button"
+								className="btn btn-xs gap-1"
+								onClick={goBack}
+							>
 								<HiChevronLeft className="size-3.5" />
 								All
 							</button>
@@ -164,7 +187,11 @@ export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
 				) : empty || !library ? (
 					<EmptyState hasFolder={!!underPath} />
 				) : selectedAlbum ? (
-					<AlbumDetailView album={selectedAlbum} onBack={goBack} onArtist={openArtist} />
+					<AlbumDetailView
+						album={selectedAlbum}
+						onBack={goBack}
+						onArtist={openArtist}
+					/>
 				) : filtering ? (
 					<FilteredAlbums
 						albums={filteredAlbums}
@@ -174,9 +201,17 @@ export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
 						onArtist={openArtist}
 					/>
 				) : view === "albums" ? (
-					<AlbumGrid albums={library.albums} onSelect={openAlbum} onArtist={openArtist} />
+					<AlbumGrid
+						albums={library.albums}
+						onSelect={openAlbum}
+						onArtist={openArtist}
+					/>
 				) : (
-					<ArtistView albums={library.albums} onSelect={openAlbum} onArtist={openArtist} />
+					<ArtistView
+						albums={library.albums}
+						onSelect={openAlbum}
+						onArtist={openArtist}
+					/>
 				)}
 			</div>
 		</div>
@@ -209,15 +244,22 @@ function FilteredAlbums({
 			{albums.length > 0 ? (
 				<AlbumGrid albums={albums} onSelect={onSelect} onArtist={onArtist} />
 			) : (
-				<div className="px-4 py-10 text-center text-sm text-base-content/50">No matches.</div>
+				<div className="px-4 py-10 text-center text-sm text-base-content/50">
+					No matches.
+				</div>
 			)}
 		</div>
 	);
 }
 
-function Centered({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function Centered({
+	children,
+	className = "",
+}: { children: React.ReactNode; className?: string }) {
 	return (
-		<div className={`flex h-full items-center justify-center text-sm text-base-content/60 ${className}`}>
+		<div
+			className={`flex h-full items-center justify-center text-sm text-base-content/60 ${className}`}
+		>
 			{children}
 		</div>
 	);

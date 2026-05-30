@@ -10,5 +10,10 @@
 		"types": ["bun"]
 	},
 	"include": ["frontend/src"],
-	"exclude": ["node_modules", "frontend/build.ts", "frontend/dev.ts", "frontend/dist"]
+	"exclude": [
+		"node_modules",
+		"frontend/build.ts",
+		"frontend/dev.ts",
+		"frontend/dist"
+	]
 }

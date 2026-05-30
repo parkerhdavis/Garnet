@@ -21,7 +21,12 @@ export function AlbumCard({
 	return (
 		<div className="group flex flex-col gap-2">
 			<div className="relative">
-				<button type="button" onClick={onOpen} className="block w-full" title={album.album}>
+				<button
+					type="button"
+					onClick={onOpen}
+					className="block w-full"
+					title={album.album}
+				>
 					<AlbumArt
 						absPath={album.cover_abs_path}
 						className="w-full aspect-square shadow-sm transition-shadow group-hover:shadow-lg"
@@ -37,8 +42,14 @@ export function AlbumCard({
 				</button>
 			</div>
 			<div className="min-w-0">
-				<button type="button" onClick={onOpen} className="block w-full text-left">
-					<div className="truncate text-sm font-medium leading-tight">{album.album}</div>
+				<button
+					type="button"
+					onClick={onOpen}
+					className="block w-full text-left"
+				>
+					<div className="truncate text-sm font-medium leading-tight">
+						{album.album}
+					</div>
 				</button>
 				{onArtist ? (
 					<button
@@ -50,7 +61,9 @@ export function AlbumCard({
 						{album.album_artist}
 					</button>
 				) : (
-					<div className="truncate text-xs text-base-content/60">{album.album_artist}</div>
+					<div className="truncate text-xs text-base-content/60">
+						{album.album_artist}
+					</div>
 				)}
 			</div>
 		</div>

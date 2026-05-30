@@ -4,7 +4,11 @@
 //! default params + a small params editor; the executor for these lives in the
 //! Rust `automations` module.
 
-import { HiArrowsRightLeft, HiArrowsPointingIn, HiPencilSquare } from "react-icons/hi2";
+import {
+	HiArrowsRightLeft,
+	HiArrowsPointingIn,
+	HiPencilSquare,
+} from "react-icons/hi2";
 import type { AutomationStepContribution } from "@/plugins/types";
 
 const convertStep: AutomationStepContribution = {
@@ -38,7 +42,12 @@ const resizeStep: AutomationStepContribution = {
 	description: "Scale by percentage, exact size, or nearest power of two.",
 	icon: HiArrowsPointingIn,
 	group: "base",
-	defaultParams: () => ({ mode: "scale", width: 50, height: 50, filter: "lanczos" }),
+	defaultParams: () => ({
+		mode: "scale",
+		width: 50,
+		height: 50,
+		filter: "lanczos",
+	}),
 	ParamsEditor: ({ params, onChange }) => {
 		const mode = (params.mode as string) ?? "scale";
 		return (
@@ -57,7 +66,9 @@ const resizeStep: AutomationStepContribution = {
 						<input
 							type="number"
 							value={(params.width as number) ?? 1024}
-							onChange={(e) => onChange({ ...params, width: Number(e.target.value) })}
+							onChange={(e) =>
+								onChange({ ...params, width: Number(e.target.value) })
+							}
 							className="input input-xs input-bordered w-20"
 							placeholder="W"
 						/>
@@ -65,7 +76,9 @@ const resizeStep: AutomationStepContribution = {
 						<input
 							type="number"
 							value={(params.height as number) ?? 1024}
-							onChange={(e) => onChange({ ...params, height: Number(e.target.value) })}
+							onChange={(e) =>
+								onChange({ ...params, height: Number(e.target.value) })
+							}
 							className="input input-xs input-bordered w-20"
 							placeholder="H"
 						/>

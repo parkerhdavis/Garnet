@@ -9,7 +9,8 @@ import { PlayingBars } from "@/plugins/music/components/PlayingBars";
 import { formatDuration, qualityShort } from "@/plugins/music/lib/format";
 
 /// Shared column template for the header + rows: # · title · quality · time.
-export const TRACK_GRID = "grid grid-cols-[1.75rem_1fr_auto_3.25rem] items-center gap-x-4";
+export const TRACK_GRID =
+	"grid grid-cols-[1.75rem_1fr_auto_3.25rem] items-center gap-x-4";
 
 export function TrackRow({
 	track,
@@ -46,12 +47,16 @@ export function TrackRow({
 					)
 				) : (
 					<>
-						<span className="group-hover:hidden">{track.track_no ?? index + 1}</span>
+						<span className="group-hover:hidden">
+							{track.track_no ?? index + 1}
+						</span>
 						<HiPlay className="hidden size-3.5 group-hover:block" />
 					</>
 				)}
 			</span>
-			<span className={`min-w-0 truncate text-sm ${isCurrent ? "font-medium text-primary" : ""}`}>
+			<span
+				className={`min-w-0 truncate text-sm ${isCurrent ? "font-medium text-primary" : ""}`}
+			>
 				{track.title}
 			</span>
 			<span className="truncate text-[10px] font-medium uppercase tracking-wide text-base-content/40">

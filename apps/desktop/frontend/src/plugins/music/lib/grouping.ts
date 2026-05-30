@@ -3,7 +3,18 @@
 //! returns albums already grouped + sorted by album-artist, so this is a cheap
 //! contiguous-run regroup).
 
-import type { MusicAlbum } from "@/lib/tauri";
+import type { MusicAlbum, MusicTrack } from "@/lib/tauri";
+
+/// Separator joining album-artist + album into an album id. Mirrors the U+0001
+/// the backend uses in `format!("{album_artist}\u{1}{album}")` (music/mod.rs
+/// `group_tracks`) — a control char that can't appear in real tag text.
+const ALBUM_ID_SEP = String.fromCharCode(1);
+
+/// The album id a track belongs to, matching the backend's album ids so the
+/// player bar can address the now-playing track's album in the grid.
+export function albumIdForTrack(track: MusicTrack): string {
+	return `${track.album_artist}${ALBUM_ID_SEP}${track.album}`;
+}
 
 export type ArtistGroup = {
 	artist: string;

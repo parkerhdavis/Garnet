@@ -154,7 +154,12 @@ export type SortDir = "asc" | "desc";
 /** Group key used to keep matching assets contiguous in the result. The
  *  primary ORDER BY is the group key (in `group_dir`); the secondary sort is
  *  the regular `sort_by` / `sort_dir`. `none` disables grouping. */
-export type AssetGroupBy = "none" | "root" | "folder" | "format" | "mtime_bucket";
+export type AssetGroupBy =
+	| "none"
+	| "root"
+	| "folder"
+	| "format"
+	| "mtime_bucket";
 
 export type AssetQuery = {
 	root_id?: number | null;
@@ -227,13 +232,16 @@ export type TrashResult = {
 
 export const api = {
 	loadSettings: () => invoke<AppSettings>("load_settings"),
-	saveSettings: (settings: AppSettings) => invoke<void>("save_settings", { settings }),
+	saveSettings: (settings: AppSettings) =>
+		invoke<void>("save_settings", { settings }),
 	registerLibraryRoot: (path: string) =>
 		invoke<LibraryRoot>("register_library_root", { path }),
 	listLibraryRoots: () => invoke<LibraryRoot[]>("list_library_roots"),
-	removeLibraryRoot: (id: number) => invoke<void>("remove_library_root", { id }),
+	removeLibraryRoot: (id: number) =>
+		invoke<void>("remove_library_root", { id }),
 	scanLibraryRoot: (id: number) => invoke<void>("scan_library_root", { id }),
-	listAssets: (query: AssetQuery) => invoke<AssetPage>("list_assets", { query }),
+	listAssets: (query: AssetQuery) =>
+		invoke<AssetPage>("list_assets", { query }),
 	getAsset: (id: number) => invoke<Asset>("get_asset", { id }),
 	/// Stat a single on-disk file and describe it as an ephemeral asset
 	/// (id = -1, not in the catalog). Backs the ad-hoc "open a loose file"
@@ -276,8 +284,7 @@ export const api = {
 			motionOnly,
 			hasAnimation,
 		}),
-	getStartupTimings: () =>
-		invoke<StartupReport | null>("get_startup_timings"),
+	getStartupTimings: () => invoke<StartupReport | null>("get_startup_timings"),
 	markStartupPhase: (name: string, note: string | null = null) =>
 		invoke<void>("mark_startup_phase", { name, note }),
 	finalizeStartupTimings: (splashBudgetMs: number | null = null) =>
@@ -334,7 +341,8 @@ export const api = {
 	audioSeek: (positionSeconds: number) =>
 		invoke<void>("audio_seek", { positionSeconds }),
 	audioStop: () => invoke<void>("audio_stop"),
-	audioSetVolume: (volumeDb: number) => invoke<void>("audio_set_volume", { volumeDb }),
+	audioSetVolume: (volumeDb: number) =>
+		invoke<void>("audio_set_volume", { volumeDb }),
 	getMediaPort: () => invoke<number>("get_media_port"),
 	renameAsset: (assetId: number, newName: string) =>
 		invoke<AssetOpResult>("rename_asset", { assetId, newName }),
@@ -342,7 +350,8 @@ export const api = {
 		invoke<AssetOpResult>("move_asset", { assetId, destDir }),
 	moveFile: (fromAbsPath: string, destDir: string) =>
 		invoke<string>("move_file", { fromAbsPath, destDir }),
-	trashAsset: (assetId: number) => invoke<TrashResult>("trash_asset", { assetId }),
+	trashAsset: (assetId: number) =>
+		invoke<TrashResult>("trash_asset", { assetId }),
 	restoreFromTrash: (trashPath: string, destinationAbsPath: string) =>
 		invoke<void>("restore_from_trash", { trashPath, destinationAbsPath }),
 };

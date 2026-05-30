@@ -8,7 +8,11 @@ import type { MusicAlbum } from "@/lib/tauri";
 import { AlbumArt } from "@/plugins/music/components/AlbumArt";
 import { HiResBadge } from "@/plugins/music/components/HiResBadge";
 import { TRACK_GRID, TrackRow } from "@/plugins/music/components/TrackRow";
-import { albumSubtitle, isHiRes, qualityChips } from "@/plugins/music/lib/format";
+import {
+	albumSubtitle,
+	isHiRes,
+	qualityChips,
+} from "@/plugins/music/lib/format";
 import { useMusicStore } from "@/plugins/music/stores/musicStore";
 
 export function AlbumDetailView({
@@ -58,7 +62,9 @@ export function AlbumDetailView({
 							<HiChevronLeft className="size-4" />
 							Albums
 						</button>
-						<h1 className="truncate text-3xl font-bold leading-tight">{album.album}</h1>
+						<h1 className="truncate text-3xl font-bold leading-tight">
+							{album.album}
+						</h1>
 						{onArtist ? (
 							<button
 								type="button"
@@ -68,10 +74,16 @@ export function AlbumDetailView({
 								{album.album_artist}
 							</button>
 						) : (
-							<div className="truncate text-lg text-base-content/80">{album.album_artist}</div>
+							<div className="truncate text-lg text-base-content/80">
+								{album.album_artist}
+							</div>
 						)}
 						<div className="mt-1 text-xs text-base-content/55">
-							{albumSubtitle(album.track_count, album.total_duration_secs, album.year)}
+							{albumSubtitle(
+								album.track_count,
+								album.total_duration_secs,
+								album.year,
+							)}
 						</div>
 						{chips.length > 0 && (
 							<div className="mt-2 flex flex-wrap items-center gap-1.5">

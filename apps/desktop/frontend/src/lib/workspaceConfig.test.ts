@@ -23,7 +23,9 @@ describe("workspaceScopeQuery", () => {
 	});
 
 	test("maps rootFolder → underPath and fileFilters → formats", () => {
-		const s = workspaceScopeQuery(ws({ rootFolder: "/music", fileFilters: "mp3, flac" }));
+		const s = workspaceScopeQuery(
+			ws({ rootFolder: "/music", fileFilters: "mp3, flac" }),
+		);
 		expect(s.underPath).toBe("/music");
 		expect(s.formats).toEqual(["mp3", "flac"]);
 	});

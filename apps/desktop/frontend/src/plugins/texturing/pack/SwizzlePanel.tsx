@@ -3,7 +3,6 @@ import { usePackStore } from "@/plugins/texturing/stores/packStore";
 import DropZone from "@/plugins/texturing/ui/DropZone";
 import type { ChannelSource } from "@/plugins/texturing/types";
 
-
 const channelRows = [
 	{ key: "r" as const, label: "R", dotColor: "bg-red-500" },
 	{ key: "g" as const, label: "G", dotColor: "bg-green-500" },
@@ -37,7 +36,8 @@ export default function SwizzlePanel() {
 			<div className="px-3 pt-3 pb-2 border-b border-base-300 shrink-0">
 				<div className="text-sm font-semibold text-base-content">Swizzle</div>
 				<div className="text-xs text-base-content/40 mt-0.5 leading-snug">
-					Remap channels within a single image. Each output channel can read from any source channel, with optional invert.
+					Remap channels within a single image. Each output channel can read
+					from any source channel, with optional invert.
 				</div>
 			</div>
 
@@ -68,7 +68,9 @@ export default function SwizzlePanel() {
 						<span className="text-xs font-bold w-4 shrink-0">{ch.label}</span>
 						<select
 							value={swizzleMappings[ch.key].source}
-							onChange={(e) => setSwizzleMapping(ch.key, e.target.value as ChannelSource)}
+							onChange={(e) =>
+								setSwizzleMapping(ch.key, e.target.value as ChannelSource)
+							}
 							className="select select-xs select-bordered flex-1"
 						>
 							{sourceOptions.map((opt) => (

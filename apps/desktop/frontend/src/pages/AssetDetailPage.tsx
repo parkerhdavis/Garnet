@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { lazy, Suspense, useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+	Link,
+	useNavigate,
+	useParams,
+	useSearchParams,
+} from "react-router-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
@@ -32,7 +37,9 @@ import { subscribeThumbnailReady } from "@/lib/thumbnailBus";
 // initial bundle small; the detail page is fast on non-3D assets and Three.js
 // only parses once the user actually opens a model.
 const ModelPreview = lazy(() =>
-	import("@/components/ModelPreview").then((m) => ({ default: m.ModelPreview })),
+	import("@/components/ModelPreview").then((m) => ({
+		default: m.ModelPreview,
+	})),
 );
 import {
 	absPathFor,
@@ -155,10 +162,15 @@ export function AssetDetailPage() {
 				void api.ensureThumbnail(absPath, assetMtime, 1024).catch(() => {});
 			}
 		});
-		const unsub = subscribeThumbnailReady(absPath, assetMtime, 1024, (payload) => {
-			if (cancelled) return;
-			setBlendPreview(convertFileSrc(payload.path));
-		});
+		const unsub = subscribeThumbnailReady(
+			absPath,
+			assetMtime,
+			1024,
+			(payload) => {
+				if (cancelled) return;
+				setBlendPreview(convertFileSrc(payload.path));
+			},
+		);
 		return () => {
 			cancelled = true;
 			unsub();
@@ -180,15 +192,21 @@ export function AssetDetailPage() {
 		void (async () => {
 			try {
 				const thumbnailer = await loadModelThumbnailer();
-				await thumbnailer.request(assetId, absPath, assetMtime, 240, assetFormat, {
-					force: true,
-				});
+				await thumbnailer.request(
+					assetId,
+					absPath,
+					assetMtime,
+					240,
+					assetFormat,
+					{
+						force: true,
+					},
+				);
 			} catch {
 				/* silent — ModelPreview already surfaces real load errors */
 			}
 		})();
 	}, [asset, absPath, isModel, ephemeral]);
-
 
 	if (loading) {
 		return (
@@ -294,7 +312,9 @@ export function AssetDetailPage() {
 						type="button"
 						className="btn btn-xs"
 						onClick={() =>
-							navigate(ephemeral ? ephemeralEditRoute(absPath) : `/edit/${asset.id}`)
+							navigate(
+								ephemeral ? ephemeralEditRoute(absPath) : `/edit/${asset.id}`,
+							)
 						}
 						title="Open in the editor"
 					>
@@ -345,14 +365,13 @@ export function AssetDetailPage() {
 							message={mediaError}
 						/>
 					) : isVideo ? (
-						// biome-ignore lint/a11y/useMediaCaption: source content has no caption track
 						<video
 							src={livePath}
 							controls
 							onError={(e) => {
 								const err = e.currentTarget.error;
 								const code = err
-									? `MediaError code ${err.code}${err.message ? ": " + err.message : ""}`
+									? `MediaError code ${err.code}${err.message ? `: ${err.message}` : ""}`
 									: "no error object";
 								setMediaError(
 									`The webview rejected this video (${code}). Diagnostic panel below — click Run fetches to probe the asset protocol.`,
@@ -362,16 +381,17 @@ export function AssetDetailPage() {
 							className="max-w-full max-h-full object-contain bg-black rounded"
 						/>
 					) : isAudio ? (
-						// biome-ignore lint/a11y/useMediaCaption: source content has no caption track
 						<audio
 							src={livePath}
 							controls
 							onError={(e) => {
 								const err = e.currentTarget.error;
 								const code = err
-									? `MediaError code ${err.code}${err.message ? ": " + err.message : ""}`
+									? `MediaError code ${err.code}${err.message ? `: ${err.message}` : ""}`
 									: "no error object";
-								setMediaError(`The webview rejected this audio file (${code}).`);
+								setMediaError(
+									`The webview rejected this audio file (${code}).`,
+								);
 								setDiagnosticOpen(true);
 							}}
 							className="w-3/4"
@@ -412,10 +432,12 @@ export function AssetDetailPage() {
 							/>
 						) : (
 							<div className="text-center text-xs text-base-content/60 max-w-md">
-								<div className="mb-2">No interactive preview for .blend files.</div>
+								<div className="mb-2">
+									No interactive preview for .blend files.
+								</div>
 								<div>
-									Generating embedded thumbnail… Use <strong>Open externally</strong> above
-									to open in Blender.
+									Generating embedded thumbnail… Use{" "}
+									<strong>Open externally</strong> above to open in Blender.
 								</div>
 							</div>
 						)
@@ -437,12 +459,24 @@ export function AssetDetailPage() {
 
 					{isModel && modelStats && (
 						<DetailSection title="Model">
-							<KV label="Triangles" value={modelStats.triangles.toLocaleString()} />
-							<KV label="Vertices" value={modelStats.vertices.toLocaleString()} />
+							<KV
+								label="Triangles"
+								value={modelStats.triangles.toLocaleString()}
+							/>
+							<KV
+								label="Vertices"
+								value={modelStats.vertices.toLocaleString()}
+							/>
 							<KV label="Meshes" value={modelStats.meshes.toLocaleString()} />
-							<KV label="Materials" value={modelStats.materials.toLocaleString()} />
+							<KV
+								label="Materials"
+								value={modelStats.materials.toLocaleString()}
+							/>
 							{modelStats.textures > 0 && (
-								<KV label="Textures" value={modelStats.textures.toLocaleString()} />
+								<KV
+									label="Textures"
+									value={modelStats.textures.toLocaleString()}
+								/>
 							)}
 							{modelStats.bones > 0 && (
 								<KV label="Bones" value={modelStats.bones.toLocaleString()} />
@@ -542,11 +576,18 @@ function DetailSection({
 	);
 }
 
-function KV({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function KV({
+	label,
+	value,
+	mono,
+}: { label: string; value: string; mono?: boolean }) {
 	return (
 		<div className="grid grid-cols-[64px_1fr] gap-2 text-xs py-0.5">
 			<dt className="text-base-content/55">{label}</dt>
-			<dd className={`truncate ${mono ? "font-mono text-[11px]" : ""}`} title={value}>
+			<dd
+				className={`truncate ${mono ? "font-mono text-[11px]" : ""}`}
+				title={value}
+			>
 				{value}
 			</dd>
 		</div>
@@ -579,11 +620,11 @@ function MediaErrorPanel({
 				</div>
 			</div>
 			<div className="text-[10px] text-base-content/50 mt-3">
-				On Linux, webkit2gtk's <code>&lt;video&gt;</code> element often can't stream
-				files through Tauri's asset protocol even when the codec is installed —
-				this is a known platform limitation independent of GStreamer codecs. Use{" "}
-				<strong>Open externally</strong> in the header to play the file in your
-				system's default media app.
+				On Linux, webkit2gtk's <code>&lt;video&gt;</code> element often can't
+				stream files through Tauri's asset protocol even when the codec is
+				installed — this is a known platform limitation independent of GStreamer
+				codecs. Use <strong>Open externally</strong> in the header to play the
+				file in your system's default media app.
 			</div>
 		</div>
 	);
