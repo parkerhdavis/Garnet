@@ -1,12 +1,92 @@
 ![Garnet Icon](./resources/icons/128x128.png)
 # Garnet
 
-A free, open-source digital asset manager for a wide variety of asset types including image, video, audio, 3D models and animations, and more. The base install is a working DAM for any media type you drop into it: cross-format organization, search, preview, and metadata. Upcoming core and plugin functionality add helpful utilities for various media including reformatting, basic editing tools, trimming and resizing, and more.
+A free, open-source digital asset manager for a wide variety of asset types including image, video, audio, 3D models and animations, and more. The base install is a working DAM for any media type you drop into it: cross-format organization, search, preview, metadata, and built-in image editing. Optional plugins add per-format depth, and more core and plugin utilities — video trimming, format reformatting, and the like — are on the way.
 
 Garnet is **offline and local**, operating as a surface over your local files. No proprietary library format, no forced ingestion, no cloud, no accounts. It indexes and operates where files already live.
 
 > [!NOTE]
 > Garnet is still in an early stage of development, with limited editing utilities available. The functionalities available should work without issue, but you'll see a lot of gaps where core or plugin functions have yet to be built.
+
+## Core Features
+
+Garnet's base install is a complete DAM with **zero plugins** — it catalogs, previews, searches, lightly edits, and batch-processes any media type, operating as an index over wherever your files already live. Nothing is copied into a proprietary library; Garnet works in place.
+
+### Catalog & Browsing
+
+![Library browser grouped by format](.github/assets/garnet-screenshot-core-formatgroups.png)
+
+Register any number of folders as **library roots** and Garnet indexes them in place, tracking files across moves and renames by content hash and rescanning automatically as the folders change on disk.
+
+- Paginated grid or list view; **group** by folder, format, source, or date, and sort by any column
+- **Filter** by format, size, and modified-date range; full-text **search** on filename and path
+- One-click **type views** — Images, Videos, Audio, Models, Animations, Other
+- **Tag** assets and filter by tag; **pin** any root or subfolder to the sidebar; organize work into **Workspaces**
+- **Open a loose file ad-hoc** (`Ctrl/Cmd+O`) — point Garnet at any file *outside* your library and get its full preview and editor surfaces without adding it to the catalog
+
+---
+
+### Previews & Quick-Look
+
+![3D model quick-look with details and stats](.github/assets/garnet-screenshot-core-model.png)
+
+Inline, zero-config preview for every common media type, with cached thumbnails throughout the grid.
+
+- **Images, video, and audio** play inline; a loopback media server keeps video and audio reliable on Linux
+- **3D models** (glTF/GLB, OBJ, STL, PLY, FBX, USD) render in an interactive WebGL viewer with triangle, vertex, mesh, material, and bone counts
+- **Skeletal animations** play back with a scrub timeline
+
+![Skeletal animation playback with a scrub timeline](.github/assets/garnet-screenshot-core-animation.png)
+
+- A details panel surfaces **native metadata** — image dimensions, EXIF (camera, lens, exposure), and audio tags — alongside your own tags
+- Thumbnails for images, videos, 3D models, and `.blend` files (extracted from the embedded preview)
+
+---
+
+### Image Editor
+
+![Image editor with adjustment sliders, luminance curve, and crop overlay](.github/assets/garnet-screenshot-core-imageadjust.png)
+
+A non-destructive editor that previews on the original at full resolution (GPU-accelerated) and only writes pixels when you save.
+
+- **Adjustments** — hue, saturation, brightness, contrast, temperature, and tint
+- **Luminance curve** — a draggable monotonic spline driving a live lookup table
+- **Geometry** — crop (aspect-ratio presets + rule-of-thirds guides), resize, rotate, and corner-round
+- Hold `\` to peek the original, full undo/redo, and a choice of **save-as-new** or **overwrite**
+
+---
+
+### Automations
+
+Build reusable batch pipelines and run them across many files at once — base steps (**convert**, **resize**, and **rename** with token patterns) plus steps contributed by plugins. Runs in parallel with live progress in the footer, and pipelines save as named presets.
+
+## Plugin Features
+
+Plugins add per-format depth on top of the base. Each is first-party, compiles into the app, and is toggled on or off from the in-app plugin manager. Garnet ships with two today.
+
+### 3D Texturing
+
+![3D Texturing plugin — channel packing with live preview](.github/assets/garnet-screenshot-texturingplug-pack.png)
+
+The full toolset from [Packi](https://github.com/parkerhdavis/Packi), woven in as a workspace with tabbed tools.
+
+- **Pack** — channel pack / unpack / swizzle with per-channel source selection and invert, live preview, and presets for common conventions (Unreal ORM, Unity mask maps, RMA, Godot ORM, and more)
+- **Adjust** — normal-map operations: flip green (DirectX ↔ OpenGL), height-to-normal, blend (RNM), and normalize
+- **Preview** — a 2D tiling preview and a 3D PBR material preview
+- **Size** — texture info, VRAM budget across 16+ GPU compression formats, and the full mip chain
+- Contributes Flip Green / Normalize steps to the base Automations pipeline
+
+---
+
+### Music Library
+
+![Music Library plugin — album view with track list and player](.github/assets/garnet-screenshot-musicplug-emmaharner.png)
+
+A catalog-backed workspace that organizes your indexed audio into an **album-artist → album → track** tree with album-cover browsing and a built-in player.
+
+- Native Rust audio engine (Symphonia + Rodio) for reliable, high-quality local playback — including Hi-Res and FLAC
+- Docked transport with a play queue and a **waveform** rendered from precomputed peaks
+- Reads embedded tags and cover art; per-track quality badges (format, bit depth, sample rate)
 
 ## Stack
 
