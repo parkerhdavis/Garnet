@@ -58,8 +58,6 @@ type MusicState = {
 	loading: boolean;
 	error: string | null;
 	view: MusicView;
-	/// Album the user has drilled into (null = grid).
-	selectedAlbumId: string | null;
 
 	// Playback
 	queue: MusicTrack[];
@@ -73,7 +71,6 @@ type MusicState = {
 
 	load: (scope: MusicScope) => Promise<void>;
 	setView: (v: MusicView) => void;
-	selectAlbum: (id: string | null) => void;
 
 	playTrack: (track: MusicTrack, tracks: MusicTrack[]) => void;
 	playAlbum: (album: MusicAlbum) => void;
@@ -94,7 +91,6 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 	loading: true,
 	error: null,
 	view: "albums",
-	selectedAlbumId: null,
 
 	queue: [],
 	order: [],
@@ -115,8 +111,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 		}
 	},
 
-	setView: (view) => set({ view, selectedAlbumId: null }),
-	selectAlbum: (selectedAlbumId) => set({ selectedAlbumId }),
+	setView: (view) => set({ view }),
 
 	playTrack: (track, tracks) => {
 		const i = tracks.findIndex((t) => t.asset_id === track.asset_id);
@@ -188,11 +183,3 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
 	setPlaybackStatus: (playbackStatus) => set({ playbackStatus }),
 }));
-
-/// The album the user has drilled into, resolved against the loaded library.
-export function useSelectedAlbum(): MusicAlbum | null {
-	const library = useMusicStore((s) => s.library);
-	const id = useMusicStore((s) => s.selectedAlbumId);
-	if (!library || !id) return null;
-	return library.albums.find((a) => a.id === id) ?? null;
-}

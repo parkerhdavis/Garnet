@@ -7,12 +7,13 @@
 
 import { useEffect } from "react";
 import { HiMusicalNote, HiSquares2X2, HiUserGroup } from "react-icons/hi2";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { Workspace } from "@/lib/tauri";
 import { workspaceScopeQuery } from "@/lib/workspaceConfig";
 import { AlbumDetailView } from "@/plugins/music/components/AlbumDetailView";
 import { AlbumGrid } from "@/plugins/music/components/AlbumGrid";
 import { ArtistView } from "@/plugins/music/components/ArtistView";
-import { useMusicStore, useSelectedAlbum } from "@/plugins/music/stores/musicStore";
+import { useMusicStore } from "@/plugins/music/stores/musicStore";
 
 export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
 	const load = useMusicStore((s) => s.load);
@@ -21,8 +22,23 @@ export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
 	const library = useMusicStore((s) => s.library);
 	const view = useMusicStore((s) => s.view);
 	const setView = useMusicStore((s) => s.setView);
-	const selectAlbum = useMusicStore((s) => s.selectAlbum);
-	const selectedAlbum = useSelectedAlbum();
+
+	// The drilled-into album lives in the URL (?album=…) so the back gesture
+	// pops album → grid (instead of leaving the workspace), and the spot is
+	// restorable. Opening pushes a history entry; the in-app back mirrors it.
+	const [searchParams, setSearchParams] = useSearchParams();
+	const navigate = useNavigate();
+	const selectedAlbumId = searchParams.get("album");
+	const selectedAlbum =
+		selectedAlbumId && library
+			? (library.albums.find((a) => a.id === selectedAlbumId) ?? null)
+			: null;
+	const openAlbum = (id: string) => {
+		const nextParams = new URLSearchParams(searchParams);
+		nextParams.set("album", id);
+		setSearchParams(nextParams);
+	};
+	const closeAlbum = () => navigate(-1);
 
 	// (Re)load when the workspace's scope (root folder / filters) changes.
 	const scope = workspaceScopeQuery(workspace);
@@ -75,11 +91,11 @@ export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
 				) : empty || !library ? (
 					<EmptyState hasFolder={!!underPath} />
 				) : selectedAlbum ? (
-					<AlbumDetailView album={selectedAlbum} onBack={() => selectAlbum(null)} />
+					<AlbumDetailView album={selectedAlbum} onBack={closeAlbum} />
 				) : view === "albums" ? (
-					<AlbumGrid albums={library.albums} onSelect={selectAlbum} />
+					<AlbumGrid albums={library.albums} onSelect={openAlbum} />
 				) : (
-					<ArtistView albums={library.albums} onSelect={selectAlbum} />
+					<ArtistView albums={library.albums} onSelect={openAlbum} />
 				)}
 			</div>
 		</div>
