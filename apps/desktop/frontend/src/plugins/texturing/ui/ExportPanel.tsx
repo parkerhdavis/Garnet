@@ -3,10 +3,11 @@
 //! Normal tools. Ported from Packi, minus its settings-store persistence —
 //! the chosen directory lives in component state for the session.
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { HiFolderOpen, HiArrowDownTray } from "react-icons/hi2";
 import type { ExportConfig, ExportFormat } from "@/plugins/texturing/types";
+import { useTexturingWorkspace } from "@/plugins/texturing/workspaceContext";
 
 const formatLabels: Record<ExportFormat, string> = {
 	png8: "PNG (8-bit)",
@@ -31,10 +32,18 @@ export default function ExportPanel({
 	disabled = false,
 	filenameDefault = "output",
 }: ExportPanelProps) {
+	// Default the export directory to the workspace's working output folder.
+	const outputDir = useTexturingWorkspace()?.outputDir ?? null;
 	const [format, setFormat] = useState<ExportFormat>(defaultFormat ?? formats[0]);
-	const [directory, setDirectory] = useState("");
+	const [directory, setDirectory] = useState(outputDir ?? "");
 	const [filename, setFilename] = useState(filenameDefault);
 	const [exporting, setExporting] = useState(false);
+
+	// Keep the export directory in sync with the working output folder when it
+	// changes (until the user picks a different one for this export).
+	useEffect(() => {
+		if (outputDir) setDirectory(outputDir);
+	}, [outputDir]);
 
 	const handlePickDir = useCallback(async () => {
 		const result = await open({ directory: true, defaultPath: directory || undefined });

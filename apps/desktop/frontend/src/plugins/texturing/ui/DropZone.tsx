@@ -6,6 +6,7 @@
 import { useState, useCallback } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { HiArrowUpTray, HiXMark } from "react-icons/hi2";
+import { useTexturingWorkspace } from "@/plugins/texturing/workspaceContext";
 
 interface DropZoneProps {
 	label: string;
@@ -31,14 +32,17 @@ export default function DropZone({
 	loading = false,
 }: DropZoneProps) {
 	const [dragOver, setDragOver] = useState(false);
+	// Pre-target the picker to the workspace's working folder when present.
+	const workingFolder = useTexturingWorkspace()?.rootFolder ?? undefined;
 
 	const handleBrowse = useCallback(async () => {
 		const result = await open({
 			multiple: false,
+			defaultPath: workingFolder,
 			filters: [{ name: "Images", extensions: accept ?? DEFAULT_EXTS }],
 		});
 		if (typeof result === "string") onFilePicked(result);
-	}, [accept, onFilePicked]);
+	}, [accept, onFilePicked, workingFolder]);
 
 	const handleDragOver = useCallback((e: React.DragEvent) => {
 		e.preventDefault();
