@@ -32,6 +32,11 @@ export function qualityChips(q: Quality): string[] {
 	return chips;
 }
 
+/// True for hi-res audio: deeper than CD bit depth, or above 48 kHz.
+export function isHiRes(q: Quality): boolean {
+	return (q.bit_depth ?? 0) >= 24 || (q.sample_rate ?? 0) > 48000;
+}
+
 /// Compact one-cell quality, e.g. "FLAC 24/48" (format + bit-depth/kHz).
 export function qualityShort(q: Quality): string | null {
 	if (!q.format) return null;

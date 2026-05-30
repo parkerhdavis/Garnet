@@ -6,8 +6,9 @@
 import { HiArrowsRightLeft, HiChevronLeft, HiPlay } from "react-icons/hi2";
 import type { MusicAlbum } from "@/lib/tauri";
 import { AlbumArt } from "@/plugins/music/components/AlbumArt";
+import { HiResBadge } from "@/plugins/music/components/HiResBadge";
 import { TRACK_GRID, TrackRow } from "@/plugins/music/components/TrackRow";
-import { albumSubtitle, qualityChips } from "@/plugins/music/lib/format";
+import { albumSubtitle, isHiRes, qualityChips } from "@/plugins/music/lib/format";
 import { useMusicStore } from "@/plugins/music/stores/musicStore";
 
 export function AlbumDetailView({ album, onBack }: { album: MusicAlbum; onBack: () => void }) {
@@ -17,7 +18,9 @@ export function AlbumDetailView({ album, onBack }: { album: MusicAlbum; onBack: 
 	const nowPlaying = useMusicStore((s) => s.nowPlaying);
 	const playbackStatus = useMusicStore((s) => s.playbackStatus);
 
-	const chips = album.tracks.length > 0 ? qualityChips(album.tracks[0]) : [];
+	const rep = album.tracks[0];
+	const chips = rep ? qualityChips(rep) : [];
+	const hiRes = rep ? isHiRes(rep) : false;
 
 	return (
 		<div>
@@ -54,6 +57,7 @@ export function AlbumDetailView({ album, onBack }: { album: MusicAlbum; onBack: 
 						</div>
 						{chips.length > 0 && (
 							<div className="mt-2 flex flex-wrap items-center gap-1.5">
+								{hiRes && <HiResBadge />}
 								{chips.map((c, i) => (
 									<span
 										key={c}

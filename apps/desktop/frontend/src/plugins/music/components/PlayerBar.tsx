@@ -13,10 +13,11 @@ import {
 	HiSpeakerXMark,
 } from "react-icons/hi2";
 import { AlbumArt } from "@/plugins/music/components/AlbumArt";
+import { HiResBadge } from "@/plugins/music/components/HiResBadge";
 import { Waveform } from "@/plugins/music/components/Waveform";
 import { useNativeAudio } from "@/plugins/music/hooks/useNativeAudio";
 import { usePeaks } from "@/plugins/music/hooks/usePeaks";
-import { formatDuration, qualityShort } from "@/plugins/music/lib/format";
+import { formatDuration, isHiRes, qualityShort } from "@/plugins/music/lib/format";
 import { useMusicStore } from "@/plugins/music/stores/musicStore";
 
 /// Linear 0..1 volume → dB for the engine (0 → effectively silent).
@@ -63,6 +64,7 @@ export function PlayerBar() {
 
 	const isPlaying = player.status === "playing";
 	const quality = qualityShort(nowPlaying);
+	const hiRes = isHiRes(nowPlaying);
 
 	return (
 		<div className="flex items-center gap-3 border-t border-base-300 bg-base-100 px-4 py-2 shrink-0">
@@ -73,10 +75,14 @@ export function PlayerBar() {
 					<div className="truncate text-sm font-medium leading-tight">{nowPlaying.title}</div>
 					<div className="flex min-w-0 items-center gap-1.5">
 						<span className="truncate text-xs text-base-content/60">{nowPlaying.artist}</span>
-						{quality && (
-							<span className="badge badge-xs shrink-0 border-0 bg-base-content/10 text-[9px] font-medium text-base-content/55">
-								{quality}
-							</span>
+						{hiRes ? (
+							<HiResBadge className="badge-xs shrink-0 text-[9px]" />
+						) : (
+							quality && (
+								<span className="badge badge-xs shrink-0 border-0 bg-base-content/10 text-[9px] font-medium text-base-content/55">
+									{quality}
+								</span>
+							)
 						)}
 					</div>
 				</div>
@@ -130,8 +136,10 @@ export function PlayerBar() {
 						<div className="h-10 rounded bg-base-200" />
 					)}
 				</div>
-				<span className="w-9 text-[11px] tabular-nums text-base-content/50">
-					{formatDuration(player.duration)}
+				<span className="w-10 text-[11px] tabular-nums text-base-content/50">
+					{player.duration > 0
+						? `-${formatDuration(Math.max(0, player.duration - player.position))}`
+						: formatDuration(player.duration)}
 				</span>
 			</div>
 
