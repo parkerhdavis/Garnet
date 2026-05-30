@@ -12,7 +12,6 @@ import { workspaceScopeQuery } from "@/lib/workspaceConfig";
 import { AlbumDetailView } from "@/plugins/music/components/AlbumDetailView";
 import { AlbumGrid } from "@/plugins/music/components/AlbumGrid";
 import { ArtistView } from "@/plugins/music/components/ArtistView";
-import { PlayerBar } from "@/plugins/music/components/PlayerBar";
 import { useMusicStore, useSelectedAlbum } from "@/plugins/music/stores/musicStore";
 
 export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
@@ -83,8 +82,6 @@ export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
 					<ArtistView albums={library.albums} onSelect={selectAlbum} />
 				)}
 			</div>
-
-			<PlayerBar />
 		</div>
 	);
 }

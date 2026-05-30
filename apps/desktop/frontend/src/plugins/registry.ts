@@ -54,3 +54,11 @@ export function allAutomationSteps(): Owned<AutomationStepContribution>[] {
 	}
 	return out;
 }
+
+export function allGlobals(): Owned<React.ComponentType>[] {
+	const out: Owned<React.ComponentType>[] = [];
+	for (const p of plugins.values()) {
+		if (p.global) out.push({ pluginId: p.id, contribution: p.global });
+	}
+	return out;
+}

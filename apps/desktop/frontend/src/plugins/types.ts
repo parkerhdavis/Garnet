@@ -81,4 +81,9 @@ export interface GarnetPlugin {
 	version?: string;
 	workflows?: WorkflowContribution[];
 	automationSteps?: AutomationStepContribution[];
+	/// An always-mounted, app-global component (gated on the plugin being
+	/// enabled), rendered by the Layout above the footer regardless of route.
+	/// The Music Library uses it for a persistent player that keeps playing
+	/// after you leave the music workspace. Render nothing when idle.
+	global?: React.ComponentType;
 }

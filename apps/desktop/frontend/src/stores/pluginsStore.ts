@@ -12,6 +12,7 @@ import { create } from "zustand";
 import { api } from "@/lib/tauri";
 import {
 	allAutomationSteps,
+	allGlobals,
 	allWorkflows,
 } from "@/plugins/registry";
 import type {
@@ -87,6 +88,15 @@ export function enabledAutomationSteps(): AutomationStepContribution[] {
 	return allAutomationSteps()
 		.filter((s) => isEnabled(s.pluginId))
 		.map((s) => s.contribution);
+}
+
+/// Always-mounted global components for enabled plugins. Components that need to
+/// update on toggle should subscribe to `usePluginsStore(s => s.enabledIds)`.
+export function enabledGlobals(): React.ComponentType[] {
+	const isEnabled = usePluginsStore.getState().isEnabled;
+	return allGlobals()
+		.filter((g) => isEnabled(g.pluginId))
+		.map((g) => g.contribution);
 }
 
 /// The enabled workflow for a given workspace type, or undefined if no plugin
