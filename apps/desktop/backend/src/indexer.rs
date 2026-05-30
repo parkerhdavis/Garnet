@@ -259,6 +259,14 @@ fn refresh_metadata(
 				}
 			}
 		}
+
+		if AUDIO_EXTS.contains(&ext) {
+			if let Some(audio_pairs) = read_audio_tags(abs_path) {
+				for (k, v) in audio_pairs {
+					pairs.push((k, v));
+				}
+			}
+		}
 	}
 
 	if !pairs.is_empty() {
@@ -300,6 +308,103 @@ fn read_exif(path: &Path) -> Option<Vec<(&'static str, String)>> {
 	} else {
 		Some(out)
 	}
+}
+
+/// Audio extensions whose tags the indexer extracts. Mirrors the frontend's
+/// `AUDIO_FORMATS`, minus MIDI (which carries no readable tags). lofty handles
+/// ID3v2 (MP3), Vorbis comments (FLAC/OGG/Opus), MP4 atoms (M4A/AAC), and more.
+const AUDIO_EXTS: &[&str] = &[
+	"mp3", "wav", "flac", "aac", "ogg", "oga", "m4a", "opus", "wma", "aif", "aiff", "ape", "ac3",
+];
+
+/// Read tags + duration from an audio file into `audio.*` metadata pairs.
+/// Returns None when the file has no readable tags/properties (e.g. unsupported
+/// container) so nothing is written. The mapping itself lives in the pure
+/// `build_audio_pairs` so it's unit-testable without a real audio fixture.
+fn read_audio_tags(path: &Path) -> Option<Vec<(&'static str, String)>> {
+	use lofty::file::{AudioFile, TaggedFileExt};
+	use lofty::tag::{Accessor, ItemKey};
+
+	let tagged = lofty::read_from_path(path).ok()?;
+	let duration_secs = tagged.properties().duration().as_secs();
+	let pairs = match tagged.primary_tag().or_else(|| tagged.first_tag()) {
+		Some(tag) => build_audio_pairs(
+			duration_secs,
+			tag.title().as_deref(),
+			tag.artist().as_deref(),
+			tag.album().as_deref(),
+			tag.get_string(ItemKey::AlbumArtist),
+			tag.genre().as_deref(),
+			tag.track(),
+			tag.disk(),
+			tag.get_string(ItemKey::Year).and_then(parse_year),
+			tag.picture_count() > 0,
+		),
+		None => build_audio_pairs(
+			duration_secs, None, None, None, None, None, None, None, None, false,
+		),
+	};
+	if pairs.is_empty() {
+		None
+	} else {
+		Some(pairs)
+	}
+}
+
+/// Pull the leading 4-digit year out of a date-ish tag value ("2001",
+/// "2001-05-04", "May 2001" all → 2001).
+fn parse_year(s: &str) -> Option<u32> {
+	let digits: String = s.chars().filter(|c| c.is_ascii_digit()).take(4).collect();
+	digits.parse().ok()
+}
+
+/// Push a trimmed, non-empty string value under `key`.
+fn push_audio_str(out: &mut Vec<(&'static str, String)>, key: &'static str, val: Option<&str>) {
+	if let Some(v) = val {
+		let t = v.trim();
+		if !t.is_empty() {
+			out.push((key, t.to_string()));
+		}
+	}
+}
+
+/// Pure mapping from extracted tag fields to `audio.*` metadata pairs. Empty/
+/// whitespace strings and a zero duration are skipped so the row set stays lean.
+#[allow(clippy::too_many_arguments)]
+fn build_audio_pairs(
+	duration_secs: u64,
+	title: Option<&str>,
+	artist: Option<&str>,
+	album: Option<&str>,
+	album_artist: Option<&str>,
+	genre: Option<&str>,
+	track: Option<u32>,
+	disc: Option<u32>,
+	year: Option<u32>,
+	has_cover: bool,
+) -> Vec<(&'static str, String)> {
+	let mut out: Vec<(&'static str, String)> = Vec::new();
+	if duration_secs > 0 {
+		out.push(("audio.duration_secs", duration_secs.to_string()));
+	}
+	push_audio_str(&mut out, "audio.title", title);
+	push_audio_str(&mut out, "audio.artist", artist);
+	push_audio_str(&mut out, "audio.album", album);
+	push_audio_str(&mut out, "audio.album_artist", album_artist);
+	push_audio_str(&mut out, "audio.genre", genre);
+	if let Some(n) = track {
+		out.push(("audio.track", n.to_string()));
+	}
+	if let Some(n) = disc {
+		out.push(("audio.disc", n.to_string()));
+	}
+	if let Some(y) = year {
+		out.push(("audio.year", y.to_string()));
+	}
+	if has_cover {
+		out.push(("audio.has_cover", "1".to_string()));
+	}
+	out
 }
 
 #[cfg(test)]
@@ -451,5 +556,53 @@ mod tests {
 			.query_row("SELECT COUNT(*) FROM asset_metadata", [], |r| r.get(0))
 			.unwrap();
 		assert_eq!(md_count, 0);
+	}
+
+	#[test]
+	fn builds_audio_pairs_from_full_tags() {
+		let pairs = build_audio_pairs(
+			215,
+			Some("Song"),
+			Some("Artist"),
+			Some("Album"),
+			Some("Various Artists"),
+			Some("Rock"),
+			Some(3),
+			Some(1),
+			Some(2001),
+			true,
+		);
+		let map: std::collections::HashMap<_, _> = pairs.into_iter().collect();
+		assert_eq!(map["audio.title"], "Song");
+		assert_eq!(map["audio.artist"], "Artist");
+		assert_eq!(map["audio.album"], "Album");
+		assert_eq!(map["audio.album_artist"], "Various Artists");
+		assert_eq!(map["audio.genre"], "Rock");
+		assert_eq!(map["audio.track"], "3");
+		assert_eq!(map["audio.disc"], "1");
+		assert_eq!(map["audio.year"], "2001");
+		assert_eq!(map["audio.duration_secs"], "215");
+		assert_eq!(map["audio.has_cover"], "1");
+	}
+
+	#[test]
+	fn audio_pairs_skip_empty_zero_and_false() {
+		let pairs = build_audio_pairs(
+			0,
+			Some("   "),
+			None,
+			Some("Album"),
+			None,
+			None,
+			None,
+			None,
+			None,
+			false,
+		);
+		let keys: Vec<_> = pairs.iter().map(|(k, _)| *k).collect();
+		assert!(!keys.contains(&"audio.duration_secs"), "zero duration omitted");
+		assert!(!keys.contains(&"audio.title"), "whitespace-only title omitted");
+		assert!(!keys.contains(&"audio.has_cover"), "no cover omitted");
+		assert!(keys.contains(&"audio.album"));
 	}
 }

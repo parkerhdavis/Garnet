@@ -36,6 +36,9 @@ tower-http = { version = "0.6", features = ["fs", "cors"] }
 notify = "8"
 notify-debouncer-mini = "0.6"
 rayon = "1.10"
+# Audio tag (ID3/Vorbis/MP4) reading for the base indexer's audio metadata.
+# Pure Rust, MIT/Apache. Also pulls embedded cover art for the Music plugin.
+lofty = "0.24"
 
 # Cross-platform user-extended-attribute mirror for garnet_metadata. The
 # `xattr` crate supports Linux/macOS/FreeBSD; Windows uses NTFS alternate
