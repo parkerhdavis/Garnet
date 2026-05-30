@@ -5,5 +5,4 @@
 //! plugin.
 
 import "@/plugins/core";
-// The 3D Texturing plugin registers itself here once its surfaces land
-// (commit 8): import "@/plugins/texturing";
+import "@/plugins/texturing";
