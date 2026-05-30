@@ -16,6 +16,7 @@ import type { Workspace } from "@/lib/tauri";
 import PackTools from "@/plugins/texturing/tools/PackTools";
 import SizeTools from "@/plugins/texturing/tools/SizeTools";
 import NormalMapTools from "@/plugins/texturing/tools/NormalMapTools";
+import PreviewTools from "@/plugins/texturing/tools/PreviewTools";
 
 type TabId = "pack" | "adjust" | "size" | "preview";
 
@@ -60,17 +61,8 @@ export function TexturingWorkflow({ workspace }: { workspace: Workspace }) {
 				{tab === "pack" && <PackTools />}
 				{tab === "adjust" && <NormalMapTools />}
 				{tab === "size" && <SizeTools />}
-				{tab === "preview" && <PreviewPlaceholder />}
+				{tab === "preview" && <PreviewTools />}
 			</div>
-		</div>
-	);
-}
-
-function PreviewPlaceholder() {
-	return (
-		<div className="flex flex-col items-center justify-center h-full text-center p-12 text-base-content/40">
-			<HiCube className="size-10 mb-3 opacity-50" />
-			<p className="text-sm">2D tiling + 3D PBR material preview lands in the next commit.</p>
 		</div>
 	);
 }
