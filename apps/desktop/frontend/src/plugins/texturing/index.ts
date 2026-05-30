@@ -25,6 +25,7 @@ registerPlugin({
 			description:
 				"A texture workspace with channel packing, normal-map tools, size analysis, and preview.",
 			Component: TexturingWorkflow,
+			usesWorkingFolder: true,
 		},
 	],
 	automationSteps: texturingAutomationSteps,

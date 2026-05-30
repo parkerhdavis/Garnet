@@ -51,7 +51,8 @@ import {
 } from "react-icons/hi2";
 import { confirm } from "@/components/ConfirmDialog";
 import { openContextMenu } from "@/components/ContextMenu";
-import { NewWorkspaceDialog } from "@/components/NewWorkspaceDialog";
+import { NewWorkspaceDialog, type NewWorkspaceOptions } from "@/components/NewWorkspaceDialog";
+import { WorkspaceSettingsDialog } from "@/components/WorkspaceSettingsDialog";
 import { prompt } from "@/components/PromptDialog";
 import type { PinnedSource, Workspace } from "@/lib/tauri";
 import { workspaceTypeMeta } from "@/lib/workspaceTypes";
@@ -66,20 +67,33 @@ export function Sidebar() {
 	const refreshWorkspaces = useWorkspacesStore((s) => s.refresh);
 	const createWorkspace = useWorkspacesStore((s) => s.create);
 	const renameWorkspace = useWorkspacesStore((s) => s.rename);
+	const updateWorkspaceConfig = useWorkspacesStore((s) => s.updateConfig);
 	const removeWorkspace = useWorkspacesStore((s) => s.remove);
 	const navigate = useNavigate();
 	const params = useParams<{ id?: string }>();
 	const activeSourceId = params.id ? Number(params.id) : null;
 	const [newWorkspaceOpen, setNewWorkspaceOpen] = useState(false);
+	const [settingsWorkspace, setSettingsWorkspace] = useState<Workspace | null>(null);
 
 	useEffect(() => {
 		void refresh();
 		void refreshWorkspaces();
 	}, [refresh, refreshWorkspaces]);
 
-	async function handleCreateWorkspace(name: string, type: string) {
+	async function handleCreateWorkspace(
+		name: string,
+		type: string,
+		opts: NewWorkspaceOptions,
+	) {
 		const ws = await createWorkspace(name, type);
-		if (ws) navigate(`/workspaces/${ws.id}`);
+		if (!ws) return;
+		if (opts.rootFolder || opts.fileFilters) {
+			await updateWorkspaceConfig(ws.id, {
+				rootFolder: opts.rootFolder ?? undefined,
+				fileFilters: opts.fileFilters ?? undefined,
+			});
+		}
+		navigate(`/workspaces/${ws.id}`);
 	}
 
 	async function handleRenameWorkspace(ws: Workspace) {
@@ -107,6 +121,11 @@ export function Sidebar() {
 
 	function handleWorkspaceContextMenu(event: React.MouseEvent, ws: Workspace) {
 		openContextMenu(event, [
+			{
+				label: "Settings…",
+				icon: HiCog6Tooth,
+				onClick: () => setSettingsWorkspace(ws),
+			},
 			{
 				label: "Rename…",
 				icon: HiPencilSquare,
@@ -303,6 +322,10 @@ export function Sidebar() {
 				open={newWorkspaceOpen}
 				onClose={() => setNewWorkspaceOpen(false)}
 				onCreate={handleCreateWorkspace}
+			/>
+			<WorkspaceSettingsDialog
+				workspace={settingsWorkspace}
+				onClose={() => setSettingsWorkspace(null)}
 			/>
 		</aside>
 	);

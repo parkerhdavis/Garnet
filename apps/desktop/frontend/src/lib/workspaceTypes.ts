@@ -16,6 +16,9 @@ export type WorkspaceTypeMeta = {
 	label: string;
 	icon: IconType;
 	description: string;
+	/// Whether this type exposes a working folder + file filters (see
+	/// `WorkflowContribution.usesWorkingFolder`).
+	usesWorkingFolder: boolean;
 };
 
 export const LIBRARY_TYPE_META: WorkspaceTypeMeta = {
@@ -23,6 +26,7 @@ export const LIBRARY_TYPE_META: WorkspaceTypeMeta = {
 	label: "Library",
 	icon: HiRectangleStack,
 	description: "A named library view with an optional saved filter.",
+	usesWorkingFolder: false,
 };
 
 /// Metadata for any workspace type, resolving even disabled-plugin types so an
@@ -36,9 +40,10 @@ export function workspaceTypeMeta(type: string): WorkspaceTypeMeta {
 			label: w.contribution.label,
 			icon: w.contribution.icon,
 			description: w.contribution.description,
+			usesWorkingFolder: w.contribution.usesWorkingFolder ?? false,
 		};
 	}
-	return { type, label: type, icon: HiSquares2X2, description: "" };
+	return { type, label: type, icon: HiSquares2X2, description: "", usesWorkingFolder: false };
 }
 
 /// The workspace types a user can create right now: the base Library type plus
@@ -50,6 +55,7 @@ export function creatableWorkspaceTypes(): WorkspaceTypeMeta[] {
 		label: w.label,
 		icon: w.icon,
 		description: w.description,
+		usesWorkingFolder: w.usesWorkingFolder ?? false,
 	}));
 	return [LIBRARY_TYPE_META, ...pluginTypes];
 }

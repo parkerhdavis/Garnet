@@ -3,13 +3,19 @@
 //! workflow types) and give it a name. Plugin workflow types only appear when
 //! their plugin is enabled, so the picker stays in sync with the Plugins page.
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { WorkingFolderFields } from "@/components/WorkingFolderFields";
 import { usePluginsStore } from "@/stores/pluginsStore";
 import {
 	creatableWorkspaceTypes,
 	LIBRARY_TYPE,
 	type WorkspaceTypeMeta,
 } from "@/lib/workspaceTypes";
+
+export type NewWorkspaceOptions = {
+	rootFolder: string | null;
+	fileFilters: string | null;
+};
 
 export function NewWorkspaceDialog({
 	open,
@@ -18,7 +24,7 @@ export function NewWorkspaceDialog({
 }: {
 	open: boolean;
 	onClose: () => void;
-	onCreate: (name: string, type: string) => Promise<void>;
+	onCreate: (name: string, type: string, opts: NewWorkspaceOptions) => Promise<void>;
 }) {
 	// Re-derive the type list when plugin enable-state changes.
 	usePluginsStore((s) => s.enabledIds);
@@ -26,13 +32,22 @@ export function NewWorkspaceDialog({
 
 	const [name, setName] = useState("");
 	const [type, setType] = useState<string>(LIBRARY_TYPE);
+	const [rootFolder, setRootFolder] = useState<string | null>(null);
+	const [fileFilters, setFileFilters] = useState("");
 	const [submitting, setSubmitting] = useState(false);
+
+	const usesWorkingFolder = useMemo(
+		() => types.find((t) => t.type === type)?.usesWorkingFolder ?? false,
+		[types, type],
+	);
 
 	// Reset the form each time the dialog opens.
 	useEffect(() => {
 		if (open) {
 			setName("");
 			setType(LIBRARY_TYPE);
+			setRootFolder(null);
+			setFileFilters("");
 			setSubmitting(false);
 		}
 	}, [open]);
@@ -44,7 +59,10 @@ export function NewWorkspaceDialog({
 		if (!trimmed || submitting) return;
 		setSubmitting(true);
 		try {
-			await onCreate(trimmed, type);
+			await onCreate(trimmed, type, {
+				rootFolder: usesWorkingFolder ? rootFolder : null,
+				fileFilters: usesWorkingFolder ? fileFilters.trim() || null : null,
+			});
 			onClose();
 		} finally {
 			setSubmitting(false);
@@ -96,6 +114,21 @@ export function NewWorkspaceDialog({
 							))}
 						</div>
 					</div>
+
+					{usesWorkingFolder && (
+						<>
+							<WorkingFolderFields
+								rootFolder={rootFolder}
+								fileFilters={fileFilters}
+								onRootFolder={setRootFolder}
+								onFileFilters={setFileFilters}
+							/>
+							<p className="text-[11px] text-base-content/45 -mt-1">
+								Optional. You can change these later from the workspace's right-click
+								menu → Settings.
+							</p>
+						</>
+					)}
 
 					<div className="flex justify-end gap-2 mt-1">
 						<button type="button" className="btn btn-sm btn-ghost" onClick={onClose}>

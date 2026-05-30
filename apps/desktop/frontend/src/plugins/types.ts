@@ -29,6 +29,12 @@ export interface WorkflowContribution {
 	/// Renders the workspace interior. Receives the workspace row so it can
 	/// read/write type-specific `config` and (later) scope to library assets.
 	Component: React.ComponentType<{ workspace: Workspace }>;
+	/// When true, the New Workspace dialog + Workspace Settings expose a
+	/// "working folder" + "file filters" for this type (a root OS directory the
+	/// workflow's file tools draw inputs from). File-based workflows (3D
+	/// Texturing) set this; library-backed ones (e.g. a future Music Library)
+	/// leave it off.
+	usesWorkingFolder?: boolean;
 }
 
 /// Editor for one automation step's parameters. Receives the current params
