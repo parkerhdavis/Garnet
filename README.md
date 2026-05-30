@@ -8,6 +8,8 @@ Garnet is **offline and local**, operating as a surface over your local files. N
 > [!NOTE]
 > Garnet is still in an early stage of development, with limited editing utilities available. The functionalities available should work without issue, but you'll see a lot of gaps where core or plugin functions have yet to be built.
 
+---
+
 ## Core Features
 
 Garnet's base install is a complete DAM with **zero plugins** — it catalogs, previews, searches, lightly edits, and batch-processes any media type, operating as an index over wherever your files already live. Nothing is copied into a proprietary library; Garnet works in place.
@@ -24,8 +26,6 @@ Register any number of folders as **library roots** and Garnet indexes them in p
 - **Tag** assets and filter by tag; **pin** any root or subfolder to the sidebar; organize work into **Workspaces**
 - **Open a loose file ad-hoc** (`Ctrl/Cmd+O`) — point Garnet at any file *outside* your library and get its full preview and editor surfaces without adding it to the catalog
 
----
-
 ### Previews & Quick-Look
 
 ![3D model quick-look with details and stats](.github/assets/garnet-screenshot-core-model.png)
@@ -41,8 +41,6 @@ Inline, zero-config preview for every common media type, with cached thumbnails 
 - A details panel surfaces **native metadata** — image dimensions, EXIF (camera, lens, exposure), and audio tags — alongside your own tags
 - Thumbnails for images, videos, 3D models, and `.blend` files (extracted from the embedded preview)
 
----
-
 ### Image Editor
 
 ![Image editor with adjustment sliders, luminance curve, and crop overlay](.github/assets/garnet-screenshot-core-imageadjust.png)
@@ -54,11 +52,11 @@ A non-destructive editor that previews on the original at full resolution (GPU-a
 - **Geometry** — crop (aspect-ratio presets + rule-of-thirds guides), resize, rotate, and corner-round
 - Hold `\` to peek the original, full undo/redo, and a choice of **save-as-new** or **overwrite**
 
----
-
 ### Automations
 
 Build reusable batch pipelines and run them across many files at once — base steps (**convert**, **resize**, and **rename** with token patterns) plus steps contributed by plugins. Runs in parallel with live progress in the footer, and pipelines save as named presets.
+
+---
 
 ## Plugin Features
 
@@ -76,8 +74,6 @@ The full toolset from [Packi](https://github.com/parkerhdavis/Packi), woven in a
 - **Size** — texture info, VRAM budget across 16+ GPU compression formats, and the full mip chain
 - Contributes Flip Green / Normalize steps to the base Automations pipeline
 
----
-
 ### Music Library
 
 ![Music Library plugin — album view with track list and player](.github/assets/garnet-screenshot-musicplug-emmaharner.png)
@@ -87,6 +83,8 @@ A catalog-backed workspace that organizes your indexed audio into an **album-art
 - Native Rust audio engine (Symphonia + Rodio) for reliable, high-quality local playback — including Hi-Res and FLAC
 - Docked transport with a play queue and a **waveform** rendered from precomputed peaks
 - Reads embedded tags and cover art; per-track quality badges (format, bit depth, sample rate)
+
+---
 
 ## Stack
 
@@ -98,6 +96,8 @@ A catalog-backed workspace that organizes your indexed audio into an **album-art
 - **Library DB:** SQLite via `rusqlite`
 
 Stack mirrors [Packi](https://github.com/parkerhdavis/Packi) for code reuse and a consistent offline/local ethos.
+
+---
 
 ## Development
 
@@ -117,11 +117,15 @@ make lint typecheck test
 
 The library SQLite file lands at `$XDG_DATA_HOME/garnet/library.sqlite` (or the OS equivalent); logs go to `$XDG_CONFIG_HOME/garnet/logs/`.
 
+---
+
 ## License
 
 Covered under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later) — see [LICENSE.md](./LICENSE.md).
 
 Beyond that, I only have one rule: **First, do no harm. Then, help where you can.**
+
+---
 
 ## Financial Support
 
