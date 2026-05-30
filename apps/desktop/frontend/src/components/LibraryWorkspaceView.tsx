@@ -74,7 +74,7 @@ export function LibraryWorkspaceView({ workspace }: { workspace: Workspace }) {
 
 	async function handleClearFilter() {
 		const next = { ...workspace.config };
-		delete next.savedQuery;
+		next.savedQuery = undefined;
 		await updateConfig(workspace.id, next);
 		void applyFilters(EMPTY_LIBRARY_QUERY);
 	}

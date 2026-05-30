@@ -44,11 +44,14 @@ export function isMeaningfulClip(clip: THREE.AnimationClip): boolean {
 }
 
 function detectKind(url: string): ModelKind | null {
-	const m = url.toLowerCase().match(/\.(gltf|glb|obj|stl|ply|fbx|usd|usda|usdc|usdz)(?:$|\?)/);
+	const m = url
+		.toLowerCase()
+		.match(/\.(gltf|glb|obj|stl|ply|fbx|usd|usda|usdc|usdz)(?:$|\?)/);
 	if (!m) return null;
 	const ext = m[1];
 	if (ext === "gltf" || ext === "glb") return "gltf";
-	if (ext === "usd" || ext === "usda" || ext === "usdc" || ext === "usdz") return "usd";
+	if (ext === "usd" || ext === "usda" || ext === "usdc" || ext === "usdz")
+		return "usd";
 	return ext as ModelKind;
 }
 
@@ -73,7 +76,9 @@ export function ModelPreview({
 		const el = containerRef.current;
 		if (!el) return;
 		if (!url) return;
-		const kind = detectKind(url) ?? (format ? detectKind(`.${format.toLowerCase()}`) : null);
+		const kind =
+			detectKind(url) ??
+			(format ? detectKind(`.${format.toLowerCase()}`) : null);
 		if (!kind) {
 			setError(`Unsupported model format: ${format ?? "unknown"}`);
 			setLoading(false);
@@ -200,7 +205,8 @@ function AnimationControls({
 			const el = target as HTMLElement | null;
 			if (!el) return false;
 			const tag = el.tagName;
-			if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+			if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")
+				return true;
 			return el.isContentEditable;
 		}
 		const writeLabelsForCurrent = () => {
@@ -208,7 +214,8 @@ function AnimationControls({
 			if (!p || p.duration <= 0) return;
 			const fraction = p.time / p.duration;
 			if (fillRef.current) fillRef.current.style.width = `${fraction * 100}%`;
-			if (handleRef.current) handleRef.current.style.left = `${fraction * 100}%`;
+			if (handleRef.current)
+				handleRef.current.style.left = `${fraction * 100}%`;
 			if (timeLabelRef.current) {
 				timeLabelRef.current.textContent = `${formatTime(p.time)} / ${formatTime(p.duration)}`;
 			}
@@ -328,7 +335,11 @@ function AnimationControls({
 				onClick={() => setPlaying(!playing)}
 				title={playing ? "Pause" : "Play"}
 			>
-				{playing ? <HiPause className="size-3.5" /> : <HiPlay className="size-3.5" />}
+				{playing ? (
+					<HiPause className="size-3.5" />
+				) : (
+					<HiPlay className="size-3.5" />
+				)}
 			</button>
 			{clips.length > 1 ? (
 				<select
@@ -619,7 +630,7 @@ class ModelScene {
 				);
 			}
 		});
-		if (!isFinite(box.min.x) || box.isEmpty()) return;
+		if (!Number.isFinite(box.min.x) || box.isEmpty()) return;
 		const size = box.getSize(new THREE.Vector3());
 		const center = box.getCenter(new THREE.Vector3());
 		const maxDim = Math.max(size.x, size.y, size.z);
@@ -668,7 +679,11 @@ async function loadByKind(url: string, kind: ModelKind): Promise<LoadResult> {
 			const loader = new STLLoader();
 			const geom = await loader.loadAsync(url);
 			geom.computeVertexNormals();
-			const mat = new THREE.MeshStandardMaterial({ color: 0xb0b0b0, metalness: 0.1, roughness: 0.6 });
+			const mat = new THREE.MeshStandardMaterial({
+				color: 0xb0b0b0,
+				metalness: 0.1,
+				roughness: 0.6,
+			});
 			return { object: new THREE.Mesh(geom, mat), animations: [] };
 		}
 		case "ply": {
@@ -707,7 +722,10 @@ function emptyStats(): ModelStats {
 /// Counts triangles/vertices and tallies meshes, unique materials, unique
 /// textures, bones. `animationCount` is passed in because the caller has
 /// already filtered out empty clips via isMeaningfulClip.
-function computeModelStats(root: THREE.Object3D, animationCount: number): ModelStats {
+function computeModelStats(
+	root: THREE.Object3D,
+	animationCount: number,
+): ModelStats {
 	let triangles = 0;
 	let vertices = 0;
 	let meshes = 0;
@@ -718,16 +736,17 @@ function computeModelStats(root: THREE.Object3D, animationCount: number): ModelS
 	const collectMaterial = (mat: THREE.Material) => {
 		if (materials.has(mat)) return;
 		materials.add(mat);
-		for (const value of Object.values(mat as unknown as Record<string, unknown>)) {
+		for (const value of Object.values(
+			mat as unknown as Record<string, unknown>,
+		)) {
 			if (value instanceof THREE.Texture) textures.add(value);
 		}
 	};
 
 	root.traverse((c) => {
 		if (c instanceof THREE.Bone) bones++;
-		const geom = (c as THREE.Mesh | THREE.Points | THREE.LineSegments).geometry as
-			| THREE.BufferGeometry
-			| undefined;
+		const geom = (c as THREE.Mesh | THREE.Points | THREE.LineSegments)
+			.geometry as THREE.BufferGeometry | undefined;
 		if (c instanceof THREE.Mesh && geom) {
 			meshes++;
 			const position = geom.attributes.position;
@@ -760,7 +779,11 @@ function computeModelStats(root: THREE.Object3D, animationCount: number): ModelS
 
 function disposeObject(obj: THREE.Object3D): void {
 	obj.traverse((child) => {
-		if (child instanceof THREE.Mesh || child instanceof THREE.Points || child instanceof THREE.LineSegments) {
+		if (
+			child instanceof THREE.Mesh ||
+			child instanceof THREE.Points ||
+			child instanceof THREE.LineSegments
+		) {
 			child.geometry?.dispose?.();
 			const mat = child.material;
 			if (Array.isArray(mat)) {

@@ -30,7 +30,11 @@ export function QueuePanel() {
 				<span className="text-xs font-semibold uppercase tracking-wider text-base-content/60">
 					Queue
 				</span>
-				<button type="button" className="btn btn-ghost btn-xs btn-circle" onClick={toggle}>
+				<button
+					type="button"
+					className="btn btn-ghost btn-xs btn-circle"
+					onClick={toggle}
+				>
 					<HiXMark className="size-4" />
 				</button>
 			</div>
@@ -45,11 +49,17 @@ export function QueuePanel() {
 					<>
 						<SectionLabel>Up next</SectionLabel>
 						{upcoming.map(({ track, pos }) => (
-							<QueueRow key={`${track.asset_id}-${pos}`} track={track} onClick={() => jumpTo(pos)} />
+							<QueueRow
+								key={`${track.asset_id}-${pos}`}
+								track={track}
+								onClick={() => jumpTo(pos)}
+							/>
 						))}
 					</>
 				) : (
-					<div className="px-2 py-4 text-center text-xs text-base-content/40">Nothing up next</div>
+					<div className="px-2 py-4 text-center text-xs text-base-content/40">
+						Nothing up next
+					</div>
 				)}
 			</div>
 		</div>
@@ -87,8 +97,12 @@ function QueueRow({
 				{isCurrent && playing && <PlayingBars className="text-primary" />}
 			</span>
 			<span className="min-w-0 flex-1">
-				<span className="block truncate text-sm leading-tight">{track.title}</span>
-				<span className="block truncate text-xs text-base-content/55">{track.artist}</span>
+				<span className="block truncate text-sm leading-tight">
+					{track.title}
+				</span>
+				<span className="block truncate text-xs text-base-content/55">
+					{track.artist}
+				</span>
 			</span>
 			<span className="shrink-0 text-[11px] tabular-nums text-base-content/45">
 				{formatDuration(track.duration_secs)}

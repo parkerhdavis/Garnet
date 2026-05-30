@@ -19,7 +19,10 @@ export function ArtistView({
 	return (
 		<div className="flex flex-col">
 			{groups.map((g) => (
-				<section key={g.artist} className="border-b border-base-300/60 last:border-0">
+				<section
+					key={g.artist}
+					className="border-b border-base-300/60 last:border-0"
+				>
 					<div className="flex items-baseline gap-2 px-4 pt-4 pb-0.5">
 						{onArtist ? (
 							<button
@@ -36,7 +39,11 @@ export function ArtistView({
 							{g.albumCount} {g.albumCount === 1 ? "album" : "albums"}
 						</span>
 					</div>
-					<AlbumGrid albums={g.albums} onSelect={onSelect} onArtist={onArtist} />
+					<AlbumGrid
+						albums={g.albums}
+						onSelect={onSelect}
+						onArtist={onArtist}
+					/>
 				</section>
 			))}
 		</div>

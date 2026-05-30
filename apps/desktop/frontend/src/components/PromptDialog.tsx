@@ -140,9 +140,7 @@ export function PromptDialogRoot() {
 						onChange={(e) => setValue(e.target.value)}
 						className="input input-sm input-bordered w-full"
 					/>
-					{error && (
-						<p className="text-xs text-error">{error}</p>
-					)}
+					{error && <p className="text-xs text-error">{error}</p>}
 				</div>
 				<div className="flex justify-end gap-2 px-4 py-3 border-t border-base-300 bg-base-200/50 rounded-b-lg">
 					<button

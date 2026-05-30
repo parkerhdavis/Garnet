@@ -13,7 +13,11 @@ import type {
 	ImageWithPreview,
 } from "@/plugins/texturing/types";
 
-export type NormalOperation = "flip" | "height-to-normal" | "blend" | "normalize";
+export type NormalOperation =
+	| "flip"
+	| "height-to-normal"
+	| "blend"
+	| "normalize";
 
 const PREVIEW_SIZE = 1024;
 const DEBOUNCE_MS = 300;
@@ -93,7 +97,12 @@ export const useNormalStore = create<NormalState>((set, get) => ({
 	},
 
 	clearInput: () =>
-		set({ inputPath: null, inputInfo: null, inputPreview: null, resultPreview: null }),
+		set({
+			inputPath: null,
+			inputInfo: null,
+			inputPreview: null,
+			resultPreview: null,
+		}),
 
 	loadSecond: async (path) => {
 		try {

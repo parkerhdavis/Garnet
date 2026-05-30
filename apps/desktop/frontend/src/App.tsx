@@ -85,12 +85,18 @@ export default function App() {
 
 						<Route path="settings" element={<SettingsPage />} />
 						<Route path="settings/library" element={<SettingsPage />} />
-						<Route path="settings/appearance" element={<SettingsAppearancePage />} />
+						<Route
+							path="settings/appearance"
+							element={<SettingsAppearancePage />}
+						/>
 						<Route path="settings/general" element={<SettingsGeneralPage />} />
 						{/* About moved to /app/about as part of the App sidebar
 						    section. Keep the old URL working in case anything
 						    deep-links to it. */}
-						<Route path="settings/about" element={<Navigate to="/app/about" replace />} />
+						<Route
+							path="settings/about"
+							element={<Navigate to="/app/about" replace />}
+						/>
 
 						<Route path="app/stats" element={<AppStatsPage />} />
 						<Route path="app/keybinds" element={<AppKeybindsPage />} />
@@ -185,7 +191,9 @@ function useSplashTimer() {
 		if (!splashGone) return;
 		if (marks.current.finalized) return;
 		marks.current.finalized = true;
-		void api.finalizeStartupTimings(SPLASH_MIN_MS + SPLASH_FADE_MS).catch(() => {});
+		void api
+			.finalizeStartupTimings(SPLASH_MIN_MS + SPLASH_FADE_MS)
+			.catch(() => {});
 		useBootStore.getState().markReady();
 	}, [splashGone]);
 
@@ -208,9 +216,11 @@ function useScanEventBridge() {
 
 		void listen<number>("scan:started", (e) => {
 			useLibraryStore.getState()._markScanStarted(e.payload);
-			useBgTasksStore
-				.getState()
-				.add({ id: scanTaskId(e.payload), kind: "scan", label: "Scanning library" });
+			useBgTasksStore.getState().add({
+				id: scanTaskId(e.payload),
+				kind: "scan",
+				label: "Scanning library",
+			});
 		}).then((u) => unlistens.push(u));
 
 		void listen<ScanReport>("scan:completed", (e) => {
@@ -264,7 +274,8 @@ function useGlobalHotkeys() {
 			const el = target as HTMLElement | null;
 			if (!el) return false;
 			const tag = el.tagName;
-			if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+			if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")
+				return true;
 			if (el.isContentEditable) return true;
 			return false;
 		}
@@ -433,7 +444,10 @@ type ErrorBoundaryState = { error: Error | null };
 // Top-level error boundary so render-time failures show as a visible message
 // (and a console trace) instead of leaving the pre-mount "Loading Garnet…"
 // placeholder hanging indefinitely.
-class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+class ErrorBoundary extends Component<
+	{ children: ReactNode },
+	ErrorBoundaryState
+> {
 	state: ErrorBoundaryState = { error: null };
 
 	static getDerivedStateFromError(error: Error): ErrorBoundaryState {

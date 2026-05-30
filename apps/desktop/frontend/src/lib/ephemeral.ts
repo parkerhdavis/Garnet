@@ -62,7 +62,11 @@ export async function addPathToLibrary(absPath: string): Promise<number> {
 	// is exactly its filename. Match on that (robust to path canonicalization
 	// that registerLibraryRoot applies to the root).
 	const resolve = async (): Promise<number | null> => {
-		const page = await api.listAssets({ root_id: root.id, path_search: name, limit: 200 });
+		const page = await api.listAssets({
+			root_id: root.id,
+			path_search: name,
+			limit: 200,
+		});
 		const match = page.assets.find((a) => a.relative_path === name);
 		return match ? match.id : null;
 	};
@@ -90,7 +94,9 @@ export async function addPathToLibrary(absPath: string): Promise<number> {
 				const id = await resolve();
 				if (id !== null) finish(() => resolvePromise(id));
 			} catch (e) {
-				finish(() => rejectPromise(e instanceof Error ? e : new Error(String(e))));
+				finish(() =>
+					rejectPromise(e instanceof Error ? e : new Error(String(e))),
+				);
 			}
 		};
 
@@ -109,7 +115,9 @@ export async function addPathToLibrary(absPath: string): Promise<number> {
 			.scanLibraryRoot(root.id)
 			.then(tryResolve)
 			.catch((e) =>
-				finish(() => rejectPromise(e instanceof Error ? e : new Error(String(e)))),
+				finish(() =>
+					rejectPromise(e instanceof Error ? e : new Error(String(e))),
+				),
 			);
 	});
 }

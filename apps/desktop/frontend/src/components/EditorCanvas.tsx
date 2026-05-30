@@ -57,8 +57,10 @@ export default function EditorCanvas({
 		observerRef.current = ro;
 	}, []);
 
-	const radiusScale = renderedOutputW && geom.outputW > 0 ? renderedOutputW / geom.outputW : 0;
-	const radiusPx = geom.cornerRadiusOutput > 0 ? geom.cornerRadiusOutput * radiusScale : 0;
+	const radiusScale =
+		renderedOutputW && geom.outputW > 0 ? renderedOutputW / geom.outputW : 0;
+	const radiusPx =
+		geom.cornerRadiusOutput > 0 ? geom.cornerRadiusOutput * radiusScale : 0;
 
 	// Empty pipeline fast path: plain img with object-contain.
 	if (!geom.anyGeometric) {

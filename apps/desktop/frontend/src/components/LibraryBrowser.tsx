@@ -106,7 +106,9 @@ export function LibraryBrowser() {
 				{noRoots ? (
 					<EmptyNoRoots onOpenFile={handleOpenFile} />
 				) : loading && assets.length === 0 ? (
-					<div className="p-12 text-center text-base-content/60 text-sm">Loading…</div>
+					<div className="p-12 text-center text-base-content/60 text-sm">
+						Loading…
+					</div>
 				) : assets.length === 0 ? (
 					<EmptyNoMatches />
 				) : viewMode === "grid" ? (
@@ -141,15 +143,20 @@ function EmptyNoRoots({ onOpenFile }: { onOpenFile: () => void }) {
 				<div className="card-body items-center text-center py-12">
 					<h2 className="card-title">No library roots yet</h2>
 					<p className="text-base-content/70 max-w-md">
-						Garnet indexes files where they already live. Add a folder in Settings to
-						start cataloging — or open a single file ad-hoc without adding it.
+						Garnet indexes files where they already live. Add a folder in
+						Settings to start cataloging — or open a single file ad-hoc without
+						adding it.
 					</p>
 					<div className="flex flex-wrap items-center justify-center gap-2 mt-4">
 						<Link to="/settings" className="btn btn-primary">
 							<HiFolderPlus className="size-4" />
 							Go to Settings
 						</Link>
-						<button type="button" className="btn btn-ghost" onClick={onOpenFile}>
+						<button
+							type="button"
+							className="btn btn-ghost"
+							onClick={onOpenFile}
+						>
 							<HiDocumentArrowUp className="size-4" />
 							Open a file
 						</button>

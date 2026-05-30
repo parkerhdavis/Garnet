@@ -32,17 +32,26 @@ export const useSizeStore = create<SizeStoreState>((set) => ({
 	loadInput: async (path) => {
 		set({ inputLoading: true });
 		try {
-			const result = await invoke<ImageWithPreview>("load_image_with_preview", { path, maxPreviewSize: 1024 });
-			set({ inputPath: path, inputInfo: result.info, inputPreview: result.preview, inputLoading: false });
+			const result = await invoke<ImageWithPreview>("load_image_with_preview", {
+				path,
+				maxPreviewSize: 1024,
+			});
+			set({
+				inputPath: path,
+				inputInfo: result.info,
+				inputPreview: result.preview,
+				inputLoading: false,
+			});
 		} catch (err) {
 			console.error("Failed to load image:", err);
 			set({ inputLoading: false });
 		}
 	},
 
-	clearInput: () => set({
-		inputPath: null,
-		inputInfo: null,
-		inputPreview: null,
-	}),
+	clearInput: () =>
+		set({
+			inputPath: null,
+			inputInfo: null,
+			inputPreview: null,
+		}),
 }));

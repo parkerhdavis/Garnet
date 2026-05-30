@@ -69,7 +69,8 @@ function summarize(byKind: Map<BgTaskKind, number>): string {
 	const scans = byKind.get("scan") ?? 0;
 	const other = byKind.get("other") ?? 0;
 	const totalThumbs = thumbs + models;
-	if (totalThumbs > 0) parts.push(`${totalThumbs} ${pluralize(totalThumbs, "thumbnail")}`);
+	if (totalThumbs > 0)
+		parts.push(`${totalThumbs} ${pluralize(totalThumbs, "thumbnail")}`);
 	if (scans > 0) parts.push(`${scans} ${pluralize(scans, "scan")}`);
 	if (other > 0) parts.push(`${other} ${pluralize(other, "task")}`);
 	if (parts.length === 0) return "";
@@ -102,7 +103,10 @@ export function Footer() {
 							className="loading loading-spinner loading-xs text-primary shrink-0"
 							aria-hidden="true"
 						/>
-						<span className="text-base-content/80 truncate" title={displayedCaption}>
+						<span
+							className="text-base-content/80 truncate"
+							title={displayedCaption}
+						>
 							{displayedCaption}
 						</span>
 					</>

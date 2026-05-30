@@ -4,7 +4,9 @@ import TexturePreview from "@/plugins/texturing/ui/TexturePreview";
 import { formatBytes } from "@/plugins/texturing/size/vramFormats";
 
 function gcd(a: number, b: number): number {
-	while (b) { [a, b] = [b, a % b]; }
+	while (b) {
+		[a, b] = [b, a % b];
+	}
 	return a;
 }
 
@@ -25,7 +27,8 @@ export default function TextureInfoPanel() {
 		);
 	}
 
-	const uncompressedBytes = info.width * info.height * info.channels * (info.bit_depth / 8);
+	const uncompressedBytes =
+		info.width * info.height * info.channels * (info.bit_depth / 8);
 	const megapixels = (info.width * info.height) / 1_000_000;
 	const isPowerOfTwo = (n: number) => n > 0 && (n & (n - 1)) === 0;
 	const pot = isPowerOfTwo(info.width) && isPowerOfTwo(info.height);
@@ -46,13 +49,22 @@ export default function TextureInfoPanel() {
 		<div className="flex-1 min-w-0 flex">
 			{/* Info table */}
 			<div className="w-72 shrink-0 border-r border-base-300 p-4">
-				<div className="text-sm font-semibold text-base-content mb-3">Image Properties</div>
+				<div className="text-sm font-semibold text-base-content mb-3">
+					Image Properties
+				</div>
 				<table className="w-full">
 					<tbody>
 						{rows.map((row) => (
-							<tr key={row.label} className="border-b border-base-300/50 last:border-0">
-								<td className="py-1.5 text-xs text-base-content/50 pr-3">{row.label}</td>
-								<td className="py-1.5 text-sm font-mono text-base-content/80 text-right">{row.value}</td>
+							<tr
+								key={row.label}
+								className="border-b border-base-300/50 last:border-0"
+							>
+								<td className="py-1.5 text-xs text-base-content/50 pr-3">
+									{row.label}
+								</td>
+								<td className="py-1.5 text-sm font-mono text-base-content/80 text-right">
+									{row.value}
+								</td>
 							</tr>
 						))}
 					</tbody>
@@ -60,11 +72,7 @@ export default function TextureInfoPanel() {
 			</div>
 
 			{/* Preview */}
-			<TexturePreview
-				imageData={preview}
-				imageInfo={info}
-				className="flex-1"
-			/>
+			<TexturePreview imageData={preview} imageInfo={info} className="flex-1" />
 		</div>
 	);
 }

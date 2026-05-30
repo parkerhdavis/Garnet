@@ -29,7 +29,8 @@ export const usePrefsStore = create<PrefsState>()(
 	persist(
 		(set) => ({
 			animatedImagesBucket: "images",
-			setAnimatedImagesBucket: (bucket) => set({ animatedImagesBucket: bucket }),
+			setAnimatedImagesBucket: (bucket) =>
+				set({ animatedImagesBucket: bucket }),
 			editorSaveDefault: "new_file",
 			setEditorSaveDefault: (mode) => set({ editorSaveDefault: mode }),
 		}),

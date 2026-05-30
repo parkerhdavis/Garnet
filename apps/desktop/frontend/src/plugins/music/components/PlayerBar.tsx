@@ -21,7 +21,11 @@ import { HiResBadge } from "@/plugins/music/components/HiResBadge";
 import { Waveform } from "@/plugins/music/components/Waveform";
 import { useNativeAudio } from "@/plugins/music/hooks/useNativeAudio";
 import { usePeaks } from "@/plugins/music/hooks/usePeaks";
-import { formatDuration, isHiRes, qualityShort } from "@/plugins/music/lib/format";
+import {
+	formatDuration,
+	isHiRes,
+	qualityShort,
+} from "@/plugins/music/lib/format";
 import { albumIdForTrack } from "@/plugins/music/lib/grouping";
 import { useMusicStore } from "@/plugins/music/stores/musicStore";
 import { useWorkspacesStore } from "@/stores/workspacesStore";
@@ -53,7 +57,10 @@ export function PlayerBar() {
 	// back to any music workspace if that one is gone — null only if there's no
 	// music workspace at all, in which case the labels aren't clickable.
 	const navWorkspaceId = useMemo(() => {
-		if (playbackWorkspaceId != null && workspaces.some((w) => w.id === playbackWorkspaceId)) {
+		if (
+			playbackWorkspaceId != null &&
+			workspaces.some((w) => w.id === playbackWorkspaceId)
+		) {
 			return playbackWorkspaceId;
 		}
 		return workspaces.find((w) => w.type === "music")?.id ?? null;
@@ -102,11 +109,15 @@ export function PlayerBar() {
 	const canNavigate = navWorkspaceId != null;
 	const goToAlbum = () => {
 		if (navWorkspaceId == null) return;
-		navigate(`/workspaces/${navWorkspaceId}?album=${encodeURIComponent(albumIdForTrack(nowPlaying))}`);
+		navigate(
+			`/workspaces/${navWorkspaceId}?album=${encodeURIComponent(albumIdForTrack(nowPlaying))}`,
+		);
 	};
 	const goToArtist = () => {
 		if (navWorkspaceId == null) return;
-		navigate(`/workspaces/${navWorkspaceId}?artist=${encodeURIComponent(nowPlaying.album_artist)}`);
+		navigate(
+			`/workspaces/${navWorkspaceId}?artist=${encodeURIComponent(nowPlaying.album_artist)}`,
+		);
 	};
 
 	return (
@@ -121,7 +132,11 @@ export function PlayerBar() {
 					title={canNavigate ? `Go to ${nowPlaying.album}` : undefined}
 					className="shrink-0 rounded transition hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:pointer-events-none"
 				>
-					<AlbumArt absPath={nowPlaying.abs_path} className="size-11" rounded="rounded" />
+					<AlbumArt
+						absPath={nowPlaying.abs_path}
+						className="size-11"
+						rounded="rounded"
+					/>
 				</button>
 				<div className="min-w-0">
 					<button
@@ -138,7 +153,9 @@ export function PlayerBar() {
 							type="button"
 							onClick={goToArtist}
 							disabled={!canNavigate}
-							title={canNavigate ? `Go to ${nowPlaying.album_artist}` : undefined}
+							title={
+								canNavigate ? `Go to ${nowPlaying.album_artist}` : undefined
+							}
 							className="min-w-0 truncate text-left text-xs text-base-content/60 hover:text-primary hover:underline disabled:text-base-content/60 disabled:no-underline"
 						>
 							{nowPlaying.artist}
@@ -181,7 +198,11 @@ export function PlayerBar() {
 					onClick={player.playPause}
 					title={isPlaying ? "Pause" : "Play"}
 				>
-					{isPlaying ? <HiPause className="size-4" /> : <HiPlay className="size-4" />}
+					{isPlaying ? (
+						<HiPause className="size-4" />
+					) : (
+						<HiPlay className="size-4" />
+					)}
 				</button>
 				<button
 					type="button"
@@ -202,7 +223,9 @@ export function PlayerBar() {
 				>
 					<HiArrowPath className="size-4" />
 					{repeat === "one" && (
-						<span className="absolute right-1.5 top-1 text-[8px] font-bold leading-none">1</span>
+						<span className="absolute right-1.5 top-1 text-[8px] font-bold leading-none">
+							1
+						</span>
 					)}
 				</button>
 			</div>

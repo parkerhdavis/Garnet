@@ -41,7 +41,10 @@ export class PBRSceneManager {
 		this.camera.position.y = 1;
 
 		// Renderer
-		this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+		this.renderer = new THREE.WebGLRenderer({
+			antialias: true,
+			preserveDrawingBuffer: true,
+		});
 		this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
 		this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 		container.appendChild(this.renderer.domElement);
@@ -105,18 +108,26 @@ export class PBRSceneManager {
 		}
 
 		// Check each texture slot + clay render toggle
-		const texturesChanged = MAP_KEYS.some((k) => oldConfig.textures[k] !== newConfig.textures[k]);
+		const texturesChanged = MAP_KEYS.some(
+			(k) => oldConfig.textures[k] !== newConfig.textures[k],
+		);
 		const clayChanged = oldConfig.clayRender !== newConfig.clayRender;
 		if (texturesChanged || clayChanged) {
 			this.updateAllTextures(newConfig, oldConfig);
 		}
 
 		// Tiling or geometry change requires re-applying UV repeat on existing textures
-		if (oldConfig.tilingScale !== newConfig.tilingScale || oldConfig.geometry !== newConfig.geometry) {
+		if (
+			oldConfig.tilingScale !== newConfig.tilingScale ||
+			oldConfig.geometry !== newConfig.geometry
+		) {
 			this.updateTiling(newConfig);
 		}
 
-		if (oldConfig.normalType !== newConfig.normalType || oldConfig.normalScale !== newConfig.normalScale) {
+		if (
+			oldConfig.normalType !== newConfig.normalType ||
+			oldConfig.normalScale !== newConfig.normalScale
+		) {
 			this.updateNormalScale(newConfig);
 		}
 
@@ -153,7 +164,9 @@ export class PBRSceneManager {
 		const mat = this.mesh.material;
 		for (const key of MAP_KEYS) {
 			const propName = MAP_NAMES[key];
-			const tex = (mat as unknown as Record<string, unknown>)[propName] as THREE.Texture | null;
+			const tex = (mat as unknown as Record<string, unknown>)[
+				propName
+			] as THREE.Texture | null;
 			tex?.dispose();
 		}
 		mat.dispose();
@@ -184,7 +197,7 @@ export class PBRSceneManager {
 		let side: THREE.Side = THREE.FrontSide;
 		let rx = 0;
 		let ry = 0;
-		let rz = 0;
+		const rz = 0;
 
 		if (config.geometry === "custom" && config.customMeshUrl) {
 			this.loadCustomMesh(config.customMeshUrl);
@@ -207,7 +220,6 @@ export class PBRSceneManager {
 				geometry = new THREE.TorusGeometry(0.5, 0.25, subs, subs);
 				rx = 0.5 * Math.PI;
 				break;
-			case "plane":
 			default:
 				geometry = new THREE.PlaneGeometry(1, 1, subs, subs);
 				side = THREE.DoubleSide;
@@ -227,7 +239,9 @@ export class PBRSceneManager {
 		if (isGltf) {
 			const loader = new GLTFLoader();
 			loader.load(url, (gltf) => {
-				const meshNode = gltf.scene.getObjectByProperty("type", "Mesh") as THREE.Mesh | undefined;
+				const meshNode = gltf.scene.getObjectByProperty("type", "Mesh") as
+					| THREE.Mesh
+					| undefined;
 				if (meshNode?.geometry) {
 					this.applyCustomGeometry(meshNode.geometry);
 				}
@@ -236,7 +250,9 @@ export class PBRSceneManager {
 			// Assume OBJ
 			const loader = new OBJLoader();
 			loader.load(url, (group) => {
-				const meshNode = group.children.find((c) => c instanceof THREE.Mesh) as THREE.Mesh | undefined;
+				const meshNode = group.children.find((c) => c instanceof THREE.Mesh) as
+					| THREE.Mesh
+					| undefined;
 				if (meshNode?.geometry) {
 					this.applyCustomGeometry(meshNode.geometry);
 				}
@@ -253,7 +269,9 @@ export class PBRSceneManager {
 		if (maxDim > 0) {
 			geometry.scale(1 / maxDim, 1 / maxDim, 1 / maxDim);
 		}
-		const center = box.getCenter(new THREE.Vector3()).multiplyScalar(1 / maxDim);
+		const center = box
+			.getCenter(new THREE.Vector3())
+			.multiplyScalar(1 / maxDim);
 		geometry.translate(-center.x, -center.y, -center.z);
 
 		// Ensure UVs exist (needed for texturing)
@@ -275,7 +293,10 @@ export class PBRSceneManager {
 		this.mesh.rotation.set(0, 0, 0);
 	}
 
-	private updateAllTextures(config: PBRSceneConfig, oldConfig?: PBRSceneConfig): void {
+	private updateAllTextures(
+		config: PBRSceneConfig,
+		oldConfig?: PBRSceneConfig,
+	): void {
 		const mat = this.mesh.material as unknown as Record<string, unknown>;
 		const ratioFactor = TILING_RATIO_FACTOR[config.geometry];
 
@@ -289,7 +310,10 @@ export class PBRSceneManager {
 			}
 
 			// Also account for clay render toggling even if the underlying URL didn't change
-			const clayToggled = mapKey === "color" && oldConfig && oldConfig.clayRender !== config.clayRender;
+			const clayToggled =
+				mapKey === "color" &&
+				oldConfig &&
+				oldConfig.clayRender !== config.clayRender;
 			if (oldUrl === newUrl && !clayToggled && oldConfig) continue;
 
 			const propName = MAP_NAMES[mapKey];
@@ -350,7 +374,9 @@ export class PBRSceneManager {
 			const propName = MAP_NAMES[mapKey];
 			const tex = mat[propName] as THREE.Texture | null;
 			if (!tex) continue;
-			const data = tex.source?.data as { width: number; height: number } | undefined;
+			const data = tex.source?.data as
+				| { width: number; height: number }
+				| undefined;
 			if (!data) continue;
 
 			const ratio = (data.width / data.height) * ratioFactor;

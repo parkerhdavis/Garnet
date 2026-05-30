@@ -24,7 +24,10 @@ export function getFileFilters(ws: Workspace): string | null {
 }
 
 /// Read a namespaced workflow config object (e.g. config.texturing).
-export function getWorkflowConfig(ws: Workspace, key: string): Record<string, unknown> {
+export function getWorkflowConfig(
+	ws: Workspace,
+	key: string,
+): Record<string, unknown> {
 	const v = ws.config?.[key];
 	return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
 }

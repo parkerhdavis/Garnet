@@ -39,7 +39,8 @@ export default function PackPanel() {
 			<div className="px-3 pt-3 pb-2 border-b border-base-300 shrink-0">
 				<div className="text-sm font-semibold text-base-content">Pack</div>
 				<div className="text-xs text-base-content/40 mt-0.5 leading-snug">
-					Combine separate grayscale textures into a single RGBA image. Use presets for common engine formats.
+					Combine separate grayscale textures into a single RGBA image. Use
+					presets for common engine formats.
 				</div>
 			</div>
 
@@ -67,7 +68,11 @@ export default function PackPanel() {
 						onClick={handleAutoDetect}
 						disabled={!packPresetLabels}
 						className="btn btn-xs btn-ghost h-6 min-h-0 px-2 gap-1"
-						title={!packPresetLabels ? "Select a preset first" : "Auto-detect textures from a directory"}
+						title={
+							!packPresetLabels
+								? "Select a preset first"
+								: "Auto-detect textures from a directory"
+						}
 					>
 						<LuWand size={12} />
 						<span>Auto</span>

@@ -18,16 +18,19 @@ import EditorCanvas from "@/components/EditorCanvas";
 import { EditorTools } from "@/components/EditorTools";
 import { api, mediaUrl, type Asset } from "@/lib/tauri";
 import { absPathFor, basename, dirname } from "@/lib/paths";
-import {
-	type Operation,
-	splitOps,
-	useEditorStore,
-} from "@/stores/editorStore";
+import { type Operation, splitOps, useEditorStore } from "@/stores/editorStore";
 import { usePrefsStore } from "@/stores/prefsStore";
 import { useUndoStore } from "@/stores/undoStore";
 
 const SUPPORTED_EXTS = new Set([
-	"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp",
+	"png",
+	"jpg",
+	"jpeg",
+	"gif",
+	"bmp",
+	"tif",
+	"tiff",
+	"webp",
 ]);
 
 export function EditorPage() {
@@ -43,7 +46,9 @@ export function EditorPage() {
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [savedAt, setSavedAt] = useState<string | null>(null);
-	const [sourceDims, setSourceDims] = useState<{ w: number; h: number } | null>(null);
+	const [sourceDims, setSourceDims] = useState<{ w: number; h: number } | null>(
+		null,
+	);
 	// URL the canvas loads the original through: asset:// (convertFileSrc) for
 	// catalog files; the loopback media server for ephemeral files, which may
 	// sit outside the asset:// scope allow-list. Resolved async (media URL).
@@ -139,7 +144,8 @@ export function EditorPage() {
 			return;
 		}
 		const img = new Image();
-		img.onload = () => setSourceDims({ w: img.naturalWidth, h: img.naturalHeight });
+		img.onload = () =>
+			setSourceDims({ w: img.naturalWidth, h: img.naturalHeight });
 		img.src = originalUrl;
 	}, [originalUrl]);
 
@@ -152,7 +158,12 @@ export function EditorPage() {
 		function isEditable(t: EventTarget | null) {
 			const el = t as HTMLElement | null;
 			if (!el) return false;
-			if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT") return true;
+			if (
+				el.tagName === "INPUT" ||
+				el.tagName === "TEXTAREA" ||
+				el.tagName === "SELECT"
+			)
+				return true;
 			return el.isContentEditable;
 		}
 		function onKeyDown(e: KeyboardEvent) {
@@ -208,7 +219,9 @@ export function EditorPage() {
 				format = normalizeFormat(ext);
 			} else {
 				const base = basename(sourcePath);
-				const stem = base.includes(".") ? base.slice(0, base.lastIndexOf(".")) : base;
+				const stem = base.includes(".")
+					? base.slice(0, base.lastIndexOf("."))
+					: base;
 				const dir = dirname(sourcePath);
 				const suggested = `${dir}/${stem}-edited.${ext}`;
 				const picked = await saveDialog({
@@ -220,7 +233,9 @@ export function EditorPage() {
 					return;
 				}
 				outputPath = picked;
-				const pickedExt = picked.includes(".") ? picked.slice(picked.lastIndexOf(".") + 1) : ext;
+				const pickedExt = picked.includes(".")
+					? picked.slice(picked.lastIndexOf(".") + 1)
+					: ext;
 				format = normalizeFormat(pickedExt);
 			}
 			await invoke<void>("commit_edit", {
@@ -271,7 +286,10 @@ export function EditorPage() {
 	// branch below skips the canvas.
 	const showingOriginal = viewMode === "original";
 	const originalSrc = originalUrl;
-	const { backendOps, cssOps } = useMemo(() => splitOps(pendingOps), [pendingOps]);
+	const { backendOps, cssOps } = useMemo(
+		() => splitOps(pendingOps),
+		[pendingOps],
+	);
 	const curveLut = useMemo(() => lastLutIn(cssOps), [cssOps]);
 	const wbScale = useMemo(() => accumulateWhiteBalance(cssOps), [cssOps]);
 	const cropOp = useMemo(
@@ -314,9 +332,18 @@ export function EditorPage() {
 					{curveLut && (
 						<filter id={CURVE_FILTER_ID} colorInterpolationFilters="sRGB">
 							<feComponentTransfer>
-								<feFuncR type="table" tableValues={lutToTableValues(curveLut)} />
-								<feFuncG type="table" tableValues={lutToTableValues(curveLut)} />
-								<feFuncB type="table" tableValues={lutToTableValues(curveLut)} />
+								<feFuncR
+									type="table"
+									tableValues={lutToTableValues(curveLut)}
+								/>
+								<feFuncG
+									type="table"
+									tableValues={lutToTableValues(curveLut)}
+								/>
+								<feFuncB
+									type="table"
+									tableValues={lutToTableValues(curveLut)}
+								/>
 							</feComponentTransfer>
 						</filter>
 					)}
@@ -339,7 +366,11 @@ export function EditorPage() {
 					<span>{loadError}</span>
 				</div>
 				<div className="text-center mt-4">
-					<button type="button" className="btn btn-sm" onClick={() => navigate(-1)}>
+					<button
+						type="button"
+						className="btn btn-sm"
+						onClick={() => navigate(-1)}
+					>
 						<HiArrowLeft className="size-4" />
 						Back
 					</button>
@@ -350,7 +381,9 @@ export function EditorPage() {
 
 	if (!asset || !originalUrl) {
 		return (
-			<div className="flex-1 p-12 text-center text-base-content/60 text-sm">Loading…</div>
+			<div className="flex-1 p-12 text-center text-base-content/60 text-sm">
+				Loading…
+			</div>
 		);
 	}
 
@@ -381,13 +414,19 @@ export function EditorPage() {
 							"no pending edits"
 						) : (
 							<>
-								{pendingOps.length} pending edit{pendingOps.length === 1 ? "" : "s"}
-								{savedAt && <span className="text-success ml-2">· saved {savedAt}</span>}
+								{pendingOps.length} pending edit
+								{pendingOps.length === 1 ? "" : "s"}
+								{savedAt && (
+									<span className="text-success ml-2">· saved {savedAt}</span>
+								)}
 							</>
 						)}
 					</div>
 				</div>
-				<span className="badge badge-xs badge-ghost" title="Hold \\ to peek original; tap \\ to toggle">
+				<span
+					className="badge badge-xs badge-ghost"
+					title="Hold \\ to peek original; tap \\ to toggle"
+				>
 					{showingOriginal ? "Original" : "Edited"}
 				</span>
 				<button

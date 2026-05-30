@@ -8,7 +8,12 @@
 //! history entry.
 
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { HiArrowPath, HiArrowsRightLeft, HiPencilSquare, HiTrash } from "react-icons/hi2";
+import {
+	HiArrowPath,
+	HiArrowsRightLeft,
+	HiPencilSquare,
+	HiTrash,
+} from "react-icons/hi2";
 import type { Asset } from "@/lib/tauri";
 import { api } from "@/lib/tauri";
 import { absPathFor, basename, dirname } from "@/lib/paths";
@@ -19,7 +24,14 @@ import { useAssetsStore } from "@/stores/assetsStore";
 import { useUndoStore } from "@/stores/undoStore";
 import { loadModelThumbnailer } from "@/lib/loadModelThumbnailer";
 
-const RENDERABLE_MODEL_EXTS = new Set(["gltf", "glb", "obj", "stl", "ply", "fbx"]);
+const RENDERABLE_MODEL_EXTS = new Set([
+	"gltf",
+	"glb",
+	"obj",
+	"stl",
+	"ply",
+	"fbx",
+]);
 function isRenderableModelAsset(asset: Asset): boolean {
 	const ext = asset.format?.toLowerCase();
 	return !!ext && RENDERABLE_MODEL_EXTS.has(ext);
@@ -137,10 +149,11 @@ async function renameAction(asset: Asset) {
 }
 
 async function moveAction(asset: Asset) {
-	const defaultDir = `${asset.root_path}/${dirname(asset.relative_path) || ""}`.replace(
-		/\/$/,
-		"",
-	);
+	const defaultDir =
+		`${asset.root_path}/${dirname(asset.relative_path) || ""}`.replace(
+			/\/$/,
+			"",
+		);
 	let selected: string | string[] | null;
 	try {
 		selected = await openDialog({
@@ -157,10 +170,8 @@ async function moveAction(asset: Asset) {
 	const destDir = selected;
 
 	const filename = basename(asset.relative_path);
-	const originalDir = `${asset.root_path}/${dirname(asset.relative_path)}`.replace(
-		/\/$/,
-		"",
-	);
+	const originalDir =
+		`${asset.root_path}/${dirname(asset.relative_path)}`.replace(/\/$/, "");
 
 	let result: Awaited<ReturnType<typeof api.moveAsset>>;
 	try {

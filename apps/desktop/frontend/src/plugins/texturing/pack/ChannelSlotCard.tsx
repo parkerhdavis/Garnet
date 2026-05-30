@@ -3,7 +3,6 @@ import { usePackStore } from "@/plugins/texturing/stores/packStore";
 import type { ChannelSource } from "@/plugins/texturing/types";
 import DropZone from "@/plugins/texturing/ui/DropZone";
 
-
 const channelColors: Record<string, string> = {
 	r: "border-red-500",
 	g: "border-green-500",
@@ -42,12 +41,12 @@ export default function ChannelSlotCard({ slot, label }: ChannelSlotCardProps) {
 	const displayLabel = label ?? channelNames[slot];
 
 	return (
-		<div className={`rounded-lg bg-base-100 border-l-4 ${channelColors[slot]} p-3`}>
+		<div
+			className={`rounded-lg bg-base-100 border-l-4 ${channelColors[slot]} p-3`}
+		>
 			<div className="flex items-center gap-2 mb-2">
 				<span className="text-sm font-bold">{channelNames[slot]}</span>
-				{label && (
-					<span className="text-xs text-base-content/50">{label}</span>
-				)}
+				{label && <span className="text-xs text-base-content/50">{label}</span>}
 			</div>
 
 			<DropZone
@@ -64,7 +63,9 @@ export default function ChannelSlotCard({ slot, label }: ChannelSlotCardProps) {
 				<div className="flex items-center gap-2 mt-2">
 					<select
 						value={channel.sourceChannel}
-						onChange={(e) => setSourceChannel(slot, e.target.value as ChannelSource)}
+						onChange={(e) =>
+							setSourceChannel(slot, e.target.value as ChannelSource)
+						}
 						className="select select-xs select-bordered flex-1"
 					>
 						{sourceOptions.map((opt) => (

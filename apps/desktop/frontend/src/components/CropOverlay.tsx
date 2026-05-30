@@ -132,10 +132,14 @@ export default function CropOverlay({
 		let t = r0.y;
 		let r = r0.x + r0.w;
 		let b = r0.y + r0.h;
-		const movesL = drag.kind === "w" || drag.kind === "nw" || drag.kind === "sw";
-		const movesR = drag.kind === "e" || drag.kind === "ne" || drag.kind === "se";
-		const movesT = drag.kind === "n" || drag.kind === "nw" || drag.kind === "ne";
-		const movesB = drag.kind === "s" || drag.kind === "sw" || drag.kind === "se";
+		const movesL =
+			drag.kind === "w" || drag.kind === "nw" || drag.kind === "sw";
+		const movesR =
+			drag.kind === "e" || drag.kind === "ne" || drag.kind === "se";
+		const movesT =
+			drag.kind === "n" || drag.kind === "nw" || drag.kind === "ne";
+		const movesB =
+			drag.kind === "s" || drag.kind === "sw" || drag.kind === "se";
 
 		if (movesL) l = r0.x + dx;
 		if (movesR) r = r0.x + r0.w + dx;
@@ -394,7 +398,8 @@ export default function CropOverlay({
 					{Math.round(rect.y)}
 				</span>
 				<span className="text-[10px] text-base-content/40 truncate hidden sm:inline">
-					Shift = preserve aspect · Alt = symmetric · Enter = done · Esc = cancel
+					Shift = preserve aspect · Alt = symmetric · Enter = done · Esc =
+					cancel
 				</span>
 				<div className="flex gap-1.5 shrink-0">
 					<button type="button" className="btn btn-xs" onClick={onCancel}>
@@ -437,8 +442,7 @@ function CornerHandle({
 }) {
 	const x = kind === "nw" || kind === "sw" ? rect.x : rect.x + rect.w;
 	const y = kind === "nw" || kind === "ne" ? rect.y : rect.y + rect.h;
-	const cursor =
-		kind === "nw" || kind === "se" ? "nwse-resize" : "nesw-resize";
+	const cursor = kind === "nw" || kind === "se" ? "nwse-resize" : "nesw-resize";
 	return (
 		<rect
 			x={x - handleSize / 2}

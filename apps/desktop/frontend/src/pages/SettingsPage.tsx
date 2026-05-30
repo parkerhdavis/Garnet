@@ -64,7 +64,9 @@ export function SettingsPage() {
 						)}
 
 						{loading && roots.length === 0 ? (
-							<div className="py-6 text-center text-base-content/60">Loading…</div>
+							<div className="py-6 text-center text-base-content/60">
+								Loading…
+							</div>
 						) : roots.length === 0 ? (
 							<div className="py-6 text-center text-base-content/60">
 								No library roots yet. Add a folder above.
@@ -76,12 +78,20 @@ export function SettingsPage() {
 									return (
 										<li key={root.id} className="py-3 flex items-center gap-3">
 											<div className="flex-1 min-w-0">
-												<div className="font-mono text-sm truncate" title={root.path}>
+												<div
+													className="font-mono text-sm truncate"
+													title={root.path}
+												>
 													{root.path}
 												</div>
 												<div className="text-xs text-base-content/60">
-													added {new Date(root.added_at * 1000).toLocaleString()}
-													{scanning && <span className="text-warning ml-2">· scanning…</span>}
+													added{" "}
+													{new Date(root.added_at * 1000).toLocaleString()}
+													{scanning && (
+														<span className="text-warning ml-2">
+															· scanning…
+														</span>
+													)}
 												</div>
 											</div>
 											<button
@@ -89,7 +99,11 @@ export function SettingsPage() {
 												className="btn btn-sm"
 												onClick={() => scanRoot(root.id)}
 												disabled={scanning}
-												title={scanning ? "Scan already in progress" : "Re-scan this root"}
+												title={
+													scanning
+														? "Scan already in progress"
+														: "Re-scan this root"
+												}
 											>
 												<HiArrowPath
 													className={`size-4 ${scanning ? "animate-spin" : ""}`}

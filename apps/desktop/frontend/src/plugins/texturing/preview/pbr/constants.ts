@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import * as THREE from "three";
-import type { GeometryType, MapKey, NormalType } from "@/plugins/texturing/types/pbr";
+import type {
+	GeometryType,
+	MapKey,
+	NormalType,
+} from "@/plugins/texturing/types/pbr";
 
 /** Maps our texture slot keys to Three.js MeshPhysicalMaterial property names */
 export const MAP_NAMES: Record<MapKey, string> = {
@@ -74,13 +78,33 @@ export const GEOMETRY_OPTIONS: { value: GeometryType; label: string }[] = [
 
 /** Texture map slot definitions for the UI */
 export const MAP_SLOTS = [
-	{ key: "color", label: "Color (Albedo)", keywords: ["color", "albedo", "basecolor", "base_color", "diffuse"] },
+	{
+		key: "color",
+		label: "Color (Albedo)",
+		keywords: ["color", "albedo", "basecolor", "base_color", "diffuse"],
+	},
 	{ key: "normal", label: "Normal Map", keywords: ["normal", "norm", "nrm"] },
 	{ key: "roughness", label: "Roughness", keywords: ["roughness", "rough"] },
-	{ key: "metalness", label: "Metalness", keywords: ["metalness", "metallic", "metal"] },
-	{ key: "ambientocclusion", label: "Ambient Occlusion", keywords: ["ambientocclusion", "ao", "occlusion"] },
-	{ key: "displacement", label: "Displacement", keywords: ["displacement", "disp", "height"] },
-	{ key: "opacity", label: "Opacity", keywords: ["opacity", "alpha", "transparency"] },
+	{
+		key: "metalness",
+		label: "Metalness",
+		keywords: ["metalness", "metallic", "metal"],
+	},
+	{
+		key: "ambientocclusion",
+		label: "Ambient Occlusion",
+		keywords: ["ambientocclusion", "ao", "occlusion"],
+	},
+	{
+		key: "displacement",
+		label: "Displacement",
+		keywords: ["displacement", "disp", "height"],
+	},
+	{
+		key: "opacity",
+		label: "Opacity",
+		keywords: ["opacity", "alpha", "transparency"],
+	},
 ] as const;
 
 /** Detect normal map convention from filename */

@@ -17,7 +17,8 @@ export function AppStatsPage() {
 	const load = () => {
 		setLoading(true);
 		setError(null);
-		api.getStartupTimings()
+		api
+			.getStartupTimings()
 			.then((r) => setReport(r))
 			.catch((e) => setError(String(e)))
 			.finally(() => setLoading(false));
@@ -38,7 +39,12 @@ export function AppStatsPage() {
 							Diagnostics about how Garnet is running on your machine.
 						</p>
 					</div>
-					<button type="button" className="btn btn-sm btn-ghost" onClick={load} title="Reload">
+					<button
+						type="button"
+						className="btn btn-sm btn-ghost"
+						onClick={load}
+						title="Reload"
+					>
 						<HiArrowPath className="size-4" />
 					</button>
 				</header>
@@ -126,17 +132,18 @@ function BudgetSummary({ report }: { report: StartupReport }) {
 	// Splash dwell: time from React mount to splash gone. In the happy case
 	// this exactly equals the splash budget. If it's longer, slow data load
 	// pushed past SPLASH_MIN_MS and extended the dwell.
-	const dwellMs = reactMountedAt !== null && splashDismissedAt !== null
-		? splashDismissedAt - reactMountedAt
-		: null;
-	const dwellExtension = budget !== null && dwellMs !== null
-		? Math.max(0, dwellMs - budget)
-		: null;
+	const dwellMs =
+		reactMountedAt !== null && splashDismissedAt !== null
+			? splashDismissedAt - reactMountedAt
+			: null;
+	const dwellExtension =
+		budget !== null && dwellMs !== null ? Math.max(0, dwellMs - budget) : null;
 	// Data load relative to splash min: did the initial fetches finish before
 	// the splash would've faded anyway?
-	const dataLoadIntoSplashMs = reactMountedAt !== null && dataLoadedAt !== null
-		? dataLoadedAt - reactMountedAt
-		: null;
+	const dataLoadIntoSplashMs =
+		reactMountedAt !== null && dataLoadedAt !== null
+			? dataLoadedAt - reactMountedAt
+			: null;
 
 	const overshootPreSplash = preSplashMs !== null && preSplashMs > 300;
 	const overshootDwell = (dwellExtension ?? 0) > 50;
@@ -144,8 +151,12 @@ function BudgetSummary({ report }: { report: StartupReport }) {
 
 	return (
 		<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
-			<div className={`rounded-lg border p-3 ${onTime ? "border-success/40 bg-success/5" : "border-warning/50 bg-warning/5"}`}>
-				<div className="text-[10px] uppercase tracking-wider opacity-60 mb-1">Verdict</div>
+			<div
+				className={`rounded-lg border p-3 ${onTime ? "border-success/40 bg-success/5" : "border-warning/50 bg-warning/5"}`}
+			>
+				<div className="text-[10px] uppercase tracking-wider opacity-60 mb-1">
+					Verdict
+				</div>
 				<div className="text-base font-semibold">
 					{onTime ? "On time" : "Overran the splash"}
 				</div>
@@ -195,8 +206,12 @@ function Metric({
 }) {
 	return (
 		<div>
-			<div className="text-[10px] uppercase tracking-wider opacity-60">{label}</div>
-			<div className={`font-semibold tabular-nums ${highlight ? "text-warning" : ""}`}>
+			<div className="text-[10px] uppercase tracking-wider opacity-60">
+				{label}
+			</div>
+			<div
+				className={`font-semibold tabular-nums ${highlight ? "text-warning" : ""}`}
+			>
 				{value === null ? "—" : formatMs(value)}
 			</div>
 			{hint && <div className="text-[10px] opacity-50">{hint}</div>}
@@ -228,7 +243,12 @@ function PhaseTable({ report }: { report: StartupReport }) {
 			<table className="table table-zebra table-sm">
 				<thead>
 					<tr>
-						<th className="w-12 text-center" title="Pre-splash vs splash-window">Where</th>
+						<th
+							className="w-12 text-center"
+							title="Pre-splash vs splash-window"
+						>
+							Where
+						</th>
 						<th className="text-right w-20">Started</th>
 						<th className="text-right w-20">Duration</th>
 						<th>Phase</th>
@@ -241,7 +261,16 @@ function PhaseTable({ report }: { report: StartupReport }) {
 						const isDwell = DWELL_PHASES.has(p.name);
 						return (
 							<tr key={`${p.name}-${i}`}>
-								<td className="text-center text-[10px] opacity-60" title={isPreSplash ? "Before splash painted" : isDwell ? "Splash dwell (intentional)" : "Splash window"}>
+								<td
+									className="text-center text-[10px] opacity-60"
+									title={
+										isPreSplash
+											? "Before splash painted"
+											: isDwell
+												? "Splash dwell (intentional)"
+												: "Splash window"
+									}
+								>
 									{isPreSplash ? "pre" : isDwell ? "fade" : "splash"}
 								</td>
 								<td className="text-right tabular-nums text-base-content/60">
@@ -273,8 +302,8 @@ function DurationCell({ ms, max }: { ms: number; max: number }) {
 		fraction > 0.75
 			? "text-error font-semibold"
 			: fraction > 0.25
-			? "text-warning font-medium"
-			: "";
+				? "text-warning font-medium"
+				: "";
 	return <span className={cls}>{ms}&nbsp;ms</span>;
 }
 

@@ -8,11 +8,22 @@
 //! *what* should play and the order.
 
 import { create } from "zustand";
-import { api, type MusicAlbum, type MusicLibrary, type MusicTrack } from "@/lib/tauri";
+import {
+	api,
+	type MusicAlbum,
+	type MusicLibrary,
+	type MusicTrack,
+} from "@/lib/tauri";
 
 export type MusicView = "albums" | "artists";
 
-export type PlaybackStatus = "idle" | "loaded" | "playing" | "paused" | "ended" | "error";
+export type PlaybackStatus =
+	| "idle"
+	| "loaded"
+	| "playing"
+	| "paused"
+	| "ended"
+	| "error";
 
 export type RepeatMode = "off" | "all" | "one";
 
@@ -44,13 +55,22 @@ type Playback = {
 	nowPlaying: MusicTrack | null;
 };
 
-function buildPlayback(tracks: MusicTrack[], startIndex: number, shuffle: boolean): Playback {
+function buildPlayback(
+	tracks: MusicTrack[],
+	startIndex: number,
+	shuffle: boolean,
+): Playback {
 	const n = tracks.length;
 	if (n === 0) return { queue: [], order: [], orderPos: -1, nowPlaying: null };
 	const idx = Math.max(0, Math.min(startIndex, n - 1));
 	const order = shuffle ? shuffledOrder(n, idx) : identityOrder(n);
 	const orderPos = shuffle ? 0 : idx;
-	return { queue: tracks, order, orderPos, nowPlaying: tracks[order[orderPos]] };
+	return {
+		queue: tracks,
+		order,
+		orderPos,
+		nowPlaying: tracks[order[orderPos]],
+	};
 }
 
 type MusicState = {
@@ -116,7 +136,10 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 	load: async (scope) => {
 		set({ loading: true, error: null });
 		try {
-			const library = await api.listMusicLibrary(scope.underPath, scope.formats);
+			const library = await api.listMusicLibrary(
+				scope.underPath,
+				scope.formats,
+			);
 			set({ library, loading: false });
 		} catch (e) {
 			set({ error: String(e), loading: false });
@@ -158,9 +181,17 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 		}
 		const currentIdx = order[orderPos];
 		if (nextShuffle) {
-			set({ shuffle: true, order: shuffledOrder(queue.length, currentIdx), orderPos: 0 });
+			set({
+				shuffle: true,
+				order: shuffledOrder(queue.length, currentIdx),
+				orderPos: 0,
+			});
 		} else {
-			set({ shuffle: false, order: identityOrder(queue.length), orderPos: currentIdx });
+			set({
+				shuffle: false,
+				order: identityOrder(queue.length),
+				orderPos: currentIdx,
+			});
 		}
 	},
 
@@ -201,7 +232,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
 	hasNext: () => {
 		const { order, orderPos, repeat } = get();
-		return order.length > 0 && (orderPos + 1 < order.length || repeat === "all");
+		return (
+			order.length > 0 && (orderPos + 1 < order.length || repeat === "all")
+		);
 	},
 	hasPrev: () => {
 		const { order, orderPos, repeat } = get();

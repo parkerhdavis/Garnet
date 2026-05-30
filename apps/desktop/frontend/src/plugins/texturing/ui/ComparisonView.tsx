@@ -33,10 +33,13 @@ export default function ComparisonView({
 	const [syncZoom, setSyncZoom] = useState(1);
 	const [syncPan, setSyncPan] = useState({ x: 0, y: 0 });
 
-	const handleViewChange = useCallback((zoom: number, pan: { x: number; y: number }) => {
-		setSyncZoom(zoom);
-		setSyncPan(pan);
-	}, []);
+	const handleViewChange = useCallback(
+		(zoom: number, pan: { x: number; y: number }) => {
+			setSyncZoom(zoom);
+			setSyncPan(pan);
+		},
+		[],
+	);
 
 	const dims = beforeInfo ?? afterInfo;
 

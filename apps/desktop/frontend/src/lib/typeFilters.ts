@@ -19,15 +19,41 @@ export type TypeKind = (typeof TYPE_KINDS)[number];
 
 export function parseTypeKind(value: string | undefined): TypeKind | null {
 	if (!value) return null;
-	return (TYPE_KINDS as readonly string[]).includes(value) ? (value as TypeKind) : null;
+	return (TYPE_KINDS as readonly string[]).includes(value)
+		? (value as TypeKind)
+		: null;
 }
 
 /// Static raster + vector image formats — never animated.
 const STATIC_IMAGE_FORMATS = [
-	"jpg", "jpeg", "jfif", "png", "bmp", "tif", "tiff", "heic", "heif", "avif",
-	"svg", "ico", "psd", "ai", "eps", "xcf",
+	"jpg",
+	"jpeg",
+	"jfif",
+	"png",
+	"bmp",
+	"tif",
+	"tiff",
+	"heic",
+	"heif",
+	"avif",
+	"svg",
+	"ico",
+	"psd",
+	"ai",
+	"eps",
+	"xcf",
 	// Camera raw
-	"raw", "cr2", "cr3", "nef", "arw", "dng", "orf", "rw2", "raf", "srw", "pef",
+	"raw",
+	"cr2",
+	"cr3",
+	"nef",
+	"arw",
+	"dng",
+	"orf",
+	"rw2",
+	"raf",
+	"srw",
+	"pef",
 ];
 
 /// Animated raster formats. Membership in Images vs Animations is configurable.
@@ -38,29 +64,78 @@ const AMBIGUOUS_ANIMATED_FORMATS = ["gif", "apng", "webp"];
 const ANIMATION_ONLY_FORMATS = ["lottie", "riv", "spine", "bvh", "swf", "anim"];
 
 const VIDEO_FORMATS = [
-	"mp4", "mov", "avi", "mkv", "webm", "flv", "wmv", "m4v",
-	"mpg", "mpeg", "3gp", "vob", "mts", "m2ts", "ogv", "ts",
+	"mp4",
+	"mov",
+	"avi",
+	"mkv",
+	"webm",
+	"flv",
+	"wmv",
+	"m4v",
+	"mpg",
+	"mpeg",
+	"3gp",
+	"vob",
+	"mts",
+	"m2ts",
+	"ogv",
+	"ts",
 ];
 
 /// Audio file extensions. Exported so the Music Library plugin can pre-fill a
 /// music workspace's file filters from the same canonical list the Audio type
 /// view uses.
 export const AUDIO_FORMATS = [
-	"mp3", "wav", "flac", "aac", "ogg", "oga", "m4a", "opus", "wma",
-	"aif", "aiff", "ape", "ac3", "mid", "midi",
+	"mp3",
+	"wav",
+	"flac",
+	"aac",
+	"ogg",
+	"oga",
+	"m4a",
+	"opus",
+	"wma",
+	"aif",
+	"aiff",
+	"ape",
+	"ac3",
+	"mid",
+	"midi",
 ];
 
 const MODEL_FORMATS = [
-	"obj", "fbx", "gltf", "glb", "dae", "blend", "3ds", "stl", "ply",
-	"usd", "usdz", "usda", "usdc", "abc", "x3d", "ma", "mb", "c4d", "max",
-	"skp", "lwo", "lws",
+	"obj",
+	"fbx",
+	"gltf",
+	"glb",
+	"dae",
+	"blend",
+	"3ds",
+	"stl",
+	"ply",
+	"usd",
+	"usdz",
+	"usda",
+	"usdc",
+	"abc",
+	"x3d",
+	"ma",
+	"mb",
+	"c4d",
+	"max",
+	"skp",
+	"lwo",
+	"lws",
 ];
 
 export type AnimatedImagesBucket = "images" | "animations";
 
 /// Returns the format list for a given type kind, given where ambiguous
 /// animated rasters (GIF/APNG/animated WebP) are configured to live.
-function formatsForKind(kind: Exclude<TypeKind, "other">, bucket: AnimatedImagesBucket): string[] {
+function formatsForKind(
+	kind: Exclude<TypeKind, "other">,
+	bucket: AnimatedImagesBucket,
+): string[] {
 	switch (kind) {
 		case "images":
 			return bucket === "images"
@@ -83,7 +158,11 @@ function formatsForKind(kind: Exclude<TypeKind, "other">, bucket: AnimatedImages
 /// the exclude-list passed to the backend when viewing /types/other.
 export function allCategorizedFormats(bucket: AnimatedImagesBucket): string[] {
 	const kinds: Exclude<TypeKind, "other">[] = [
-		"images", "videos", "audio", "models", "animations",
+		"images",
+		"videos",
+		"audio",
+		"models",
+		"animations",
 	];
 	const set = new Set<string>();
 	for (const k of kinds) {
@@ -127,7 +206,10 @@ export function buildTypeQuery(
 			return { formats: [], formats_exclude: excludes };
 		}
 		const set = new Set(excludes);
-		return { formats: userFormats.filter((f) => !set.has(f)), formats_exclude: [] };
+		return {
+			formats: userFormats.filter((f) => !set.has(f)),
+			formats_exclude: [],
+		};
 	}
 	const kindFormats = formatsForKind(kind, bucket);
 	const baseFormats =

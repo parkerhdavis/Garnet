@@ -167,7 +167,9 @@ function MetadataRow({
 	}, [tagSuggestions, entry.values, draft, isTags]);
 
 	const exactMatch = isTags
-		? tagSuggestions.find((s) => s.value.toLowerCase() === draft.trim().toLowerCase())
+		? tagSuggestions.find(
+				(s) => s.value.toLowerCase() === draft.trim().toLowerCase(),
+			)
 		: undefined;
 
 	async function commitDraft(value: string) {
@@ -270,8 +272,7 @@ function MetadataRow({
 											void commitDraft(s.value);
 										}}
 									>
-										{s.value}{" "}
-										<span className="opacity-50">· {s.count}</span>
+										{s.value} <span className="opacity-50">· {s.count}</span>
 									</button>
 								))}
 								{draft.trim() && !exactMatch && (

@@ -35,7 +35,10 @@ export function AssetGrid({ assets, onOpen }: Props) {
 	return (
 		<div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 p-4">
 			{assets.map((asset, i) => {
-				const delay = Math.min((i % PAGE_SIZE) * STAGGER_PER_INDEX, STAGGER_MAX);
+				const delay = Math.min(
+					(i % PAGE_SIZE) * STAGGER_PER_INDEX,
+					STAGGER_MAX,
+				);
 				const group = groupOf(asset, groupBy);
 				const showHeader = group !== null && group.key !== prevKey;
 				if (group) prevKey = group.key;
@@ -57,7 +60,10 @@ export function AssetGrid({ assets, onOpen }: Props) {
 	);
 }
 
-function GroupHeader({ label, firstInPage }: { label: string; firstInPage: boolean }) {
+function GroupHeader({
+	label,
+	firstInPage,
+}: { label: string; firstInPage: boolean }) {
 	return (
 		<div className={`col-span-full ${firstInPage ? "" : "mt-3"}`}>
 			<div className="flex items-center gap-3">

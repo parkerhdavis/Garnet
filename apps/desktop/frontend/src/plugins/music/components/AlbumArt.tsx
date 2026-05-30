@@ -47,7 +47,9 @@ export function AlbumArt({
 	rounded?: string;
 }) {
 	const [src, setSrc] = useState<string>(() => srcCache.get(absPath) ?? "");
-	const [resolved, setResolved] = useState<boolean>(() => srcCache.has(absPath));
+	const [resolved, setResolved] = useState<boolean>(() =>
+		srcCache.has(absPath),
+	);
 
 	useEffect(() => {
 		let cancelled = false;

@@ -15,15 +15,15 @@
 
 [data-theme="dark"] {
 	--color-base-100: oklch(0.205 0.003 60);
-	--color-base-200: oklch(0.150 0.004 60);
+	--color-base-200: oklch(0.15 0.004 60);
 	--color-base-300: oklch(0.275 0.005 60);
-	--color-base-content: oklch(0.910 0.004 60);
-	--color-primary: oklch(0.535 0.180 28);
+	--color-base-content: oklch(0.91 0.004 60);
+	--color-primary: oklch(0.535 0.18 28);
 	--color-primary-content: oklch(0.985 0 0);
-	--color-accent: oklch(0.310 0.140 28); /* literal #560000 */
+	--color-accent: oklch(0.31 0.14 28); /* literal #560000 */
 	--color-accent-content: oklch(0.985 0 0);
-	--color-neutral: oklch(0.180 0.004 60);
-	--color-neutral-content: oklch(0.880 0.004 60);
+	--color-neutral: oklch(0.18 0.004 60);
+	--color-neutral-content: oklch(0.88 0.004 60);
 }
 
 [data-theme="light"] {
@@ -31,19 +31,25 @@
 	--color-base-200: oklch(0.948 0.004 60);
 	--color-base-300: oklch(0.865 0.005 60);
 	--color-base-content: oklch(0.225 0.005 60);
-	--color-primary: oklch(0.310 0.140 28); /* literal #560000 */
+	--color-primary: oklch(0.31 0.14 28); /* literal #560000 */
 	--color-primary-content: oklch(0.985 0 0);
-	--color-accent: oklch(0.420 0.165 28);
+	--color-accent: oklch(0.42 0.165 28);
 	--color-accent-content: oklch(0.985 0 0);
 	--color-neutral: oklch(0.225 0.005 60);
-	--color-neutral-content: oklch(0.940 0.003 60);
+	--color-neutral-content: oklch(0.94 0.003 60);
 }
 
 /* ─── Splash screen icon animation ──────────────────────────────────── */
 
 @keyframes splash-icon-in {
-	0%   { opacity: 0; transform: scale(0.72); }
-	100% { opacity: 1; transform: scale(1); }
+	0% {
+		opacity: 0;
+		transform: scale(0.72);
+	}
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
 }
 
 .animate-splash-icon {
@@ -53,8 +59,14 @@
 /* ─── Splash screen wordmark animation ──────────────────────────────── */
 
 @keyframes fade-in-up {
-	0%   { opacity: 0; transform: translateY(12px); }
-	100% { opacity: 1; transform: translateY(0); }
+	0% {
+		opacity: 0;
+		transform: translateY(12px);
+	}
+	100% {
+		opacity: 1;
+		transform: translateY(0);
+	}
 }
 
 .animate-fade-in-up {
@@ -64,8 +76,13 @@
 /* ─── Music: now-playing equalizer bars ─────────────────────────────── */
 
 @keyframes eq-bar {
-	0%, 100% { transform: scaleY(0.3); }
-	50%      { transform: scaleY(1); }
+	0%,
+	100% {
+		transform: scaleY(0.3);
+	}
+	50% {
+		transform: scaleY(1);
+	}
 }
 
 .eq-bar {
@@ -85,10 +102,10 @@
 }
 
 ::-webkit-scrollbar-thumb {
-	background: oklch(0.40 0.005 60);
+	background: oklch(0.4 0.005 60);
 	border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-	background: oklch(0.55 0.020 28);
+	background: oklch(0.55 0.02 28);
 }

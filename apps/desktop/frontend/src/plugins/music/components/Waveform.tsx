@@ -11,7 +11,11 @@ import {
 } from "@/plugins/music/lib/loadWavesurfer";
 
 /// Read a daisyUI theme color (oklch CSS var) with an rgb fallback.
-function themeColor(el: HTMLElement, varName: string, fallback: string): string {
+function themeColor(
+	el: HTMLElement,
+	varName: string,
+	fallback: string,
+): string {
 	const v = getComputedStyle(el).getPropertyValue(varName).trim();
 	return v || fallback;
 }

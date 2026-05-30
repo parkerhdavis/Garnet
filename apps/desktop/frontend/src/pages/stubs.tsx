@@ -49,7 +49,11 @@ export function SettingsAppearancePage() {
 export function SettingsGeneralPage() {
 	const bucket = usePrefsStore((s) => s.animatedImagesBucket);
 	const setBucket = usePrefsStore((s) => s.setAnimatedImagesBucket);
-	const options: { value: AnimatedImagesBucket; label: string; hint: string }[] = [
+	const options: {
+		value: AnimatedImagesBucket;
+		label: string;
+		hint: string;
+	}[] = [
 		{
 			value: "images",
 			label: "Images",
@@ -80,8 +84,8 @@ export function SettingsGeneralPage() {
 					<div className="card-body gap-3">
 						<h2 className="card-title text-base">Animated raster formats</h2>
 						<p className="text-sm text-base-content/70">
-							GIF, APNG, and animated WebP can reasonably belong to either Images
-							or Animations. Pick where they show up in the sidebar.
+							GIF, APNG, and animated WebP can reasonably belong to either
+							Images or Animations. Pick where they show up in the sidebar.
 						</p>
 						<div className="flex flex-col gap-2 mt-2">
 							{options.map((opt) => (
@@ -102,7 +106,9 @@ export function SettingsGeneralPage() {
 									/>
 									<div className="min-w-0">
 										<div className="font-medium text-sm">{opt.label}</div>
-										<div className="text-xs text-base-content/60">{opt.hint}</div>
+										<div className="text-xs text-base-content/60">
+											{opt.hint}
+										</div>
 									</div>
 								</label>
 							))}

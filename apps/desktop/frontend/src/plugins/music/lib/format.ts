@@ -4,7 +4,10 @@
 import type { MusicTrack } from "@/lib/tauri";
 
 /// Audio-quality fields shared by tracks (and an album's representative track).
-type Quality = Pick<MusicTrack, "format" | "sample_rate" | "bit_depth" | "channels">;
+type Quality = Pick<
+	MusicTrack,
+	"format" | "sample_rate" | "bit_depth" | "channels"
+>;
 
 /// "Stereo" / "Mono" / "6ch".
 export function channelsLabel(ch: number | null | undefined): string | null {
@@ -68,7 +71,8 @@ export function albumSubtitle(
 ): string {
 	const tracks = `${trackCount} ${trackCount === 1 ? "track" : "tracks"}`;
 	const mins = Math.round(totalSecs / 60);
-	const length = mins >= 60 ? `${Math.floor(mins / 60)} hr ${mins % 60} min` : `${mins} min`;
+	const length =
+		mins >= 60 ? `${Math.floor(mins / 60)} hr ${mins % 60} min` : `${mins} min`;
 	const parts = [tracks, length];
 	return year ? `${year} · ${parts.join(" · ")}` : parts.join(" · ");
 }

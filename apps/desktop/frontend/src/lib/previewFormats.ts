@@ -8,25 +8,67 @@
 //! Lowercased, no leading dot — matching `Asset.format`.
 
 /// Video formats with an inline `<video>` preview.
-export const VIDEO_EXTS = new Set(["mp4", "mov", "mkv", "avi", "webm", "m4v", "wmv"]);
+export const VIDEO_EXTS = new Set([
+	"mp4",
+	"mov",
+	"mkv",
+	"avi",
+	"webm",
+	"m4v",
+	"wmv",
+]);
 
 /// Audio formats with an inline `<audio>` preview.
-export const AUDIO_EXTS = new Set(["mp3", "wav", "flac", "ogg", "aiff", "m4a", "opus"]);
+export const AUDIO_EXTS = new Set([
+	"mp3",
+	"wav",
+	"flac",
+	"ogg",
+	"aiff",
+	"m4a",
+	"opus",
+]);
 
 /// Raster + vector formats the `<img>` preview can display.
 export const RASTER_EXTS = new Set([
-	"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp", "avif", "svg", "ico",
+	"png",
+	"jpg",
+	"jpeg",
+	"gif",
+	"bmp",
+	"tif",
+	"tiff",
+	"webp",
+	"avif",
+	"svg",
+	"ico",
 ]);
 
 /// Subset of RASTER_EXTS the editor can actually round-trip today
 /// (no AVIF/SVG/ICO yet — they need format-specific decoders).
 export const EDITABLE_EXTS = new Set([
-	"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp",
+	"png",
+	"jpg",
+	"jpeg",
+	"gif",
+	"bmp",
+	"tif",
+	"tiff",
+	"webp",
 ]);
 
 /// 3D model formats the Three.js-backed ModelPreview can load.
 export const MODEL_EXTS = new Set([
-	"gltf", "glb", "obj", "stl", "ply", "fbx", "usd", "usda", "usdc", "usdz",
+	"gltf",
+	"glb",
+	"obj",
+	"stl",
+	"ply",
+	"fbx",
+	"usd",
+	"usda",
+	"usdc",
+	"usdz",
 ]);
 
 /// `.blend` — no interactive renderer; previewed via its embedded thumbnail.
@@ -46,7 +88,10 @@ export function allPreviewableExts(): string[] {
 
 /// File-dialog filter groups for the ad-hoc "Open file…" picker. The "All
 /// media" group is first so it's the default selection.
-export function openFileDialogFilters(): { name: string; extensions: string[] }[] {
+export function openFileDialogFilters(): {
+	name: string;
+	extensions: string[];
+}[] {
 	return [
 		{ name: "All media", extensions: allPreviewableExts() },
 		{ name: "Images", extensions: [...RASTER_EXTS] },

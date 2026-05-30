@@ -7,10 +7,30 @@ import VramBudgetPanel from "@/plugins/texturing/size/VramBudgetPanel";
 import MipChainPanel from "@/plugins/texturing/size/MipChainPanel";
 import { LuFileSearch, LuHardDrive, LuLayers } from "react-icons/lu";
 
-const submodules: { id: SizeSubmodule; label: string; description: string; icon: React.ReactNode }[] = [
-	{ id: "info", label: "Texture Info", description: "View resolution, channels, bit depth, and file size.", icon: <LuFileSearch size={15} /> },
-	{ id: "vram", label: "VRAM Budget", description: "Estimate GPU memory cost across compression formats.", icon: <LuHardDrive size={15} /> },
-	{ id: "mipchain", label: "Mip Chain", description: "Visualize all mip levels with dimensions and sizes.", icon: <LuLayers size={15} /> },
+const submodules: {
+	id: SizeSubmodule;
+	label: string;
+	description: string;
+	icon: React.ReactNode;
+}[] = [
+	{
+		id: "info",
+		label: "Texture Info",
+		description: "View resolution, channels, bit depth, and file size.",
+		icon: <LuFileSearch size={15} />,
+	},
+	{
+		id: "vram",
+		label: "VRAM Budget",
+		description: "Estimate GPU memory cost across compression formats.",
+		icon: <LuHardDrive size={15} />,
+	},
+	{
+		id: "mipchain",
+		label: "Mip Chain",
+		description: "Visualize all mip levels with dimensions and sizes.",
+		icon: <LuLayers size={15} />,
+	},
 ];
 
 export default function SizeTools() {

@@ -96,7 +96,11 @@ export function useNativeAudio(path: string | null, volumeDb = 0): NativeAudio {
 				if (cancelled) return;
 				const p = e.payload;
 				// Ignore events targeting a different load.
-				if (p.path !== null && loadedPathRef.current !== null && p.path !== loadedPathRef.current) {
+				if (
+					p.path !== null &&
+					loadedPathRef.current !== null &&
+					p.path !== loadedPathRef.current
+				) {
 					return;
 				}
 				setStatus(p.status);
@@ -152,5 +156,16 @@ export function useNativeAudio(path: string | null, volumeDb = 0): NativeAudio {
 		void api.audioSetVolume(db).catch((e) => setError(String(e)));
 	}, []);
 
-	return { status, position, duration, error, loadedPath, play, pause, playPause, seekTo, setVolumeDb };
+	return {
+		status,
+		position,
+		duration,
+		error,
+		loadedPath,
+		play,
+		pause,
+		playPause,
+		seekTo,
+		setVolumeDb,
+	};
 }

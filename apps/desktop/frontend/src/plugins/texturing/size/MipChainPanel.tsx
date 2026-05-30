@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useEffect, useState, useRef } from "react";
 import { useSizeStore } from "@/plugins/texturing/stores/sizeStore";
-import { computeMipLevels, GPU_FORMATS, formatBytes } from "@/plugins/texturing/size/vramFormats";
+import {
+	computeMipLevels,
+	GPU_FORMATS,
+	formatBytes,
+} from "@/plugins/texturing/size/vramFormats";
 
 const MIN_COL_WIDTH = 28;
 const GAP = 12;
@@ -19,7 +23,9 @@ export default function MipChainPanel() {
 		return computeMipLevels(info.width, info.height);
 	}, [info]);
 
-	const format = GPU_FORMATS.find((f) => f.name.startsWith(selectedFormat)) ?? GPU_FORMATS[6];
+	const format =
+		GPU_FORMATS.find((f) => f.name.startsWith(selectedFormat)) ??
+		GPU_FORMATS[6];
 
 	// Measure container width for scaling
 	useEffect(() => {
@@ -83,7 +89,9 @@ export default function MipChainPanel() {
 				};
 				generateNext();
 			};
-			img.src = preview.startsWith("data:") ? preview : `data:image/png;base64,${preview}`;
+			img.src = preview.startsWith("data:")
+				? preview
+				: `data:image/png;base64,${preview}`;
 		});
 
 		return () => {
@@ -100,7 +108,10 @@ export default function MipChainPanel() {
 		);
 	}
 
-	const totalSize = mipLevels.reduce((sum, lvl) => sum + format.sizeBytes(lvl.width, lvl.height), 0);
+	const totalSize = mipLevels.reduce(
+		(sum, lvl) => sum + format.sizeBytes(lvl.width, lvl.height),
+		0,
+	);
 
 	// Compute scale so all mips fit in a single row
 	const availableWidth = containerWidth - 32;
@@ -120,7 +131,10 @@ export default function MipChainPanel() {
 			}
 		}
 		if (countMin === 0 || sumLarge === 0) break;
-		scale = Math.min(1, (availableWidth - totalGaps - countMin * MIN_COL_WIDTH) / sumLarge);
+		scale = Math.min(
+			1,
+			(availableWidth - totalGaps - countMin * MIN_COL_WIDTH) / sumLarge,
+		);
 	}
 
 	return (
@@ -154,17 +168,27 @@ export default function MipChainPanel() {
 			</div>
 
 			{/* Mip cascade — single row, bottom-aligned relative to vertically centered first mip */}
-			<div ref={containerRef} className="flex-1 overflow-hidden p-4 flex items-center">
+			<div
+				ref={containerRef}
+				className="flex-1 overflow-hidden p-4 flex items-center"
+			>
 				<div className="flex items-end" style={{ gap: GAP }}>
 					{mipLevels.map((lvl, i) => {
-						const displayW = Math.max(MIN_COL_WIDTH, Math.round(lvl.width * scale));
+						const displayW = Math.max(
+							MIN_COL_WIDTH,
+							Math.round(lvl.width * scale),
+						);
 						const imgW = Math.max(4, Math.round(lvl.width * scale));
 						const imgH = Math.max(4, Math.round(lvl.height * scale));
 						const levelSize = format.sizeBytes(lvl.width, lvl.height);
 						const loaded = mipPreviews[i] != null;
 
 						return (
-							<div key={i} className="flex flex-col items-center gap-1 shrink-0" style={{ width: displayW }}>
+							<div
+								key={i}
+								className="flex flex-col items-center gap-1 shrink-0"
+								style={{ width: displayW }}
+							>
 								{/* Mip image */}
 								<div
 									className="bg-base-300/30 rounded border border-base-300/50 overflow-hidden flex items-center justify-center"
@@ -175,7 +199,9 @@ export default function MipChainPanel() {
 											src={mipPreviews[i]!}
 											alt={`Mip ${i}`}
 											className="w-full h-full"
-											style={{ imageRendering: imgW < 32 ? "pixelated" : "auto" }}
+											style={{
+												imageRendering: imgW < 32 ? "pixelated" : "auto",
+											}}
 										/>
 									) : (
 										<span

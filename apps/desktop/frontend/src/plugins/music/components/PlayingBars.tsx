@@ -8,9 +8,18 @@ export function PlayingBars({ className = "" }: { className?: string }) {
 			className={`inline-flex h-3.5 items-end gap-[2px] ${className}`}
 			aria-label="Playing"
 		>
-			<span className="eq-bar h-full w-[2px] bg-current" style={{ animationDelay: "0ms" }} />
-			<span className="eq-bar h-full w-[2px] bg-current" style={{ animationDelay: "180ms" }} />
-			<span className="eq-bar h-full w-[2px] bg-current" style={{ animationDelay: "360ms" }} />
+			<span
+				className="eq-bar h-full w-[2px] bg-current"
+				style={{ animationDelay: "0ms" }}
+			/>
+			<span
+				className="eq-bar h-full w-[2px] bg-current"
+				style={{ animationDelay: "180ms" }}
+			/>
+			<span
+				className="eq-bar h-full w-[2px] bg-current"
+				style={{ animationDelay: "360ms" }}
+			/>
 		</span>
 	);
 }

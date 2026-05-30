@@ -7,9 +7,9 @@
  * implemented — state lives in Zustand stores and survives page reloads.
  */
 
-import { watch } from "fs";
-import { cp, mkdir } from "fs/promises";
-import { existsSync } from "fs";
+import { watch } from "node:fs";
+import { cp, mkdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import type { ServerWebSocket } from "bun";
 
 const DEV_PORT = 5173;
@@ -19,14 +19,23 @@ const reloadClients = new Set<ServerWebSocket<unknown>>();
 
 async function buildCSS() {
 	const proc = Bun.spawn(
-		["bunx", "@tailwindcss/cli", "-i", "src/styles/index.css", "-o", `${DIST}/styles.css`],
+		[
+			"bunx",
+			"@tailwindcss/cli",
+			"-i",
+			"src/styles/index.css",
+			"-o",
+			`${DIST}/styles.css`,
+		],
 		{ stdout: "inherit", stderr: "inherit" },
 	);
 	await proc.exited;
 }
 
 async function buildMain() {
-	const pkg = await Bun.file(new URL("../package.json", import.meta.url)).json();
+	const pkg = await Bun.file(
+		new URL("../package.json", import.meta.url),
+	).json();
 	await Bun.build({
 		entrypoints: ["src/main.tsx"],
 		outdir: DIST,
@@ -36,10 +45,14 @@ async function buildMain() {
 		// main.js and parsed on every page reload even though they're not
 		// needed until the user opens a 3D asset.
 		splitting: true,
-		naming: { entry: "[name].js", chunk: "[name]-[hash].js", asset: "[name]-[hash][ext]" },
+		naming: {
+			entry: "[name].js",
+			chunk: "[name]-[hash].js",
+			asset: "[name]-[hash][ext]",
+		},
 		define: {
 			"process.env.NODE_ENV": '"development"',
-			"__APP_VERSION__": JSON.stringify(pkg.version),
+			__APP_VERSION__: JSON.stringify(pkg.version),
 		},
 	});
 }
@@ -72,12 +85,17 @@ Bun.serve({
 		}
 		const filePath = url.pathname === "/" ? "/index.html" : url.pathname;
 		const file = Bun.file(`${DIST}${filePath}`);
-		if (!(await file.exists())) return new Response("Not found", { status: 404 });
+		if (!(await file.exists()))
+			return new Response("Not found", { status: 404 });
 		return new Response(file);
 	},
 	websocket: {
-		open(ws) { reloadClients.add(ws); },
-		close(ws) { reloadClients.delete(ws); },
+		open(ws) {
+			reloadClients.add(ws);
+		},
+		close(ws) {
+			reloadClients.delete(ws);
+		},
 		message() {},
 	},
 });

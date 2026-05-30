@@ -17,7 +17,11 @@ import {
 	type SortDir,
 	type ValueCount,
 } from "@/lib/tauri";
-import { buildTypeQuery, formatsInKind, type TypeKind } from "@/lib/typeFilters";
+import {
+	buildTypeQuery,
+	formatsInKind,
+	type TypeKind,
+} from "@/lib/typeFilters";
 import { usePrefsStore } from "@/stores/prefsStore";
 
 export const PAGE_SIZE = 60;
@@ -186,7 +190,11 @@ export const useAssetsStore = create<AssetsState>((set, get) => {
 		// out of library" notices). A background scan-driven refresh
 		// shouldn't wipe a message the user hasn't read yet. The error
 		// banner has its own dismiss button.
-		set(collapse ? { loading: true, resetNonce: s.resetNonce + 1 } : { loading: true });
+		set(
+			collapse
+				? { loading: true, resetNonce: s.resetNonce + 1 }
+				: { loading: true },
+		);
 		try {
 			const [page, rawFormatCounts, tagCounts] = await Promise.all([
 				api.listAssets(listQuery(s, limit, 0)),
@@ -265,7 +273,9 @@ export const useAssetsStore = create<AssetsState>((set, get) => {
 		toggleFormat: async (format) => {
 			const lc = format.toLowerCase();
 			const current = get().formats;
-			const next = current.includes(lc) ? current.filter((f) => f !== lc) : [...current, lc];
+			const next = current.includes(lc)
+				? current.filter((f) => f !== lc)
+				: [...current, lc];
 			set({ formats: next });
 			await get().reset();
 		},
@@ -313,7 +323,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => {
 
 		setSort: async (by) => {
 			const { sortBy, sortDir } = get();
-			const nextDir: SortDir = sortBy === by ? (sortDir === "asc" ? "desc" : "asc") : "asc";
+			const nextDir: SortDir =
+				sortBy === by ? (sortDir === "asc" ? "desc" : "asc") : "asc";
 			set({ sortBy: by, sortDir: nextDir });
 			await get().reset();
 		},

@@ -45,7 +45,9 @@ function toBackendStep(step: AutomationStepInstance) {
 }
 
 /// Split a backend `{ type, ...params }` step into `{ type, params }`.
-function fromBackendStep(step: { type: string } & Record<string, unknown>): AutomationStepInstance {
+function fromBackendStep(
+	step: { type: string } & Record<string, unknown>,
+): AutomationStepInstance {
 	const { type, ...params } = step;
 	return { type, params };
 }
@@ -95,7 +97,10 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
 
 	addFiles: (paths) =>
 		set((s) => ({
-			inputFiles: [...s.inputFiles, ...paths.filter((p) => !s.inputFiles.includes(p))],
+			inputFiles: [
+				...s.inputFiles,
+				...paths.filter((p) => !s.inputFiles.includes(p)),
+			],
 			result: null,
 		})),
 
@@ -123,7 +128,9 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
 
 	updateStepParams: (index, params) =>
 		set((s) => ({
-			pipeline: s.pipeline.map((step, i) => (i === index ? { ...step, params } : step)),
+			pipeline: s.pipeline.map((step, i) =>
+				i === index ? { ...step, params } : step,
+			),
 		})),
 
 	moveStep: (from, to) =>
@@ -142,10 +149,13 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
 		const { inputFiles, pipeline } = get();
 		if (inputFiles.length === 0) return;
 		try {
-			const items = await invoke<AutomationPreviewItem[]>("preview_automation", {
-				files: inputFiles,
-				pipeline: { steps: pipeline.map(toBackendStep) },
-			});
+			const items = await invoke<AutomationPreviewItem[]>(
+				"preview_automation",
+				{
+					files: inputFiles,
+					pipeline: { steps: pipeline.map(toBackendStep) },
+				},
+			);
 			set({ previewItems: items });
 		} catch (err) {
 			console.error("Automation preview failed:", err);
@@ -161,9 +171,12 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
 			.getState()
 			.add({ id: BG_TASK_ID, kind: "other", label: "Running automation" });
 
-		const unlisten = await listen<AutomationProgress>("automation:progress", (event) => {
-			set({ progress: event.payload });
-		});
+		const unlisten = await listen<AutomationProgress>(
+			"automation:progress",
+			(event) => {
+				set({ progress: event.payload });
+			},
+		);
 
 		try {
 			const result = await invoke<AutomationResult>("run_automation", {

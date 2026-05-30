@@ -31,9 +31,15 @@ export const KEYBIND_CATEGORIES: KeybindCategory[] = [
 	{
 		title: "Selection (library view)",
 		items: [
-			{ keys: ["Click"], description: "Select asset (replaces any prior selection)" },
+			{
+				keys: ["Click"],
+				description: "Select asset (replaces any prior selection)",
+			},
 			{ keys: ["Ctrl", "Click"], description: "Toggle asset in selection" },
-			{ keys: ["Shift", "Click"], description: "Select range from anchor to clicked tile" },
+			{
+				keys: ["Shift", "Click"],
+				description: "Select range from anchor to clicked tile",
+			},
 			{ keys: ["Double-click"], description: "Open asset in detail view" },
 			{ keys: ["Ctrl", "D"], description: "Deselect all" },
 			{ keys: ["Esc"], description: "Deselect all" },
@@ -60,7 +66,10 @@ export const KEYBIND_CATEGORIES: KeybindCategory[] = [
 	{
 		title: "Image editor",
 		items: [
-			{ keys: ["\\"], description: "Hold to peek the original; tap to toggle edited/original" },
+			{
+				keys: ["\\"],
+				description: "Hold to peek the original; tap to toggle edited/original",
+			},
 		],
 	},
 ];

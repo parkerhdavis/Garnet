@@ -91,7 +91,12 @@ async function probeOpener(absPath: string): Promise<OpenerProbe[]> {
 		const t0 = performance.now();
 		try {
 			await fn();
-			results.push({ op, ok: true, error: null, durationMs: performance.now() - t0 });
+			results.push({
+				op,
+				ok: true,
+				error: null,
+				durationMs: performance.now() - t0,
+			});
 		} catch (e) {
 			results.push({
 				op,
@@ -180,13 +185,19 @@ export function MediaDiagnostic({ url, absPath, autoRun = false }: Props) {
 							<div key={o.op} className="font-mono">
 								<span
 									className={
-										o.ok ? "text-success" : o.ok === false ? "text-error" : "opacity-60"
+										o.ok
+											? "text-success"
+											: o.ok === false
+												? "text-error"
+												: "opacity-60"
 									}
 								>
 									{o.ok ? "✓" : "✗"}
 								</span>{" "}
 								<span>{o.op}</span>{" "}
-								<span className="opacity-60">({o.durationMs.toFixed(0)}ms)</span>
+								<span className="opacity-60">
+									({o.durationMs.toFixed(0)}ms)
+								</span>
 								{o.error && (
 									<div className="ml-4 text-error break-all">{o.error}</div>
 								)}
@@ -211,7 +222,10 @@ export function MediaDiagnostic({ url, absPath, autoRun = false }: Props) {
 	);
 }
 
-function ProbeRow({ label, probe }: { label: string; probe: FetchProbe | null }) {
+function ProbeRow({
+	label,
+	probe,
+}: { label: string; probe: FetchProbe | null }) {
 	if (!probe) {
 		return (
 			<div className="mt-2 font-mono opacity-50">
@@ -237,7 +251,9 @@ function ProbeRow({ label, probe }: { label: string; probe: FetchProbe | null })
 			{probe.error && (
 				<div className="ml-4 text-error break-all">error: {probe.error}</div>
 			)}
-			{probe.bodyPreview && <div className="ml-4 opacity-70">{probe.bodyPreview}</div>}
+			{probe.bodyPreview && (
+				<div className="ml-4 opacity-70">{probe.bodyPreview}</div>
+			)}
 			{Object.keys(probe.headers).length > 0 && (
 				<details className="ml-4 opacity-70">
 					<summary className="cursor-pointer">headers</summary>
