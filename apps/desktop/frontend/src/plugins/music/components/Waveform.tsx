@@ -93,5 +93,14 @@ export function Waveform({
 		}
 	}, [position, ready]);
 
-	return <div ref={containerRef} className="w-full cursor-pointer" />;
+	// Fade in once wavesurfer has rendered (peaks arrive a beat after play
+	// starts), so the waveform eases in instead of popping.
+	return (
+		<div
+			ref={containerRef}
+			className={`w-full cursor-pointer transition-opacity duration-500 ${
+				ready ? "opacity-100" : "opacity-0"
+			}`}
+		/>
+	);
 }

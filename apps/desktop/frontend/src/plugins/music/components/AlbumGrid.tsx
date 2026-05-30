@@ -17,7 +17,7 @@ export function AlbumGrid({
 			style={{ gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))" }}
 		>
 			{albums.map((album) => (
-				<AlbumCard key={album.id} album={album} onClick={() => onSelect(album.id)} />
+				<AlbumCard key={album.id} album={album} onOpen={() => onSelect(album.id)} />
 			))}
 		</div>
 	);

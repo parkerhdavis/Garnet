@@ -16,7 +16,7 @@ import { AlbumArt } from "@/plugins/music/components/AlbumArt";
 import { Waveform } from "@/plugins/music/components/Waveform";
 import { useNativeAudio } from "@/plugins/music/hooks/useNativeAudio";
 import { usePeaks } from "@/plugins/music/hooks/usePeaks";
-import { formatDuration } from "@/plugins/music/lib/format";
+import { formatDuration, qualityShort } from "@/plugins/music/lib/format";
 import { useMusicStore } from "@/plugins/music/stores/musicStore";
 
 /// Linear 0..1 volume → dB for the engine (0 → effectively silent).
@@ -62,20 +62,23 @@ export function PlayerBar() {
 	if (!nowPlaying) return null;
 
 	const isPlaying = player.status === "playing";
+	const quality = qualityShort(nowPlaying);
 
 	return (
 		<div className="flex items-center gap-3 border-t border-base-300 bg-base-100 px-4 py-2 shrink-0">
 			{/* Now playing */}
-			<div className="flex w-48 min-w-0 shrink-0 items-center gap-3">
-				<AlbumArt
-					absPath={nowPlaying.abs_path}
-					size={96}
-					className="size-11 shrink-0"
-					rounded="rounded"
-				/>
+			<div className="flex w-56 min-w-0 shrink-0 items-center gap-3">
+				<AlbumArt absPath={nowPlaying.abs_path} className="size-11 shrink-0" rounded="rounded" />
 				<div className="min-w-0">
 					<div className="truncate text-sm font-medium leading-tight">{nowPlaying.title}</div>
-					<div className="truncate text-xs text-base-content/60">{nowPlaying.artist}</div>
+					<div className="flex min-w-0 items-center gap-1.5">
+						<span className="truncate text-xs text-base-content/60">{nowPlaying.artist}</span>
+						{quality && (
+							<span className="badge badge-xs shrink-0 border-0 bg-base-content/10 text-[9px] font-medium text-base-content/55">
+								{quality}
+							</span>
+						)}
+					</div>
 				</div>
 			</div>
 

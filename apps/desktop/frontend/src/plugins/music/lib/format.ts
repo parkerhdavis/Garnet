@@ -1,6 +1,47 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Small formatting helpers for the Music Library UI.
 
+import type { MusicTrack } from "@/lib/tauri";
+
+/// Audio-quality fields shared by tracks (and an album's representative track).
+type Quality = Pick<MusicTrack, "format" | "sample_rate" | "bit_depth" | "channels">;
+
+/// "Stereo" / "Mono" / "6ch".
+export function channelsLabel(ch: number | null | undefined): string | null {
+	if (!ch) return null;
+	if (ch === 1) return "Mono";
+	if (ch === 2) return "Stereo";
+	return `${ch}ch`;
+}
+
+/// kHz label: 48000 → "48 kHz", 44100 → "44.1 kHz".
+function khz(rate: number): string {
+	const k = rate / 1000;
+	return `${Number.isInteger(k) ? k : k.toFixed(1)} kHz`;
+}
+
+/// Quality chips for an album/track header, e.g. ["FLAC", "24-bit", "48 kHz",
+/// "Stereo"]. Omits any field that's missing.
+export function qualityChips(q: Quality): string[] {
+	const chips: string[] = [];
+	if (q.format) chips.push(q.format.toUpperCase());
+	if (q.bit_depth) chips.push(`${q.bit_depth}-bit`);
+	if (q.sample_rate) chips.push(khz(q.sample_rate));
+	const ch = channelsLabel(q.channels);
+	if (ch) chips.push(ch);
+	return chips;
+}
+
+/// Compact one-cell quality, e.g. "FLAC 24/48" (format + bit-depth/kHz).
+export function qualityShort(q: Quality): string | null {
+	if (!q.format) return null;
+	const fmt = q.format.toUpperCase();
+	if (q.bit_depth && q.sample_rate) {
+		return `${fmt} ${q.bit_depth}/${Math.round(q.sample_rate / 1000)}`;
+	}
+	return fmt;
+}
+
 /// Format a track length in seconds as `m:ss` (or `h:mm:ss` past an hour).
 export function formatDuration(secs: number | null | undefined): string {
 	if (secs == null || !Number.isFinite(secs) || secs < 0) return "—";

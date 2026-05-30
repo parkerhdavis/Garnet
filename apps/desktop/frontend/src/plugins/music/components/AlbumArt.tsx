@@ -1,25 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Album cover image. Resolves art via the backend (embedded → folder cover),
-//! caching results module-wide so the same cover isn't re-fetched across
-//! re-renders/remounts. Shows a music-note placeholder while loading or when no
-//! art exists.
+//! Album cover image. Resolves art via the backend (embedded → folder cover) at
+//! a fixed resolution, caching results module-wide so the same cover isn't
+//! re-fetched across re-renders/remounts (and so one cover can be shown at
+//! several display sizes — grid tile, detail header, blurred backdrop, player
+//! thumb — from a single fetch). Display size is CSS-driven via `className`.
+//! Shows a music-note placeholder while loading or when no art exists.
 
 import { useEffect, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { HiMusicalNote } from "react-icons/hi2";
 import { api } from "@/lib/tauri";
 
+/// Backend downscale target. One crisp-enough size for every on-screen use.
+const FETCH_SIZE = 512;
+
 /// absPath → resolved <img src> ("" = no art found). Shared across instances.
 const srcCache = new Map<string, string>();
 const inflight = new Map<string, Promise<string>>();
 
-function resolveArt(absPath: string, size: number): Promise<string> {
+function resolveArt(absPath: string): Promise<string> {
 	const cached = srcCache.get(absPath);
 	if (cached !== undefined) return Promise.resolve(cached);
 	let p = inflight.get(absPath);
 	if (!p) {
 		p = api
-			.loadAlbumArt(absPath, null, size)
+			.loadAlbumArt(absPath, null, FETCH_SIZE)
 			.then((path) => (path ? convertFileSrc(path) : ""))
 			.catch(() => "")
 			.then((src) => {
@@ -34,13 +39,10 @@ function resolveArt(absPath: string, size: number): Promise<string> {
 
 export function AlbumArt({
 	absPath,
-	size = 300,
 	className = "",
 	rounded = "rounded-md",
 }: {
 	absPath: string;
-	/// Pixel size requested from the backend (cover is downscaled to fit).
-	size?: number;
 	className?: string;
 	rounded?: string;
 }) {
@@ -55,7 +57,7 @@ export function AlbumArt({
 			return;
 		}
 		setResolved(false);
-		void resolveArt(absPath, size).then((s) => {
+		void resolveArt(absPath).then((s) => {
 			if (cancelled) return;
 			setSrc(s);
 			setResolved(true);
@@ -63,7 +65,7 @@ export function AlbumArt({
 		return () => {
 			cancelled = true;
 		};
-	}, [absPath, size]);
+	}, [absPath]);
 
 	if (src) {
 		return (

@@ -39,6 +39,7 @@ type MusicState = {
 	/// Start a track within a queue (typically its album's track list).
 	playTrack: (track: MusicTrack, queue: MusicTrack[]) => void;
 	playAlbum: (album: MusicAlbum) => void;
+	playAlbumShuffled: (album: MusicAlbum) => void;
 	next: () => void;
 	prev: () => void;
 	hasNext: () => boolean;
@@ -78,6 +79,16 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 	playAlbum: (album) => {
 		if (album.tracks.length === 0) return;
 		set({ nowPlaying: album.tracks[0], queue: album.tracks, queueIndex: 0 });
+	},
+
+	playAlbumShuffled: (album) => {
+		if (album.tracks.length === 0) return;
+		const shuffled = [...album.tracks];
+		for (let i = shuffled.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+		}
+		set({ nowPlaying: shuffled[0], queue: shuffled, queueIndex: 0 });
 	},
 
 	next: () => {

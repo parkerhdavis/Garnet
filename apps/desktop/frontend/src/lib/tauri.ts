@@ -99,6 +99,9 @@ export type MusicTrack = {
 	duration_secs: number | null;
 	year: number | null;
 	format: string | null;
+	sample_rate: number | null;
+	bit_depth: number | null;
+	channels: number | null;
 	has_cover: boolean;
 };
 
