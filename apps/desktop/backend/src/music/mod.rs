@@ -6,8 +6,15 @@
 //! `audio`/`audio_decoder`/`peaks`.
 
 pub mod art;
+pub mod audio;
+pub mod audio_decoder;
+pub mod peaks;
 
 pub use art::load_album_art;
+pub use audio::{
+	audio_load, audio_pause, audio_play, audio_seek, audio_set_volume, audio_stop,
+};
+pub use peaks::get_audio_peaks;
 
 use crate::AppState;
 use rusqlite::{Connection, ToSql};

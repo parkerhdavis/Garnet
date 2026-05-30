@@ -39,6 +39,13 @@ rayon = "1.10"
 # Audio tag (ID3/Vorbis/MP4) reading for the base indexer's audio metadata.
 # Pure Rust, MIT/Apache. Also pulls embedded cover art for the Music plugin.
 lofty = "0.24"
+# Native audio playback + waveform peaks for the Music Library plugin.
+# Symphonia decodes; Rodio drives the OS sink via CPAL (needs libasound2 on
+# Linux). Bypasses the webview's audio pipeline, which chops compressed audio
+# on Linux. crossbeam carries commands from Tauri handlers to the audio thread.
+symphonia = { version = "0.5", features = ["all-codecs", "all-formats"] }
+rodio = { version = "0.20", default-features = false, features = ["symphonia-all"] }
+crossbeam-channel = "0.5"
 
 # Cross-platform user-extended-attribute mirror for garnet_metadata. The
 # `xattr` crate supports Linux/macOS/FreeBSD; Windows uses NTFS alternate

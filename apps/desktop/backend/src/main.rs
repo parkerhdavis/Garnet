@@ -42,7 +42,10 @@ use image_io::{
 use library::{
 	list_library_roots, register_library_root, remove_library_root, scan_library_root,
 };
-use music::{list_music_library, load_album_art};
+use music::{
+	audio_load, audio_pause, audio_play, audio_seek, audio_set_volume, audio_stop,
+	get_audio_peaks, list_music_library, load_album_art,
+};
 use native_metadata::list_asset_metadata;
 use plugins::list_plugins;
 use pinned_sources::{list_pinned_sources, pin_source, unpin_source};
@@ -182,6 +185,15 @@ fn main() {
 				app.manage(watcher::WatcherState(std::sync::Mutex::new(watcher)));
 			});
 
+			// Native audio player thread (Music Library plugin). Owns the OS
+			// audio sink; transport commands flow through a channel and
+			// position/state come back as `audio:*` events. Spawned here
+			// because the audio thread needs the AppHandle to emit.
+			t.time("spawn audio player", || {
+				let sender = music::audio::spawn(app.handle().clone());
+				app.manage(std::sync::Mutex::new(sender));
+			});
+
 			// Background auto-scan: enumerate every registered library root
 			// and spawn a scan for each. Each scan opens its own SQLite
 			// connection (WAL mode), so they don't block IPC commands on the
@@ -296,6 +308,13 @@ fn main() {
 			delete_user_preset,
 			list_music_library,
 			load_album_art,
+			audio_load,
+			audio_play,
+			audio_pause,
+			audio_seek,
+			audio_stop,
+			audio_set_volume,
+			get_audio_peaks,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
