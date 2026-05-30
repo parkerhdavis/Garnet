@@ -59,6 +59,14 @@ type MusicState = {
 	error: string | null;
 	view: MusicView;
 
+	// Workspace context. `activeWorkspaceId` is the music workspace currently
+	// mounted (set by MusicWorkflow); `playbackWorkspaceId` is captured from it
+	// when playback starts, so the global player bar can navigate back to the
+	// exact workspace the now-playing track came from (its scope is guaranteed
+	// to contain that album/artist).
+	activeWorkspaceId: number | null;
+	playbackWorkspaceId: number | null;
+
 	// Playback
 	queue: MusicTrack[];
 	order: number[];
@@ -71,6 +79,7 @@ type MusicState = {
 
 	load: (scope: MusicScope) => Promise<void>;
 	setView: (v: MusicView) => void;
+	setActiveWorkspace: (id: number | null) => void;
 
 	playTrack: (track: MusicTrack, tracks: MusicTrack[]) => void;
 	playAlbum: (album: MusicAlbum) => void;
@@ -91,6 +100,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 	loading: true,
 	error: null,
 	view: "albums",
+
+	activeWorkspaceId: null,
+	playbackWorkspaceId: null,
 
 	queue: [],
 	order: [],
@@ -113,14 +125,29 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
 	setView: (view) => set({ view }),
 
+	setActiveWorkspace: (activeWorkspaceId) => set({ activeWorkspaceId }),
+
 	playTrack: (track, tracks) => {
 		const i = tracks.findIndex((t) => t.asset_id === track.asset_id);
-		set(buildPlayback(tracks, i < 0 ? 0 : i, get().shuffle));
+		set({
+			playbackWorkspaceId: get().activeWorkspaceId,
+			...buildPlayback(tracks, i < 0 ? 0 : i, get().shuffle),
+		});
 	},
 
-	playAlbum: (album) => set({ shuffle: false, ...buildPlayback(album.tracks, 0, false) }),
+	playAlbum: (album) =>
+		set({
+			shuffle: false,
+			playbackWorkspaceId: get().activeWorkspaceId,
+			...buildPlayback(album.tracks, 0, false),
+		}),
 
-	playAlbumShuffled: (album) => set({ shuffle: true, ...buildPlayback(album.tracks, 0, true) }),
+	playAlbumShuffled: (album) =>
+		set({
+			shuffle: true,
+			playbackWorkspaceId: get().activeWorkspaceId,
+			...buildPlayback(album.tracks, 0, true),
+		}),
 
 	toggleShuffle: () => {
 		const { queue, order, orderPos, shuffle } = get();

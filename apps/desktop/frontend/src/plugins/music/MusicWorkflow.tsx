@@ -30,6 +30,13 @@ export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
 	const library = useMusicStore((s) => s.library);
 	const view = useMusicStore((s) => s.view);
 	const setView = useMusicStore((s) => s.setView);
+	const setActiveWorkspace = useMusicStore((s) => s.setActiveWorkspace);
+
+	// Record this as the active music workspace so playback started here is
+	// attributed to it — the global player bar navigates back to it on click.
+	useEffect(() => {
+		setActiveWorkspace(workspace.id);
+	}, [workspace.id, setActiveWorkspace]);
 
 	// Browse navigation lives in the URL (?album / ?artist) so the back gesture
 	// pops album → artist → grid (instead of leaving the workspace) and the
