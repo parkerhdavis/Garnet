@@ -32,6 +32,7 @@ import {
 	HiCog6Tooth,
 	HiCommandLine,
 	HiCube,
+	HiDocumentArrowUp,
 	HiEllipsisHorizontalCircle,
 	HiFilm,
 	HiFolder,
@@ -51,6 +52,7 @@ import {
 } from "react-icons/hi2";
 import { confirm } from "@/components/ConfirmDialog";
 import { openContextMenu } from "@/components/ContextMenu";
+import { pickFileToPreview } from "@/lib/ephemeral";
 import { NewWorkspaceDialog, type NewWorkspaceOptions } from "@/components/NewWorkspaceDialog";
 import { WorkspaceSettingsDialog } from "@/components/WorkspaceSettingsDialog";
 import { prompt } from "@/components/PromptDialog";
@@ -182,6 +184,10 @@ export function Sidebar() {
 		return roots[roots.length - 1].path;
 	}, [roots]);
 
+	async function handleOpenFile() {
+		await pickFileToPreview((to) => navigate(to));
+	}
+
 	async function handlePinSource() {
 		const selected = await openDialog({
 			directory: true,
@@ -216,6 +222,17 @@ export function Sidebar() {
 			</Link>
 
 			<nav className="flex-1 overflow-y-auto py-3 px-2 divide-y divide-base-300 [&>*]:py-6 [&>*:first-child]:pt-1 [&>*:last-child]:pb-2">
+				{/* Ad-hoc open: deliberately above Workspaces and outside the
+				    Library group — it's a one-off "look at this loose file,"
+				    not a curation of the library (cf. Pin source). */}
+				<div>
+					<ul className="flex flex-col gap-0.5 pl-1">
+						<NavAction icon={HiDocumentArrowUp} onClick={handleOpenFile}>
+							Open file…
+						</NavAction>
+					</ul>
+				</div>
+
 				<NavGroup title="Workspaces">
 					<ul className="flex flex-col gap-0.5 pl-1">
 						{workspaces.map((w) => (

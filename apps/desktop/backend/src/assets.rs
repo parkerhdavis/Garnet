@@ -526,6 +526,57 @@ pub fn get_asset(state: State<AppState>, id: i64) -> Result<Asset, String> {
 	.map_err(stringify)
 }
 
+/// Stat a single file on disk and describe it as an *ephemeral* `Asset` —
+/// one that has no row in the catalog. Used by the ad-hoc "open a loose file
+/// outside any library root" flow: the preview/editor surfaces are mostly
+/// path-addressed, so handing them an `Asset` shaped the usual way lets the
+/// existing code paths work unchanged.
+///
+/// The sentinel ids (`id = -1`, `root_id = -1`) mark the asset as ephemeral;
+/// the frontend keys its id-only degradations (no tags/metadata persistence,
+/// an "Add to library" upsell) off `id < 0`. `root_path` is set to the file's
+/// parent directory and `relative_path` to its filename so that the frontend's
+/// `absPathFor(asset)` (= `root_path + "/" + relative_path`) reconstructs the
+/// real absolute path with no special-casing.
+#[tauri::command]
+pub fn describe_file(path: String) -> Result<Asset, String> {
+	let p = std::path::Path::new(&path);
+	let meta = std::fs::metadata(p).map_err(|e| format!("could not stat {path:?}: {e}"))?;
+	if !meta.is_file() {
+		return Err(format!("{path:?} is not a file"));
+	}
+
+	let mtime = meta
+		.modified()
+		.ok()
+		.and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+		.map(|d| d.as_secs() as i64);
+
+	let root_path = p
+		.parent()
+		.map(|d| d.to_string_lossy().to_string())
+		.unwrap_or_default();
+	let relative_path = p
+		.file_name()
+		.map(|n| n.to_string_lossy().to_string())
+		.unwrap_or_else(|| path.clone());
+	let format = p
+		.extension()
+		.map(|e| e.to_string_lossy().to_lowercase());
+
+	Ok(Asset {
+		id: -1,
+		root_id: -1,
+		root_path,
+		relative_path,
+		size: Some(meta.len() as i64),
+		mtime,
+		format,
+		is_motion_only: None,
+		has_animation: None,
+	})
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

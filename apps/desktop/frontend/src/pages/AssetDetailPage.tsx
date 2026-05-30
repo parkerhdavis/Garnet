@@ -1,19 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { lazy, Suspense, useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
 	HiArrowLeft,
 	HiArrowTopRightOnSquare,
 	HiFolderOpen,
+	HiFolderPlus,
 	HiPencilSquare,
 } from "react-icons/hi2";
 import { api, mediaUrl, type Asset, type AssetMetadata } from "@/lib/tauri";
 import type { ModelStats } from "@/components/ModelPreview";
 import { MediaDiagnostic } from "@/components/MediaDiagnostic";
 import { GarnetMetadataEditor } from "@/components/GarnetMetadataEditor";
+import { confirm } from "@/components/ConfirmDialog";
+import { addPathToLibrary, ephemeralEditRoute } from "@/lib/ephemeral";
+import {
+	AUDIO_EXTS,
+	BLEND_EXTS,
+	EDITABLE_EXTS,
+	MODEL_EXTS,
+	RASTER_EXTS,
+	VIDEO_EXTS,
+} from "@/lib/previewFormats";
 import { loadModelThumbnailer } from "@/lib/loadModelThumbnailer";
 import { subscribeThumbnailReady } from "@/lib/thumbnailBus";
 
@@ -31,23 +42,14 @@ import {
 	formatTime,
 } from "@/lib/paths";
 
-const VIDEO_EXTS = new Set(["mp4", "mov", "mkv", "avi", "webm", "m4v", "wmv"]);
-const AUDIO_EXTS = new Set(["mp3", "wav", "flac", "ogg", "aiff", "m4a", "opus"]);
-const RASTER_EXTS = new Set([
-	"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp", "avif", "svg", "ico",
-]);
-/// Subset of RASTER_EXTS the editor can actually round-trip today
-/// (no AVIF/SVG/ICO yet — they need format-specific decoders).
-const EDITABLE_EXTS = new Set([
-	"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp",
-]);
-const MODEL_EXTS = new Set([
-	"gltf", "glb", "obj", "stl", "ply", "fbx", "usd", "usda", "usdc", "usdz",
-]);
-const BLEND_EXTS = new Set(["blend"]);
-
 export function AssetDetailPage() {
 	const { id: idParam } = useParams();
+	const [searchParams] = useSearchParams();
+	const pathParam = searchParams.get("path");
+	// Ad-hoc mode: addressed by `?path=` instead of an integer id. The file is
+	// described as an ephemeral asset (id < 0) and id-only panels degrade to an
+	// "Add to library" upsell.
+	const ephemeral = pathParam !== null;
 	const navigate = useNavigate();
 	const [asset, setAsset] = useState<Asset | null>(null);
 	const [metadata, setMetadata] = useState<AssetMetadata[]>([]);
@@ -58,6 +60,7 @@ export function AssetDetailPage() {
 	const [diagnosticOpen, setDiagnosticOpen] = useState(false);
 	const [livePath, setLivePath] = useState<string>("");
 	const [modelStats, setModelStats] = useState<ModelStats | null>(null);
+	const [adding, setAdding] = useState(false);
 
 	const ext = asset?.format?.toLowerCase();
 	const absPath = asset ? absPathFor(asset) : "";
@@ -71,16 +74,28 @@ export function AssetDetailPage() {
 
 	useEffect(() => {
 		let cancelled = false;
-		const id = Number(idParam);
-		if (Number.isNaN(id)) {
-			setError("invalid asset id");
-			setLoading(false);
-			return;
-		}
 		setLoading(true);
 		setMediaError(null);
-		Promise.all([api.getAsset(id), api.listAssetMetadata(id)])
-			.then(([a, md]) => {
+		setError(null);
+
+		async function loadAsset(): Promise<{ a: Asset; md: AssetMetadata[] }> {
+			if (ephemeral) {
+				// Ephemeral files have no persisted native metadata (it's keyed
+				// by asset id); skip the lookup and leave the panel as an upsell.
+				const a = await api.describeFile(pathParam as string);
+				return { a, md: [] };
+			}
+			const id = Number(idParam);
+			if (Number.isNaN(id)) throw new Error("invalid asset id");
+			const [a, md] = await Promise.all([
+				api.getAsset(id),
+				api.listAssetMetadata(id),
+			]);
+			return { a, md };
+		}
+
+		loadAsset()
+			.then(({ a, md }) => {
 				if (cancelled) return;
 				setAsset(a);
 				setMetadata(md);
@@ -94,7 +109,7 @@ export function AssetDetailPage() {
 		return () => {
 			cancelled = true;
 		};
-	}, [idParam]);
+	}, [idParam, pathParam, ephemeral]);
 
 	useEffect(() => {
 		if (!asset) {
@@ -102,7 +117,12 @@ export function AssetDetailPage() {
 			return;
 		}
 		let cancelled = false;
-		if (isVideo || isAudio) {
+		// Video/audio always go through the loopback media server (webkit2gtk
+		// won't stream them over asset://). For ephemeral images + models we
+		// route through it too: the file may live outside the asset:// scope
+		// allow-list, and the media server serves any path. Catalog images /
+		// models keep using asset:// (convertFileSrc) where it works fine.
+		if (isVideo || isAudio || (ephemeral && (isImage || isModel))) {
 			void mediaUrl(absPath).then((u) => {
 				if (!cancelled) setLivePath(u);
 			});
@@ -112,7 +132,7 @@ export function AssetDetailPage() {
 		return () => {
 			cancelled = true;
 		};
-	}, [asset, absPath, isVideo, isAudio]);
+	}, [asset, absPath, isVideo, isAudio, isImage, isModel, ephemeral]);
 
 	// `.blend` has no live renderer — Three.js can't load the format and
 	// we don't want a Blender subprocess dependency. The detail-page preview
@@ -150,7 +170,10 @@ export function AssetDetailPage() {
 	// so any grid tile mounted for this asset picks up the fresh PNG on
 	// return without a full library refresh.
 	useEffect(() => {
-		if (!asset || !isModel) return;
+		// Ephemeral files have no catalog row to persist a thumbnail against
+		// (save_model_thumbnail keys by asset id), so skip the regen — the
+		// interactive ModelPreview still renders client-side regardless.
+		if (!asset || !isModel || ephemeral) return;
 		const assetId = asset.id;
 		const assetMtime = asset.mtime;
 		const assetFormat = asset.format;
@@ -164,7 +187,7 @@ export function AssetDetailPage() {
 				/* silent — ModelPreview already surfaces real load errors */
 			}
 		})();
-	}, [asset, absPath, isModel]);
+	}, [asset, absPath, isModel, ephemeral]);
 
 
 	if (loading) {
@@ -206,6 +229,26 @@ export function AssetDetailPage() {
 			setOpenerError(`revealItemInDir failed: ${String(e)}`);
 		}
 	};
+	const handleAddToLibrary = async () => {
+		setOpenerError(null);
+		const folder = asset.root_path;
+		const ok = await confirm({
+			title: "Add to library?",
+			message: `Garnet will add the folder "${folder}" as a library root and index its contents. This is how you tag and keep metadata on this file.`,
+			confirmLabel: "Add to library",
+		});
+		if (!ok) return;
+		setAdding(true);
+		try {
+			const newId = await addPathToLibrary(absPath);
+			// Re-resolve to the real catalog route so tags/metadata light up.
+			navigate(`/asset/${newId}`, { replace: true });
+		} catch (e) {
+			setOpenerError(`Add to library failed: ${String(e)}`);
+		} finally {
+			setAdding(false);
+		}
+	};
 
 	return (
 		<motion.div
@@ -234,11 +277,25 @@ export function AssetDetailPage() {
 						{abbreviatePath(asset.root_path)} / {asset.relative_path}
 					</div>
 				</div>
+				{ephemeral && (
+					<button
+						type="button"
+						className="btn btn-xs btn-primary"
+						onClick={handleAddToLibrary}
+						disabled={adding}
+						title="Add this file's folder to your library so you can tag and index it"
+					>
+						<HiFolderPlus className="size-3.5" />
+						{adding ? "Adding…" : "Add to library"}
+					</button>
+				)}
 				{isEditable && (
 					<button
 						type="button"
 						className="btn btn-xs"
-						onClick={() => navigate(`/edit/${asset.id}`)}
+						onClick={() =>
+							navigate(ephemeral ? ephemeralEditRoute(absPath) : `/edit/${asset.id}`)
+						}
 						title="Open in the editor"
 					>
 						<HiPencilSquare className="size-3.5" />
@@ -399,36 +456,61 @@ export function AssetDetailPage() {
 						</DetailSection>
 					)}
 
-					<DetailSection title="Native Metadata">
-						{metadata.length === 0 ? (
-							<div className="text-xs text-base-content/50">
-								No metadata extracted for this format.
+					{ephemeral ? (
+						<DetailSection title="Tags & Metadata" last>
+							<div className="text-xs text-base-content/60 space-y-2.5">
+								<p>
+									This file isn't in your library, so it can't carry tags or
+									stored metadata yet.
+								</p>
+								<button
+									type="button"
+									className="btn btn-xs btn-primary w-full"
+									onClick={handleAddToLibrary}
+									disabled={adding}
+								>
+									<HiFolderPlus className="size-3.5" />
+									{adding ? "Adding…" : "Add to library to tag"}
+								</button>
 							</div>
-						) : (
-							<dl className="space-y-1 text-xs">
-								{metadata.map((m) => (
-									<div
-										key={`${m.key}-${m.value}`}
-										className="grid grid-cols-[1fr_auto] gap-2"
-									>
-										<dt
-											className="font-mono text-[11px] text-base-content/55 truncate"
-											title={m.key}
-										>
-											{m.key}
-										</dt>
-										<dd className="font-mono text-[11px] truncate" title={m.value}>
-											{m.value}
-										</dd>
+						</DetailSection>
+					) : (
+						<>
+							<DetailSection title="Native Metadata">
+								{metadata.length === 0 ? (
+									<div className="text-xs text-base-content/50">
+										No metadata extracted for this format.
 									</div>
-								))}
-							</dl>
-						)}
-					</DetailSection>
+								) : (
+									<dl className="space-y-1 text-xs">
+										{metadata.map((m) => (
+											<div
+												key={`${m.key}-${m.value}`}
+												className="grid grid-cols-[1fr_auto] gap-2"
+											>
+												<dt
+													className="font-mono text-[11px] text-base-content/55 truncate"
+													title={m.key}
+												>
+													{m.key}
+												</dt>
+												<dd
+													className="font-mono text-[11px] truncate"
+													title={m.value}
+												>
+													{m.value}
+												</dd>
+											</div>
+										))}
+									</dl>
+								)}
+							</DetailSection>
 
-					<DetailSection title="Garnet Metadata" last>
-						<GarnetMetadataEditor assetId={asset.id} />
-					</DetailSection>
+							<DetailSection title="Garnet Metadata" last>
+								<GarnetMetadataEditor assetId={asset.id} />
+							</DetailSection>
+						</>
+					)}
 				</aside>
 			</div>
 

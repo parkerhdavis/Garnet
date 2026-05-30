@@ -6,10 +6,11 @@
 
 import { motion } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
-import { HiFolderPlus, HiXMark } from "react-icons/hi2";
+import { HiDocumentArrowUp, HiFolderPlus, HiXMark } from "react-icons/hi2";
 import { AssetGrid } from "@/components/AssetGrid";
 import { AssetList } from "@/components/AssetList";
 import { FilterBar } from "@/components/FilterBar";
+import { pickFileToPreview } from "@/lib/ephemeral";
 import type { Asset } from "@/lib/tauri";
 import { useAssetsStore } from "@/stores/assetsStore";
 import { useLibraryStore } from "@/stores/libraryStore";
@@ -24,6 +25,10 @@ export function LibraryBrowser() {
 
 	function openAsset(asset: Asset) {
 		navigate(`/asset/${asset.id}`);
+	}
+
+	function handleOpenFile() {
+		void pickFileToPreview((to) => navigate(to));
 	}
 
 	return (
@@ -54,7 +59,7 @@ export function LibraryBrowser() {
 
 			<div className="flex-1 min-h-0 overflow-auto">
 				{noRoots ? (
-					<EmptyNoRoots />
+					<EmptyNoRoots onOpenFile={handleOpenFile} />
 				) : loading && assets.length === 0 ? (
 					<div className="p-12 text-center text-base-content/60 text-sm">Loading…</div>
 				) : assets.length === 0 ? (
@@ -75,7 +80,7 @@ export function LibraryBrowser() {
 	);
 }
 
-function EmptyNoRoots() {
+function EmptyNoRoots({ onOpenFile }: { onOpenFile: () => void }) {
 	return (
 		<div className="p-12">
 			<div className="card bg-base-100 border border-base-300 max-w-xl mx-auto">
@@ -83,12 +88,18 @@ function EmptyNoRoots() {
 					<h2 className="card-title">No library roots yet</h2>
 					<p className="text-base-content/70 max-w-md">
 						Garnet indexes files where they already live. Add a folder in Settings to
-						start cataloging.
+						start cataloging — or open a single file ad-hoc without adding it.
 					</p>
-					<Link to="/settings" className="btn btn-primary mt-4">
-						<HiFolderPlus className="size-4" />
-						Go to Settings
-					</Link>
+					<div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+						<Link to="/settings" className="btn btn-primary">
+							<HiFolderPlus className="size-4" />
+							Go to Settings
+						</Link>
+						<button type="button" className="btn btn-ghost" onClick={onOpenFile}>
+							<HiDocumentArrowUp className="size-4" />
+							Open a file
+						</button>
+					</div>
 				</div>
 			</div>
 		</div>
