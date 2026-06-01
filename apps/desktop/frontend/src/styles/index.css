@@ -13,14 +13,22 @@
  * — secondary, info, success, warning, error, radii, sizes — falls back
  * to daisyUI's default so we benefit from future daisyUI tuning. */
 
+/* Accent hue (OKLCH degrees). The default is garnet (28); the frontend swaps
+ * it per the user's chosen accent preset (see lib/accent.ts + useApplyAccent).
+ * primary/accent below read it, so changing it rotates the whole accent family
+ * while keeping lightness/chroma — and the warm-neutral backgrounds — fixed. */
+:root {
+	--garnet-hue: 28;
+}
+
 [data-theme="dark"] {
 	--color-base-100: oklch(0.205 0.003 60);
 	--color-base-200: oklch(0.15 0.004 60);
 	--color-base-300: oklch(0.275 0.005 60);
 	--color-base-content: oklch(0.91 0.004 60);
-	--color-primary: oklch(0.535 0.18 28);
+	--color-primary: oklch(0.535 0.18 var(--garnet-hue));
 	--color-primary-content: oklch(0.985 0 0);
-	--color-accent: oklch(0.31 0.14 28); /* literal #560000 */
+	--color-accent: oklch(0.31 0.14 var(--garnet-hue)); /* default ≈ #560000 */
 	--color-accent-content: oklch(0.985 0 0);
 	--color-neutral: oklch(0.18 0.004 60);
 	--color-neutral-content: oklch(0.88 0.004 60);
@@ -31,12 +39,21 @@
 	--color-base-200: oklch(0.948 0.004 60);
 	--color-base-300: oklch(0.865 0.005 60);
 	--color-base-content: oklch(0.225 0.005 60);
-	--color-primary: oklch(0.31 0.14 28); /* literal #560000 */
+	--color-primary: oklch(0.31 0.14 var(--garnet-hue)); /* default ≈ #560000 */
 	--color-primary-content: oklch(0.985 0 0);
-	--color-accent: oklch(0.42 0.165 28);
+	--color-accent: oklch(0.42 0.165 var(--garnet-hue));
 	--color-accent-content: oklch(0.985 0 0);
 	--color-neutral: oklch(0.225 0.005 60);
 	--color-neutral-content: oklch(0.94 0.003 60);
+}
+
+/* Brand gem recoloured to the live accent: the white-on-transparent splash PNG
+ * is used as an alpha mask and filled with the current primary colour, so the
+ * logo follows the accent preset with no per-preset image assets. */
+.brand-mark {
+	background-color: var(--color-primary);
+	-webkit-mask: url(/garnet-splash-dark.png) center / contain no-repeat;
+	mask: url(/garnet-splash-dark.png) center / contain no-repeat;
 }
 
 /* ─── Splash screen icon animation ──────────────────────────────────── */

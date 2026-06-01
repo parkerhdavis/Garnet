@@ -8,7 +8,6 @@ import {
 	HiFolder,
 	HiInformationCircle,
 	HiSquares2X2,
-	HiSwatch,
 } from "react-icons/hi2";
 import { StubPage } from "@/pages/StubPage";
 import { usePrefsStore } from "@/stores/prefsStore";
@@ -32,16 +31,6 @@ export function SourcesIndexPage() {
 			icon={HiFolder}
 			description="Pinned source folders for quick navigation. Pin a library root from
                 Settings → Library Roots to surface it here."
-		/>
-	);
-}
-
-export function SettingsAppearancePage() {
-	return (
-		<StubPage
-			title="Appearance"
-			icon={HiSwatch}
-			description="Theme, accent color, grid density, and font size. Phase 2."
 		/>
 	);
 }

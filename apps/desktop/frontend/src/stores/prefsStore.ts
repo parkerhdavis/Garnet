@@ -6,6 +6,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { DEFAULT_ACCENT_ID } from "@/lib/accent";
 import type { AnimatedImagesBucket } from "@/lib/typeFilters";
 
 /** Default save behavior for the image editor.
@@ -37,6 +38,9 @@ type PrefsState = {
 	zoomIn: () => void;
 	zoomOut: () => void;
 	resetZoom: () => void;
+	/** Chosen accent-color preset id (see lib/accent.ts). */
+	accentId: string;
+	setAccentId: (id: string) => void;
 };
 
 export const usePrefsStore = create<PrefsState>()(
@@ -51,6 +55,8 @@ export const usePrefsStore = create<PrefsState>()(
 			zoomIn: () => set((s) => ({ zoom: clampZoom(s.zoom + ZOOM_STEP) })),
 			zoomOut: () => set((s) => ({ zoom: clampZoom(s.zoom - ZOOM_STEP) })),
 			resetZoom: () => set({ zoom: 1 }),
+			accentId: DEFAULT_ACCENT_ID,
+			setAccentId: (accentId) => set({ accentId }),
 		}),
 		{ name: "garnet-prefs" },
 	),
