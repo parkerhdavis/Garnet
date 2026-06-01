@@ -96,6 +96,11 @@ type MusicState = {
 	repeat: RepeatMode;
 	playbackStatus: PlaybackStatus;
 	queueOpen: boolean;
+	// Whether the global player bar is collapsed (hidden). Collapsing only hides
+	// the UI — native playback keeps running. Reset to false whenever playback
+	// (re)starts so the bar comes back on its own (see playTrack/playAlbum and
+	// the resume effect in PlayerBar).
+	playerCollapsed: boolean;
 
 	load: (scope: MusicScope) => Promise<void>;
 	setView: (v: MusicView) => void;
@@ -107,6 +112,7 @@ type MusicState = {
 	toggleShuffle: () => void;
 	cycleRepeat: () => void;
 	toggleQueue: () => void;
+	setPlayerCollapsed: (collapsed: boolean) => void;
 	next: () => void;
 	prev: () => void;
 	jumpTo: (orderPos: number) => void;
@@ -132,6 +138,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 	repeat: "off",
 	playbackStatus: "idle",
 	queueOpen: false,
+	playerCollapsed: false,
 
 	load: async (scope) => {
 		set({ loading: true, error: null });
@@ -154,6 +161,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 		const i = tracks.findIndex((t) => t.asset_id === track.asset_id);
 		set({
 			playbackWorkspaceId: get().activeWorkspaceId,
+			playerCollapsed: false,
 			...buildPlayback(tracks, i < 0 ? 0 : i, get().shuffle),
 		});
 	},
@@ -162,6 +170,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 		set({
 			shuffle: false,
 			playbackWorkspaceId: get().activeWorkspaceId,
+			playerCollapsed: false,
 			...buildPlayback(album.tracks, 0, false),
 		}),
 
@@ -169,6 +178,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 		set({
 			shuffle: true,
 			playbackWorkspaceId: get().activeWorkspaceId,
+			playerCollapsed: false,
 			...buildPlayback(album.tracks, 0, true),
 		}),
 
@@ -201,6 +211,14 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 	},
 
 	toggleQueue: () => set((s) => ({ queueOpen: !s.queueOpen })),
+
+	// Collapsing also closes the queue (it anchors to the now-hidden bar).
+	setPlayerCollapsed: (collapsed) =>
+		set(
+			collapsed
+				? { playerCollapsed: true, queueOpen: false }
+				: { playerCollapsed: false },
+		),
 
 	next: () => {
 		const { order, orderPos, repeat, queue } = get();
