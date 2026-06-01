@@ -11,13 +11,14 @@ import {
 	useNavigate,
 } from "react-router-dom";
 import { api, type ScanReport } from "@/lib/tauri";
-import { pickFileToPreview } from "@/lib/ephemeral";
+import { openPathAdHoc, pickFileToPreview } from "@/lib/ephemeral";
 import { emitThumbnailReady, type ThumbnailReady } from "@/lib/thumbnailBus";
 import { useBgTasksStore } from "@/stores/bgTasksStore";
 import { useBootStore } from "@/stores/bootStore";
 import { BatchRenameDialogRoot } from "@/components/BatchRenameDialog";
 import { ConfirmDialogRoot } from "@/components/ConfirmDialog";
 import { ContextMenuRoot } from "@/components/ContextMenu";
+import { FileDropZone } from "@/components/FileDropZone";
 import { Layout } from "@/components/Layout";
 import { PromptDialogRoot } from "@/components/PromptDialog";
 import { useCommandPaletteStore } from "@/stores/commandPaletteStore";
@@ -62,6 +63,7 @@ export default function App() {
 		<ErrorBoundary>
 			<HashRouter>
 				<RouteMemory />
+				<LaunchFileOpener />
 				<Routes>
 					<Route element={<Layout />}>
 						<Route index element={<LibraryPage />} />
@@ -120,6 +122,7 @@ export default function App() {
 			<ConfirmDialogRoot />
 			<PromptDialogRoot />
 			<BatchRenameDialogRoot />
+			<FileDropZone />
 
 			{!splashGone && <Splash fadeOut={loaded} />}
 		</ErrorBoundary>
@@ -521,6 +524,34 @@ function usePrefsRefreshBridge() {
 		}
 		void useAssetsStore.getState().refresh();
 	}, [bucket, first]);
+}
+
+/// Routes a file handed to Garnet by the OS into an ad-hoc preview. Two
+/// sources: (1) the initial launch argv — when the app is opened *by*
+/// double-clicking a file / "Open with Garnet", the backend stashes the path
+/// and we drain it once on mount; (2) the `open-file` event the single-instance
+/// plugin emits when a *second* "Open with Garnet" arrives while Garnet is
+/// already running. Lives inside HashRouter for `navigate`; runs after
+/// RouteMemory so an opened file wins over the restored last route.
+function LaunchFileOpener() {
+	const navigate = useNavigate();
+	useEffect(() => {
+		void api
+			.takePendingOpen()
+			.then((path) => {
+				if (path) openPathAdHoc(path, navigate);
+			})
+			.catch(() => {});
+
+		let unlisten: (() => void) | undefined;
+		void listen<string>("open-file", (e) => {
+			if (e.payload) openPathAdHoc(e.payload, navigate);
+		}).then((u) => {
+			unlisten = u;
+		});
+		return () => unlisten?.();
+	}, [navigate]);
+	return null;
 }
 
 /// Remembers the last visited route and restores it on the next launch, so the

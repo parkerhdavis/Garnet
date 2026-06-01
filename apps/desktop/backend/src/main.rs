@@ -70,7 +70,7 @@ use workspaces::{
 	create_workspace, delete_workspace, list_workspaces, rename_workspace, reorder_workspaces,
 	update_workspace_config,
 };
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tracing_subscriber::EnvFilter;
 
 pub struct AppState {
@@ -81,6 +81,28 @@ pub struct AppState {
 #[tauri::command]
 fn get_media_port(state: tauri::State<AppState>) -> u16 {
 	state.media_port
+}
+
+/// Holds a file path Garnet was launched with — e.g. via "Open with Garnet" /
+/// double-clicking a file in the file manager. Stashed at startup (see
+/// `file_arg`) and drained once by the frontend on mount. `None` on a normal
+/// launch.
+struct PendingOpen(Mutex<Option<String>>);
+
+#[tauri::command]
+fn take_pending_open(state: tauri::State<PendingOpen>) -> Option<String> {
+	state.0.lock().ok().and_then(|mut g| g.take())
+}
+
+/// Pick the first launch argument that names an existing file — the path the OS
+/// hands us for a file-association / "Open with Garnet" launch. Skips the binary
+/// path (argv[0]) and any flags, so a normal launch (or `cargo run`) yields
+/// `None`.
+fn file_arg(args: &[String]) -> Option<String> {
+	args.iter()
+		.skip(1)
+		.find(|a| !a.starts_with('-') && std::path::Path::new(a).is_file())
+		.cloned()
 }
 
 /// Reveal the main window. It is created hidden (`visible: false` in
@@ -184,13 +206,31 @@ fn main() {
 		}
 	};
 
+	// The file path (if any) Garnet was launched with — drained by the frontend
+	// once it mounts. Captured before the builder so the very first launch's
+	// argv isn't lost.
+	let pending_open = file_arg(&std::env::args().collect::<Vec<_>>());
+
 	let timings_for_setup = Arc::clone(&timings);
 	tauri::Builder::default()
+		// Must be the first plugin (per the plugin's docs). When a second
+		// "Open with Garnet" fires while we're running, route its file into the
+		// existing window instead of spawning a duplicate process.
+		.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+			if let Some(path) = file_arg(&argv) {
+				let _ = app.emit("open-file", path);
+			}
+			if let Some(window) = app.get_webview_window("main") {
+				let _ = window.show();
+				let _ = window.set_focus();
+			}
+		}))
 		.plugin(tauri_plugin_dialog::init())
 		.plugin(tauri_plugin_fs::init())
 		.plugin(tauri_plugin_opener::init())
 		.manage(AppState { db: Mutex::new(db), media_port })
 		.manage(StartupTimingsState(Arc::clone(&timings)))
+		.manage(PendingOpen(Mutex::new(pending_open)))
 		.setup(move |app| {
 			let t = timings_for_setup;
 
@@ -319,6 +359,7 @@ fn main() {
 			search_assets,
 			get_asset,
 			describe_file,
+			take_pending_open,
 			list_asset_formats,
 			find_duplicates,
 			rename_asset,

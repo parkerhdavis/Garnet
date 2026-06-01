@@ -20,7 +20,7 @@
 				"minWidth": 1000,
 				"minHeight": 700,
 				"resizable": true,
-				"dragDropEnabled": false,
+				"dragDropEnabled": true,
 				"visible": false,
 				"backgroundColor": "#0c0b09"
 			}
@@ -84,6 +84,35 @@
 		"active": true,
 		"targets": "all",
 		"licenseFile": "../../../LICENSE.md",
+		"fileAssociations": [
+			{
+				"ext": ["png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp", "avif", "svg", "ico"],
+				"name": "Image",
+				"description": "Image",
+				"role": "Viewer",
+				"mimeType": "image/png,image/jpeg,image/gif,image/bmp,image/tiff,image/webp,image/avif,image/svg+xml,image/x-icon"
+			},
+			{
+				"ext": ["mp4", "mov", "mkv", "avi", "webm", "m4v", "wmv"],
+				"name": "Video",
+				"description": "Video",
+				"role": "Viewer",
+				"mimeType": "video/mp4,video/quicktime,video/x-matroska,video/x-msvideo,video/webm,video/x-ms-wmv"
+			},
+			{
+				"ext": ["mp3", "wav", "flac", "ogg", "aiff", "m4a", "opus"],
+				"name": "Audio",
+				"description": "Audio",
+				"role": "Viewer",
+				"mimeType": "audio/mpeg,audio/wav,audio/flac,audio/ogg,audio/aiff,audio/mp4,audio/opus"
+			},
+			{
+				"ext": ["gltf", "glb", "obj", "stl", "ply", "fbx", "usd", "usda", "usdc", "usdz", "blend"],
+				"name": "3D Model",
+				"description": "3D model",
+				"role": "Viewer"
+			}
+		],
 		"icon": [
 			"../../../resources/icons/32x32.png",
 			"../../../resources/icons/128x128.png",

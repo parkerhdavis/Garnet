@@ -14,6 +14,7 @@ import {
 	HiCog6Tooth,
 	HiCommandLine,
 	HiCube,
+	HiDocument,
 	HiDocumentArrowUp,
 	HiDocumentDuplicate,
 	HiEllipsisHorizontalCircle,
@@ -30,12 +31,13 @@ import {
 	HiSwatch,
 } from "react-icons/hi2";
 import { api, type Asset } from "@/lib/tauri";
-import { pickFileToPreview } from "@/lib/ephemeral";
+import { openPathAdHoc, pickFileToPreview } from "@/lib/ephemeral";
 import { abbreviatePath, basename } from "@/lib/paths";
 import { workspaceTypeMeta } from "@/lib/workspaceTypes";
 import type { PaletteItemContribution } from "@/plugins/types";
 import { useCommandPaletteStore } from "@/stores/commandPaletteStore";
 import { enabledPaletteSources, usePluginsStore } from "@/stores/pluginsStore";
+import { useRecentFilesStore } from "@/stores/recentFilesStore";
 import { useWorkspacesStore } from "@/stores/workspacesStore";
 
 const ASSET_LIMIT = 8;
@@ -54,6 +56,7 @@ export function CommandPalette() {
 	const close = useCommandPaletteStore((s) => s.close);
 	const navigate = useNavigate();
 	const workspaces = useWorkspacesStore((s) => s.workspaces);
+	const recentFiles = useRecentFilesStore((s) => s.recents);
 	// Subscribe so enabledPaletteSources() re-resolves when a plugin is toggled.
 	const enabledIds = usePluginsStore((s) => s.enabledIds);
 
@@ -251,8 +254,19 @@ export function CommandPalette() {
 					void pickFileToPreview((to) => navigate(to));
 				},
 			},
+			...recentFiles.map((r) => ({
+				key: `recent-${r.path}`,
+				group: "Recent files",
+				label: r.name,
+				sublabel: abbreviatePath(r.path),
+				icon: HiDocument,
+				run: () => {
+					close();
+					openPathAdHoc(r.path, navigate);
+				},
+			})),
 		];
-	}, [navigate, close]);
+	}, [navigate, close, recentFiles]);
 
 	const items = useMemo<Item[]>(() => {
 		const q = query.trim().toLowerCase();

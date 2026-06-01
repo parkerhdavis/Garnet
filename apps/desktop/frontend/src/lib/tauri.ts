@@ -273,6 +273,10 @@ export const api = {
 	/// flow; `root_path`/`relative_path` are the file's parent dir + name so
 	/// `absPathFor` reconstructs the real path.
 	describeFile: (path: string) => invoke<Asset>("describe_file", { path }),
+	/// Drain the file path Garnet was launched with (double-click / "Open
+	/// with Garnet"), if any. Returns it once then clears it. Null on a normal
+	/// launch.
+	takePendingOpen: () => invoke<string | null>("take_pending_open"),
 	listAssetFormats: (rootId: number | null) =>
 		invoke<FormatCount[]>("list_asset_formats", { rootId }),
 	listAssetMetadata: (assetId: number) =>
