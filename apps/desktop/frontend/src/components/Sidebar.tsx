@@ -220,11 +220,9 @@ export function Sidebar() {
 				to="/"
 				className="px-4 py-3.5 border-b border-base-300 flex items-center gap-2.5 hover:bg-base-200/60 transition-colors"
 			>
-				<img
-					src="/garnet-icon.png"
-					alt=""
-					className="size-7 rounded-md select-none"
-					draggable={false}
+				<div
+					className="brand-mark size-7 shrink-0 select-none"
+					aria-hidden="true"
 				/>
 				<div className="min-w-0">
 					<div className="text-base font-semibold tracking-tight leading-none">

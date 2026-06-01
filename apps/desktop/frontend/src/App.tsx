@@ -32,13 +32,14 @@ import { SettingsPage } from "@/pages/SettingsPage";
 import { WorkspaceRoute } from "@/pages/WorkspaceRoute";
 import {
 	AppAboutPage,
-	SettingsAppearancePage,
 	SettingsGeneralPage,
 	WorkspacesPage,
 } from "@/pages/stubs";
+import { SettingsAppearancePage } from "@/pages/SettingsAppearancePage";
 import { useAssetsStore } from "@/stores/assetsStore";
 import { useLibraryStore } from "@/stores/libraryStore";
 import { usePrefsStore } from "@/stores/prefsStore";
+import { accentHue } from "@/lib/accent";
 
 // Min dwell before fade-out begins. The fade itself runs for SPLASH_FADE_MS
 // (must match the `duration-[Nms]` utility on the splash overlay below).
@@ -51,6 +52,7 @@ export default function App() {
 	useThumbnailReadyBridge();
 	useGlobalHotkeys();
 	useApplyZoom();
+	useApplyAccent();
 	usePrefsRefreshBridge();
 
 	return (
@@ -465,6 +467,20 @@ function useApplyZoom() {
 			.setZoom(zoom)
 			.catch(() => {});
 	}, [zoom]);
+}
+
+/// Applies the chosen accent preset by writing its hue to `--garnet-hue` on the
+/// root element — on mount (restoring the persisted choice) and on every
+/// change. The theme's primary/accent colors read that variable, so the whole
+/// accent family (and the masked brand logo) recolors live.
+function useApplyAccent() {
+	const accentId = usePrefsStore((s) => s.accentId);
+	useEffect(() => {
+		document.documentElement.style.setProperty(
+			"--garnet-hue",
+			String(accentHue(accentId)),
+		);
+	}, [accentId]);
 }
 
 /// Re-runs the assets query whenever the user toggles a preference that
