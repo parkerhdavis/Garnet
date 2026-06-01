@@ -49,6 +49,7 @@ export function AssetGrid({ assets, onOpen }: Props) {
 						)}
 						<AssetTile
 							asset={asset}
+							allAssets={assets}
 							orderedIds={orderedIds}
 							delay={delay}
 							onOpen={onOpen}
@@ -78,11 +79,13 @@ function GroupHeader({
 
 function AssetTile({
 	asset,
+	allAssets,
 	orderedIds,
 	delay,
 	onOpen,
 }: {
 	asset: Asset;
+	allAssets: Asset[];
 	orderedIds: number[];
 	delay: number;
 	onOpen: (asset: Asset) => void;
@@ -111,7 +114,7 @@ function AssetTile({
 		// operates on a state the user can see.
 		const sel = useSelectionStore.getState();
 		if (!sel.ids.has(asset.id)) sel.replace(asset.id);
-		openContextMenu(e, buildAssetContextMenu(asset));
+		openContextMenu(e, buildAssetContextMenu(asset, allAssets));
 	};
 
 	return (

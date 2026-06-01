@@ -230,6 +230,28 @@ export type TrashResult = {
 	original_abs_path: string;
 };
 
+export type CopyResult = {
+	asset_id: number;
+	source_abs_path: string;
+	copied_abs_path: string;
+	/** True if the copy landed inside a registered library root (so it'll be
+	 *  indexed as a new asset). */
+	still_in_library: boolean;
+};
+
+/** One (asset → new bare filename) instruction for a batch rename. */
+export type RenamePair = {
+	asset_id: number;
+	new_name: string;
+};
+
+/** A set of byte-identical assets (same content hash). */
+export type DuplicateGroup = {
+	content_hash: string;
+	size: number | null;
+	assets: Asset[];
+};
+
 export const api = {
 	loadSettings: () => invoke<AppSettings>("load_settings"),
 	saveSettings: (settings: AppSettings) =>
@@ -358,14 +380,27 @@ export const api = {
 	getMediaPort: () => invoke<number>("get_media_port"),
 	renameAsset: (assetId: number, newName: string) =>
 		invoke<AssetOpResult>("rename_asset", { assetId, newName }),
+	/// Rename a batch of assets in one collision-safe pass. The frontend
+	/// resolves the final names (e.g. from a token pattern) and hands the
+	/// (id → name) pairs here.
+	renameAssets: (renames: RenamePair[]) =>
+		invoke<AssetOpResult[]>("rename_assets", { renames }),
 	moveAsset: (assetId: number, destDir: string) =>
 		invoke<AssetOpResult>("move_asset", { assetId, destDir }),
 	moveFile: (fromAbsPath: string, destDir: string) =>
 		invoke<string>("move_file", { fromAbsPath, destDir }),
+	/// Copy an asset's file into another directory (original untouched).
+	copyAsset: (assetId: number, destDir: string) =>
+		invoke<CopyResult>("copy_asset", { assetId, destDir }),
 	trashAsset: (assetId: number) =>
 		invoke<TrashResult>("trash_asset", { assetId }),
+	/// Trash an arbitrary file by path (no asset row needed). Backs copy-undo.
+	trashFile: (absPath: string) =>
+		invoke<TrashResult>("trash_file", { absPath }),
 	restoreFromTrash: (trashPath: string, destinationAbsPath: string) =>
 		invoke<void>("restore_from_trash", { trashPath, destinationAbsPath }),
+	/// Every group of byte-identical assets (shared content hash, count ≥ 2).
+	findDuplicates: () => invoke<DuplicateGroup[]>("find_duplicates"),
 };
 
 /// Construct a URL for inline `<video>` / `<audio>` playback. Goes through

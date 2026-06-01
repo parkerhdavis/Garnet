@@ -47,6 +47,27 @@ pub fn trash_dir() -> anyhow::Result<PathBuf> {
 	Ok(dir)
 }
 
+/// Move a file on disk into Garnet's trash directory, returning the path it now
+/// lives at. The trashed name is prefixed with a unix-nanos timestamp so
+/// repeated trashings of the same filename never collide and stay
+/// chronologically sortable in the file manager. Pure filesystem — the caller
+/// owns any DB bookkeeping.
+fn move_to_trash(original: &Path) -> anyhow::Result<PathBuf> {
+	let trash = trash_dir()?;
+	let filename = original
+		.file_name()
+		.map(|s| s.to_string_lossy().to_string())
+		.unwrap_or_else(|| "asset".into());
+	let nanos = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.map(|d| d.as_nanos())
+		.unwrap_or(0);
+	let trash_path = trash.join(format!("{nanos}-{filename}"));
+	std::fs::rename(original, &trash_path)
+		.with_context(|| format!("moving {original:?} into trash"))?;
+	Ok(trash_path)
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AssetOpResult {
 	pub asset_id: i64,
@@ -317,22 +338,7 @@ pub fn trash_asset(
 		lookup_asset(&conn, asset_id).map_err(stringify)?;
 	let original = join_abs(&root_path, &relative_path);
 
-	let trash = trash_dir().map_err(|e| format!("trash dir: {e}"))?;
-	let filename = original
-		.file_name()
-		.map(|s| s.to_string_lossy().to_string())
-		.unwrap_or_else(|| "asset".into());
-	// Unique name to avoid collisions when the same filename is trashed twice.
-	// `<unix_nanos>-<filename>` is short, sorts chronologically, and stays
-	// human-readable in the file manager.
-	let nanos = std::time::SystemTime::now()
-		.duration_since(std::time::UNIX_EPOCH)
-		.map(|d| d.as_nanos())
-		.unwrap_or(0);
-	let trash_path = trash.join(format!("{nanos}-{filename}"));
-
-	std::fs::rename(&original, &trash_path)
-		.map_err(|e| format!("trash failed: {e}"))?;
+	let trash_path = move_to_trash(&original).map_err(|e| format!("trash failed: {e}"))?;
 
 	conn.execute("DELETE FROM assets WHERE id = ?1", [asset_id])
 		.map_err(stringify)?;
@@ -376,6 +382,242 @@ pub fn restore_from_trash(
 		.map_err(|e| format!("restore failed: {e}"))?;
 	tracing::info!("restored trashed file {:?} -> {:?}", from, to);
 	Ok(())
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CopyResult {
+	pub asset_id: i64,
+	/// Where the source asset lives on disk (unchanged by the copy).
+	pub source_abs_path: String,
+	/// Where the new copy was written.
+	pub copied_abs_path: String,
+	/// True if the copy landed inside a registered library root, so the
+	/// watcher will index it as a new asset. False when copied outside every
+	/// root (the file exists but Garnet won't track it).
+	pub still_in_library: bool,
+}
+
+/// Copy an asset's file into another directory, preserving the filename. The
+/// original is left untouched. The DB is not modified here — if the copy lands
+/// inside a registered root, the filesystem watcher indexes it as a new asset
+/// on its own; the returned `copied_abs_path` lets the caller wire an undo that
+/// trashes the copy.
+#[tauri::command]
+pub fn copy_asset(
+	state: State<AppState>,
+	asset_id: i64,
+	dest_dir: String,
+) -> Result<CopyResult, String> {
+	tracing::info!("copy_asset request: asset_id={} dest_dir={:?}", asset_id, dest_dir);
+	let conn = state.db.lock().map_err(stringify)?;
+	let (_root_id, root_path, relative_path) =
+		lookup_asset(&conn, asset_id).map_err(stringify)?;
+	let src = join_abs(&root_path, &relative_path);
+
+	let dest_canonical = PathBuf::from(&dest_dir)
+		.canonicalize()
+		.map_err(|e| format!("could not resolve destination {dest_dir:?}: {e}"))?;
+	if !dest_canonical.is_dir() {
+		return Err(format!("{dest_canonical:?} is not a directory"));
+	}
+
+	let filename = Path::new(&relative_path)
+		.file_name()
+		.ok_or_else(|| "asset has no filename".to_string())?;
+	let dest = dest_canonical.join(filename);
+	if dest == src {
+		return Err("Destination is the asset's current folder".into());
+	}
+	if dest.exists() {
+		return Err(format!(
+			"A file named “{}” already exists in the destination",
+			filename.to_string_lossy()
+		));
+	}
+
+	let still_in_library = find_containing_root(&conn, &dest_canonical)
+		.map_err(stringify)?
+		.is_some();
+
+	std::fs::copy(&src, &dest).map_err(|e| format!("copy failed: {e}"))?;
+	tracing::info!("copied asset id={} {:?} -> {:?}", asset_id, src, dest);
+
+	Ok(CopyResult {
+		asset_id,
+		source_abs_path: src.to_string_lossy().to_string(),
+		copied_abs_path: dest.to_string_lossy().to_string(),
+		still_in_library,
+	})
+}
+
+/// Move an arbitrary file (by absolute path, no `assets` row reference) into
+/// Garnet's trash directory. Used to undo a copy — the copied file may have
+/// been indexed as a new asset by the time undo runs, so we address it by path
+/// rather than id; the watcher's rescan drops any row that pointed at it.
+#[tauri::command]
+pub fn trash_file(abs_path: String) -> Result<TrashResult, String> {
+	tracing::info!("trash_file request: abs_path={:?}", abs_path);
+	let original = PathBuf::from(&abs_path);
+	if !original.exists() {
+		return Err(format!("file no longer exists: {original:?}"));
+	}
+	let trash_path = move_to_trash(&original).map_err(|e| format!("trash failed: {e}"))?;
+	tracing::info!("trashed file {:?} -> {:?}", original, trash_path);
+	Ok(TrashResult {
+		trash_path: trash_path.to_string_lossy().to_string(),
+		original_abs_path: original.to_string_lossy().to_string(),
+	})
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RenamePair {
+	pub asset_id: i64,
+	/// Bare target filename — no path separators. The asset stays in its
+	/// current directory.
+	pub new_name: String,
+}
+
+/// Rename a batch of assets in place (each keeps its parent directory). Powers
+/// the multi-select "Rename N items…" flow: the frontend computes the final
+/// names from a token pattern (so it can show a live preview) and hands the
+/// resolved (id → name) pairs here.
+///
+/// Collision-safe in two phases: every source is first moved aside to a
+/// unique temp name in its own directory, then each temp is moved to its final
+/// name. This lets targets reference names currently held by other sources in
+/// the same batch (e.g. a cyclic `a→b`, `b→a` swap, or a `{name}_{index}`
+/// renumber) without a mid-flight clash. Targets are validated up front: no two
+/// may resolve to the same path, and a target may pre-exist on disk only if it
+/// belongs to a source in this batch.
+#[tauri::command]
+pub fn rename_assets(
+	state: State<AppState>,
+	renames: Vec<RenamePair>,
+) -> Result<Vec<AssetOpResult>, String> {
+	let conn = state.db.lock().map_err(stringify)?;
+	rename_assets_impl(&conn, &renames)
+}
+
+/// Core of [`rename_assets`], split out so it can be tested against an
+/// in-memory DB + tempdir without the Tauri `State` wrapper.
+pub fn rename_assets_impl(
+	conn: &rusqlite::Connection,
+	renames: &[RenamePair],
+) -> Result<Vec<AssetOpResult>, String> {
+	tracing::info!("rename_assets request: {} items", renames.len());
+	if renames.is_empty() {
+		return Ok(Vec::new());
+	}
+
+	struct Plan {
+		asset_id: i64,
+		old_abs: PathBuf,
+		new_abs: PathBuf,
+		new_relative: String,
+		temp_abs: PathBuf,
+		temp_relative: String,
+	}
+
+	let nanos = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.map(|d| d.as_nanos())
+		.unwrap_or(0);
+
+	// Phase 0 — resolve and validate every rename before touching the disk.
+	let mut plans: Vec<Plan> = Vec::with_capacity(renames.len());
+	let mut sources: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+	let mut targets: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+	for (i, r) in renames.iter().enumerate() {
+		let new_name = r.new_name.trim().to_string();
+		if new_name.is_empty() {
+			return Err("New name cannot be empty".into());
+		}
+		if new_name.contains('/') || new_name.contains('\\') {
+			return Err(format!("“{new_name}” cannot contain path separators"));
+		}
+		if new_name == "." || new_name == ".." {
+			return Err(format!("“{new_name}” is not a valid name"));
+		}
+		let (_root_id, root_path, relative_path) =
+			lookup_asset(conn, r.asset_id).map_err(stringify)?;
+		let old_abs = join_abs(&root_path, &relative_path);
+		let parent_rel = Path::new(&relative_path)
+			.parent()
+			.map(|p| p.to_string_lossy().to_string())
+			.unwrap_or_default();
+		let new_relative = if parent_rel.is_empty() {
+			new_name.clone()
+		} else {
+			format!("{parent_rel}/{new_name}")
+		};
+		let new_abs = join_abs(&root_path, &new_relative);
+		if !targets.insert(new_abs.clone()) {
+			return Err(format!(
+				"Two files would both be named “{}”",
+				new_abs.to_string_lossy()
+			));
+		}
+		let temp_name = format!(".garnet-rename-{nanos}-{i}");
+		let temp_relative = if parent_rel.is_empty() {
+			temp_name.clone()
+		} else {
+			format!("{parent_rel}/{temp_name}")
+		};
+		let temp_abs = old_abs.with_file_name(&temp_name);
+		sources.insert(old_abs.clone());
+		plans.push(Plan {
+			asset_id: r.asset_id,
+			old_abs,
+			new_abs,
+			new_relative,
+			temp_abs,
+			temp_relative,
+		});
+	}
+	// A target may already exist on disk only if it's one of the sources we're
+	// about to move out of the way.
+	for t in &targets {
+		if t.exists() && !sources.contains(t) {
+			return Err(format!(
+				"A file named “{}” already exists here",
+				t.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+			));
+		}
+	}
+
+	// Phase 1 — move every source aside to its temp name, and point its row at
+	// the (unique) temp path. Updating the row here too keeps the DB's
+	// `UNIQUE(root_id, relative_path)` from tripping in phase 2 when a target
+	// name is still held by another row in the batch (e.g. an a↔b swap).
+	for p in &plans {
+		std::fs::rename(&p.old_abs, &p.temp_abs)
+			.map_err(|e| format!("rename failed for {:?}: {e}", p.old_abs))?;
+		conn.execute(
+			"UPDATE assets SET relative_path = ?1 WHERE id = ?2",
+			params![p.temp_relative, p.asset_id],
+		)
+		.map_err(stringify)?;
+	}
+	// Phase 2 — move each temp into its final name and update the row.
+	let mut results = Vec::with_capacity(plans.len());
+	for p in &plans {
+		std::fs::rename(&p.temp_abs, &p.new_abs)
+			.map_err(|e| format!("rename failed for {:?}: {e}", p.new_abs))?;
+		conn.execute(
+			"UPDATE assets SET relative_path = ?1 WHERE id = ?2",
+			params![p.new_relative, p.asset_id],
+		)
+		.map_err(stringify)?;
+		results.push(AssetOpResult {
+			asset_id: p.asset_id,
+			relative_path: p.new_relative.clone(),
+			abs_path: p.new_abs.to_string_lossy().to_string(),
+			previous_abs_path: p.old_abs.to_string_lossy().to_string(),
+			still_in_library: true,
+		});
+	}
+	tracing::info!("renamed {} assets", results.len());
+	Ok(results)
 }
 
 #[cfg(test)]
@@ -450,5 +692,65 @@ mod tests {
 	fn trash_dir_is_under_data_dir() {
 		// Just verify the path resolves and creates without panicking.
 		let _ = trash_dir().unwrap();
+	}
+
+	#[test]
+	fn batch_rename_handles_cyclic_swap() {
+		let tmp = tempdir().unwrap();
+		let a = tmp.path().join("a.txt");
+		let b = tmp.path().join("b.txt");
+		std::fs::write(&a, b"AAA").unwrap();
+		std::fs::write(&b, b"BBB").unwrap();
+		let conn = fresh_db_with_root(tmp.path());
+		conn.execute(
+			"INSERT INTO assets (id, root_id, relative_path, format)
+			 VALUES (1, 1, 'a.txt', 'txt'), (2, 1, 'b.txt', 'txt')",
+			[],
+		)
+		.unwrap();
+
+		// Swap the two filenames. The temp-name phase makes this safe even
+		// though each target is the other's current name.
+		let renames = vec![
+			RenamePair { asset_id: 1, new_name: "b.txt".into() },
+			RenamePair { asset_id: 2, new_name: "a.txt".into() },
+		];
+		let out = rename_assets_impl(&conn, &renames).unwrap();
+		assert_eq!(out.len(), 2);
+
+		// Contents followed the rows: id 1 now lives at b.txt (still "AAA").
+		assert_eq!(std::fs::read(&b).unwrap(), b"AAA");
+		assert_eq!(std::fs::read(&a).unwrap(), b"BBB");
+		let rel1: String = conn
+			.query_row("SELECT relative_path FROM assets WHERE id = 1", [], |r| r.get(0))
+			.unwrap();
+		let rel2: String = conn
+			.query_row("SELECT relative_path FROM assets WHERE id = 2", [], |r| r.get(0))
+			.unwrap();
+		assert_eq!(rel1, "b.txt");
+		assert_eq!(rel2, "a.txt");
+	}
+
+	#[test]
+	fn batch_rename_rejects_colliding_targets() {
+		let tmp = tempdir().unwrap();
+		std::fs::write(tmp.path().join("a.txt"), b"A").unwrap();
+		std::fs::write(tmp.path().join("b.txt"), b"B").unwrap();
+		let conn = fresh_db_with_root(tmp.path());
+		conn.execute(
+			"INSERT INTO assets (id, root_id, relative_path, format)
+			 VALUES (1, 1, 'a.txt', 'txt'), (2, 1, 'b.txt', 'txt')",
+			[],
+		)
+		.unwrap();
+		// Both renames resolve to the same target — rejected up front, disk
+		// left untouched.
+		let renames = vec![
+			RenamePair { asset_id: 1, new_name: "same.txt".into() },
+			RenamePair { asset_id: 2, new_name: "same.txt".into() },
+		];
+		assert!(rename_assets_impl(&conn, &renames).is_err());
+		assert!(tmp.path().join("a.txt").exists());
+		assert!(tmp.path().join("b.txt").exists());
 	}
 }

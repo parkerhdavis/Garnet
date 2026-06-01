@@ -88,6 +88,7 @@ export function AssetList({ assets, sortBy, sortDir, onSort, onOpen }: Props) {
 										)}
 										<AssetRow
 											asset={a}
+											allAssets={assets}
 											orderedIds={orderedIds}
 											onOpen={onOpen}
 										/>
@@ -117,10 +118,12 @@ function GroupHeaderRow({ label }: { label: string }) {
 
 function AssetRow({
 	asset,
+	allAssets,
 	orderedIds,
 	onOpen,
 }: {
 	asset: Asset;
+	allAssets: Asset[];
 	orderedIds: number[];
 	onOpen: (asset: Asset) => void;
 }) {
@@ -140,7 +143,7 @@ function AssetRow({
 	const handleContextMenu = (e: React.MouseEvent) => {
 		const sel = useSelectionStore.getState();
 		if (!sel.ids.has(asset.id)) sel.replace(asset.id);
-		openContextMenu(e, buildAssetContextMenu(asset));
+		openContextMenu(e, buildAssetContextMenu(asset, allAssets));
 	};
 
 	return (

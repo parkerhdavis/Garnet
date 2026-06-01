@@ -235,6 +235,16 @@ pub struct FormatCount {
 	pub count: i64,
 }
 
+/// A set of assets that are byte-for-byte identical (same `content_hash`).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DuplicateGroup {
+	pub content_hash: String,
+	/// Byte size of each copy (they're identical). NULL only if the size was
+	/// never recorded.
+	pub size: Option<i64>,
+	pub assets: Vec<Asset>,
+}
+
 fn stringify<E: std::fmt::Display>(e: E) -> String {
 	e.to_string()
 }
@@ -514,6 +524,71 @@ pub fn list_asset_formats(
 ) -> Result<Vec<FormatCount>, String> {
 	let conn = state.db.lock().map_err(stringify)?;
 	list_asset_formats_impl(&conn, root_id).map_err(stringify)
+}
+
+/// Find sets of byte-identical assets — every group of two or more rows that
+/// share a non-NULL `content_hash`. The indexer stamps `content_hash` on
+/// insert (and refreshes it on change), so this catches duplicates across
+/// every library root with no extra hashing pass. Groups come back ordered by
+/// reclaimable space (size × extra copies) descending, so the biggest wins
+/// surface first. Backs the Duplicates view.
+pub fn find_duplicates_impl(conn: &Connection) -> rusqlite::Result<Vec<DuplicateGroup>> {
+	let sql = "
+		SELECT a.id, a.root_id, r.path, a.relative_path, a.size, a.mtime, a.format,
+		       a.is_motion_only, a.has_animation, a.content_hash
+		FROM assets a JOIN library_roots r ON r.id = a.root_id
+		WHERE a.content_hash IN (
+			SELECT content_hash FROM assets
+			WHERE content_hash IS NOT NULL
+			GROUP BY content_hash HAVING COUNT(*) > 1
+		)
+		ORDER BY a.content_hash, r.path COLLATE NOCASE, a.relative_path COLLATE NOCASE";
+	let mut stmt = conn.prepare(sql)?;
+	let rows = stmt.query_map([], |r| {
+		let asset = Asset {
+			id: r.get(0)?,
+			root_id: r.get(1)?,
+			root_path: r.get(2)?,
+			relative_path: r.get(3)?,
+			size: r.get(4)?,
+			mtime: r.get(5)?,
+			format: r.get(6)?,
+			is_motion_only: r.get::<_, Option<i64>>(7)?.map(|v| v != 0),
+			has_animation: r.get::<_, Option<i64>>(8)?.map(|v| v != 0),
+		};
+		let hash: String = r.get(9)?;
+		Ok((hash, asset))
+	})?;
+
+	// Rows arrive grouped by content_hash (the ORDER BY guarantees it), so
+	// fold consecutive runs into groups.
+	let mut groups: Vec<DuplicateGroup> = Vec::new();
+	for row in rows {
+		let (hash, asset) = row?;
+		match groups.last_mut() {
+			Some(g) if g.content_hash == hash => g.assets.push(asset),
+			_ => groups.push(DuplicateGroup {
+				content_hash: hash,
+				size: asset.size,
+				assets: vec![asset],
+			}),
+		}
+	}
+
+	// Biggest reclaimable space first: size × (copies − 1).
+	groups.sort_by(|a, b| {
+		let waste = |g: &DuplicateGroup| {
+			g.size.unwrap_or(0).saturating_mul((g.assets.len() as i64 - 1).max(0))
+		};
+		waste(b).cmp(&waste(a))
+	});
+	Ok(groups)
+}
+
+#[tauri::command]
+pub fn find_duplicates(state: State<AppState>) -> Result<Vec<DuplicateGroup>, String> {
+	let conn = state.db.lock().map_err(stringify)?;
+	find_duplicates_impl(&conn).map_err(stringify)
 }
 
 #[tauri::command]
