@@ -76,18 +76,8 @@ setup: ## Check/install Rust + Bun + system deps, then bun install
 	@echo "================================================================================"
 	@echo "  Garnet Setup - Installing Dependencies"
 	@echo "================================================================================"
-	@if (-not (Get-Command rustc -ErrorAction SilentlyContinue)) { \
-		Write-Host "Rust not found. Install from https://rustup.rs then re-run 'make setup'."; \
-		exit 1; \
-	} else { \
-		Write-Host "Rust: $$(rustc --version)"; \
-	}
-	@if (-not (Get-Command bun -ErrorAction SilentlyContinue)) { \
-		Write-Host "Bun not found. Install from https://bun.sh then re-run 'make setup'."; \
-		exit 1; \
-	} else { \
-		Write-Host "Bun: $$(bun --version)"; \
-	}
+	@if (-not (Get-Command rustc -ErrorAction SilentlyContinue)) { Write-Host "Rust not found. Install from https://rustup.rs then re-run 'make setup'."; exit 1 } else { Write-Host "Rust: $$(rustc --version)" }
+	@if (-not (Get-Command bun -ErrorAction SilentlyContinue)) { Write-Host "Bun not found. Install from https://bun.sh then re-run 'make setup'."; exit 1 } else { Write-Host "Bun: $$(bun --version)" }
 	@Write-Host ""
 	@Write-Host "Windows system requirements for Tauri:"
 	@Write-Host "  - Visual Studio C++ Build Tools"
