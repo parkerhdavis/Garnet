@@ -75,6 +75,28 @@ apply_shape() {
 	esac
 }
 
+# Recolor the gem to a target colour on a white rounded tile. Used for the
+# per-accent-preset window icons (see frontend lib/accent.ts). Takes the gem
+# *shape* from the transparent source's alpha so edges stay crisp, paints it the
+# target colour, lays it over white, then rounds the corners like the default.
+make_preset_icon() {
+	local color="$1" size="$2" output="$3"
+	local radius=$(( size * ROUNDED_PERCENT / 100 ))
+	local tmp; tmp="$(mktemp -d)"
+
+	$IM -size "${size}x${size}" "xc:$color" \
+		\( "$SPLASH_DARK" -resize "${size}x${size}" \) \
+		-compose CopyOpacity -composite "$tmp/gem.png"
+	$IM -size "${size}x${size}" xc:white "$tmp/gem.png" \
+		-compose Over -composite "$tmp/tile.png"
+	$IM "$tmp/tile.png" -alpha set \
+		\( -size "${size}x${size}" xc:none \
+		   -fill white -draw "roundrectangle 0,0,$((size-1)),$((size-1)),${radius},${radius}" \) \
+		-compose DstIn -composite "PNG32:$output"
+
+	rm -rf "$tmp"
+}
+
 # ─── Tauri bundle icons (from app icon) ─────────────────────────────────
 
 echo "Generating Tauri bundle icons from $APP_ICON (shape: $ICON_SHAPE)..."
@@ -117,6 +139,35 @@ if command -v png2icns &> /dev/null; then
 else
 	echo "  Skipped icon.icns (install icnsutils: sudo apt install icnsutils)"
 fi
+
+# ─── Accent preset icons (runtime window-icon swap) ─────────────────────
+# One recolored gem per accent preset (mirrors frontend lib/accent.ts). Gem
+# colour is the deep accent for that hue — oklch(0.285 0.117 <hue>) — except
+# Citrine, which is lightened to a true gold (that hue reads as muddy brown at
+# the deep lightness). Embedded by the backend's set_app_icon command
+# (include_bytes!) and applied at runtime via window.set_icon when the user
+# picks an accent — the installed launcher icon is unaffected (it's baked at
+# build time). One 256px size is enough; the OS scales.
+
+echo ""
+echo "Generating accent preset icons..."
+mkdir -p presets
+
+# id:gem-hex — keep ids in sync with ACCENT_PRESETS in frontend lib/accent.ts.
+PRESET_ICONS=(
+	"garnet:#560002"
+	"citrine:#9c7a0f"
+	"emerald:#003801"
+	"sapphire:#002960"
+	"amethyst:#34145a"
+	"rose:#500132"
+)
+for entry in "${PRESET_ICONS[@]}"; do
+	id="${entry%%:*}"
+	hex="${entry#*:}"
+	make_preset_icon "$hex" 256 "presets/${id}.png"
+	echo "  Generated presets/${id}.png ($hex)"
+done
 
 # ─── Frontend public/ assets ───────────────────────────────────────────
 

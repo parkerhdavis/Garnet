@@ -288,6 +288,8 @@ export const api = {
 	/// unpainted webview or the static loading fallback). Called once the
 	/// splash has actually painted; idempotent on the backend.
 	showMainWindow: () => invoke<void>("show_main_window"),
+	/// Swap the running window's icon to the gem matching an accent preset id.
+	setAppIcon: (preset: string) => invoke<void>("set_app_icon", { preset }),
 	getStartupTimings: () => invoke<StartupReport | null>("get_startup_timings"),
 	markStartupPhase: (name: string, note: string | null = null) =>
 		invoke<void>("mark_startup_phase", { name, note }),

@@ -92,6 +92,33 @@ fn show_main_window(app: tauri::AppHandle) {
 	}
 }
 
+/// Swap the running window's icon to the gem matching the chosen accent preset
+/// (see frontend lib/accent.ts). Affects only the live window — titlebar/taskbar
+/// on Linux/Windows, dock on macOS; the installed launcher icon is baked at
+/// build time and unchanged. The PNGs are produced by
+/// resources/icons/generate-icons.sh and embedded so this stays self-contained.
+#[tauri::command]
+fn set_app_icon(app: tauri::AppHandle, preset: String) -> Result<(), String> {
+	let bytes: &[u8] = match preset.as_str() {
+		"garnet" => include_bytes!("../../../../resources/icons/presets/garnet.png"),
+		"citrine" => include_bytes!("../../../../resources/icons/presets/citrine.png"),
+		"emerald" => include_bytes!("../../../../resources/icons/presets/emerald.png"),
+		"sapphire" => include_bytes!("../../../../resources/icons/presets/sapphire.png"),
+		"amethyst" => include_bytes!("../../../../resources/icons/presets/amethyst.png"),
+		"rose" => include_bytes!("../../../../resources/icons/presets/rose.png"),
+		other => return Err(format!("unknown accent preset: {other}")),
+	};
+	let img = image::load_from_memory(bytes)
+		.map_err(|e| e.to_string())?
+		.to_rgba8();
+	let (w, h) = (img.width(), img.height());
+	let icon = tauri::image::Image::new_owned(img.into_raw(), w, h);
+	if let Some(window) = app.get_webview_window("main") {
+		window.set_icon(icon).map_err(|e| e.to_string())?;
+	}
+	Ok(())
+}
+
 /// Enumerate registered library roots from a fresh SQLite connection. Used by
 /// the startup auto-scan, which runs on a blocking task with no access to
 /// `AppState`.
@@ -276,6 +303,7 @@ fn main() {
 		})
 		.invoke_handler(tauri::generate_handler![
 			show_main_window,
+			set_app_icon,
 			load_settings,
 			save_settings,
 			register_library_root,
