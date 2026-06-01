@@ -23,6 +23,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, Link, useNavigate, useParams } from "react-router-dom";
+import { Reorder } from "motion/react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import type { IconType } from "react-icons";
@@ -79,6 +80,8 @@ export function Sidebar() {
 	const createWorkspace = useWorkspacesStore((s) => s.create);
 	const renameWorkspace = useWorkspacesStore((s) => s.rename);
 	const updateWorkspaceConfig = useWorkspacesStore((s) => s.updateConfig);
+	const setWorkspacesOrder = useWorkspacesStore((s) => s.setOrder);
+	const persistWorkspacesOrder = useWorkspacesStore((s) => s.persistOrder);
 	const removeWorkspace = useWorkspacesStore((s) => s.remove);
 	const navigate = useNavigate();
 	const params = useParams<{ id?: string }>();
@@ -246,21 +249,30 @@ export function Sidebar() {
 				</div>
 
 				<NavGroup title="Workspaces">
-					<ul className="flex flex-col gap-0.5 pl-1">
+					{/* Drag-to-reorder via motion's Reorder. `onReorder` updates
+					    the store live during the drag; `onDragEnd` on each item
+					    persists the final order. The "New workspace" action sits
+					    inside the group but isn't a Reorder.Item, so it stays put
+					    at the bottom and isn't draggable. */}
+					<Reorder.Group
+						as="ul"
+						axis="y"
+						values={workspaces}
+						onReorder={setWorkspacesOrder}
+						className="flex flex-col gap-0.5 pl-1"
+					>
 						{workspaces.map((w) => (
-							<NavItem
+							<WorkspaceNavItem
 								key={w.id}
-								to={`/workspaces/${w.id}`}
-								icon={workspaceTypeMeta(w.type).icon}
+								workspace={w}
+								onCommit={persistWorkspacesOrder}
 								onContextMenu={(e) => handleWorkspaceContextMenu(e, w)}
-							>
-								{w.name}
-							</NavItem>
+							/>
 						))}
 						<NavAction icon={HiPlus} onClick={() => setNewWorkspaceOpen(true)}>
 							New workspace
 						</NavAction>
-					</ul>
+					</Reorder.Group>
 				</NavGroup>
 
 				<NavGroup title="Library">
@@ -429,6 +441,39 @@ function NavItem({
 				<span className="truncate">{children}</span>
 			</NavLink>
 		</li>
+	);
+}
+
+/** A workspace row in the sidebar: a draggable Reorder.Item wrapping the same
+ *  NavLink styling as NavItem. Kept separate from NavItem because only
+ *  workspaces are reorderable. */
+function WorkspaceNavItem({
+	workspace,
+	onCommit,
+	onContextMenu,
+}: {
+	workspace: Workspace;
+	onCommit: () => void;
+	onContextMenu?: (e: React.MouseEvent) => void;
+}) {
+	const Icon = workspaceTypeMeta(workspace.type).icon;
+	return (
+		<Reorder.Item value={workspace} as="li" onDragEnd={onCommit}>
+			<NavLink
+				to={`/workspaces/${workspace.id}`}
+				onContextMenu={onContextMenu}
+				className={({ isActive }) =>
+					`flex items-center gap-2 px-2 py-1.5 rounded transition-colors ${
+						isActive
+							? "bg-primary/15 text-primary"
+							: "text-base-content/80 hover:bg-base-200 hover:text-base-content"
+					}`
+				}
+			>
+				<Icon className="size-4 shrink-0" />
+				<span className="truncate">{workspace.name}</span>
+			</NavLink>
+		</Reorder.Item>
 	);
 }
 

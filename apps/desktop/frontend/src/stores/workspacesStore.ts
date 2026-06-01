@@ -18,6 +18,10 @@ type State = {
 	) => Promise<Workspace | null>;
 	rename: (id: number, name: string) => Promise<void>;
 	updateConfig: (id: number, config: Record<string, unknown>) => Promise<void>;
+	/** Apply a new order locally (no persistence) — driven by the drag. */
+	setOrder: (workspaces: Workspace[]) => void;
+	/** Persist the current order to the backend — called when a drag ends. */
+	persistOrder: () => Promise<void>;
 	remove: (id: number) => Promise<void>;
 	get: (id: number) => Workspace | undefined;
 };
@@ -66,6 +70,19 @@ export const useWorkspacesStore = create<State>((set, get) => ({
 			await get().refresh();
 		} catch (e) {
 			set({ error: String(e) });
+		}
+	},
+
+	setOrder: (workspaces) => set({ workspaces }),
+
+	persistOrder: async () => {
+		try {
+			await api.reorderWorkspaces(get().workspaces.map((w) => w.id));
+		} catch (e) {
+			// The optimistic order is now out of sync with the backend; pull
+			// the server's truth back so the list doesn't lie.
+			set({ error: String(e) });
+			await get().refresh();
 		}
 	},
 

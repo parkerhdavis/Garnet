@@ -320,6 +320,9 @@ export const api = {
 		invoke<void>("rename_workspace", { id, name }),
 	updateWorkspaceConfig: (id: number, config: Record<string, unknown>) =>
 		invoke<void>("update_workspace_config", { id, config }),
+	/// Persist a new top-to-bottom ordering for the sidebar workspace list.
+	reorderWorkspaces: (orderedIds: number[]) =>
+		invoke<void>("reorder_workspaces", { orderedIds }),
 	deleteWorkspace: (id: number) => invoke<void>("delete_workspace", { id }),
 	listPlugins: () => invoke<PluginManifest[]>("list_plugins"),
 	/// Music Library: in-scope audio assets grouped into an album/artist tree.
