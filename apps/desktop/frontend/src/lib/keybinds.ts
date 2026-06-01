@@ -23,6 +23,8 @@ export const KEYBIND_CATEGORIES: KeybindCategory[] = [
 		items: [
 			{ keys: ["Alt", "←"], description: "Go back" },
 			{ keys: ["Alt", "→"], description: "Go forward" },
+			{ keys: ["Alt", "↑"], description: "Previous sidebar item" },
+			{ keys: ["Alt", "↓"], description: "Next sidebar item" },
 			{ keys: ["⌘", "["], description: "Go back (macOS)" },
 			{ keys: ["⌘", "]"], description: "Go forward (macOS)" },
 			{ keys: ["Esc"], description: "Close detail view, return to library" },
