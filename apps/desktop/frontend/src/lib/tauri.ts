@@ -284,6 +284,10 @@ export const api = {
 			motionOnly,
 			hasAnimation,
 		}),
+	/// Reveal the main window (created hidden so the OS never shows the
+	/// unpainted webview or the static loading fallback). Called once the
+	/// splash has actually painted; idempotent on the backend.
+	showMainWindow: () => invoke<void>("show_main_window"),
 	getStartupTimings: () => invoke<StartupReport | null>("get_startup_timings"),
 	markStartupPhase: (name: string, note: string | null = null) =>
 		invoke<void>("mark_startup_phase", { name, note }),
