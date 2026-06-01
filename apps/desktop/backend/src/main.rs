@@ -62,7 +62,8 @@ use startup_timing::{
 use std::sync::{Arc, Mutex};
 use thumbnails::{ensure_thumbnail, get_thumbnail, save_model_thumbnail};
 use workspaces::{
-	create_workspace, delete_workspace, list_workspaces, rename_workspace, update_workspace_config,
+	create_workspace, delete_workspace, list_workspaces, rename_workspace, reorder_workspaces,
+	update_workspace_config,
 };
 use tauri::Manager;
 use tracing_subscriber::EnvFilter;
@@ -314,6 +315,7 @@ fn main() {
 			create_workspace,
 			rename_workspace,
 			update_workspace_config,
+			reorder_workspaces,
 			delete_workspace,
 			load_image_info,
 			load_image_with_preview,

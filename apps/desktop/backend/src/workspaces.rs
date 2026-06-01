@@ -129,6 +129,31 @@ pub fn update_workspace_config(
 	Ok(())
 }
 
+/// Persist a new ordering for the sidebar's Workspaces section. `ordered_ids`
+/// is the full set of workspace ids in their desired top-to-bottom order; each
+/// row's `sort_order` is rewritten to its position in the list. Applied in a
+/// single transaction so the list never reads back half-reordered. Ids absent
+/// from the list are left untouched — the frontend always sends the complete
+/// list, so that only matters if a row was deleted concurrently.
+/// Rewrite each row's `sort_order` to its position in `ordered_ids`, applied
+/// atomically so the list never reads back half-reordered.
+fn write_order(conn: &mut rusqlite::Connection, ordered_ids: &[i64]) -> rusqlite::Result<()> {
+	let tx = conn.transaction()?;
+	for (idx, id) in ordered_ids.iter().enumerate() {
+		tx.execute(
+			"UPDATE workspaces SET sort_order = ?2 WHERE id = ?1",
+			params![id, idx as i64],
+		)?;
+	}
+	tx.commit()
+}
+
+#[tauri::command]
+pub fn reorder_workspaces(state: State<AppState>, ordered_ids: Vec<i64>) -> Result<(), String> {
+	let mut conn = state.db.lock().map_err(stringify)?;
+	write_order(&mut conn, &ordered_ids).map_err(stringify)
+}
+
 #[tauri::command]
 pub fn delete_workspace(state: State<AppState>, id: i64) -> Result<(), String> {
 	let conn = state.db.lock().map_err(stringify)?;
@@ -181,6 +206,28 @@ mod tests {
 		assert_eq!(rows.len(), 2);
 		assert_eq!(rows[0].name, "A");
 		assert_eq!(rows[1].kind, "texturing");
+	}
+
+	#[test]
+	fn reorder_rewrites_sort_order() {
+		let mut conn = fresh_db();
+		conn.execute(
+			"INSERT INTO workspaces (id, name, type, config, sort_order, created_at)
+			 VALUES (10,'A','library','{}',0,0),(20,'B','library','{}',1,0),(30,'C','library','{}',2,0)",
+			[],
+		)
+		.unwrap();
+		// Desired top-to-bottom order: C, A, B.
+		write_order(&mut conn, &[30, 10, 20]).unwrap();
+		let mut stmt = conn
+			.prepare(&format!("SELECT {SELECT_COLS} ORDER BY sort_order ASC, id ASC"))
+			.unwrap();
+		let names: Vec<String> = stmt
+			.query_map([], row_to_workspace)
+			.unwrap()
+			.map(|r| r.unwrap().name)
+			.collect();
+		assert_eq!(names, ["C", "A", "B"]);
 	}
 
 	#[test]
