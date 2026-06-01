@@ -21,6 +21,10 @@ export const KEYBIND_CATEGORIES: KeybindCategory[] = [
 	{
 		title: "Navigation",
 		items: [
+			{
+				keys: ["Ctrl", "K"],
+				description: "Command palette — search assets, workspaces, commands",
+			},
 			{ keys: ["Alt", "←"], description: "Go back" },
 			{ keys: ["Alt", "→"], description: "Go forward" },
 			{ keys: ["Alt", "↑"], description: "Previous sidebar item" },
