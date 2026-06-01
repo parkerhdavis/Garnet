@@ -33,6 +33,7 @@ import {
 	HiCog6Tooth,
 	HiCommandLine,
 	HiCube,
+	HiDocument,
 	HiDocumentArrowUp,
 	HiDocumentDuplicate,
 	HiEllipsisHorizontalCircle,
@@ -54,7 +55,12 @@ import {
 } from "react-icons/hi2";
 import { confirm } from "@/components/ConfirmDialog";
 import { openContextMenu } from "@/components/ContextMenu";
-import { pickFileToPreview } from "@/lib/ephemeral";
+import { openPathAdHoc, pickFileToPreview } from "@/lib/ephemeral";
+import { dirname } from "@/lib/paths";
+import {
+	type RecentFile,
+	useRecentFilesStore,
+} from "@/stores/recentFilesStore";
 import {
 	NewWorkspaceDialog,
 	type NewWorkspaceOptions,
@@ -76,6 +82,8 @@ export function Sidebar() {
 		error: pinError,
 	} = usePinnedSourcesStore();
 	const roots = useLibraryStore((s) => s.roots);
+	const recentFiles = useRecentFilesStore((s) => s.recents);
+	const removeRecentFile = useRecentFilesStore((s) => s.remove);
 	const workspaces = useWorkspacesStore((s) => s.workspaces);
 	const refreshWorkspaces = useWorkspacesStore((s) => s.refresh);
 	const createWorkspace = useWorkspacesStore((s) => s.create);
@@ -204,6 +212,23 @@ export function Sidebar() {
 		await pickFileToPreview((to) => navigate(to));
 	}
 
+	function handleRecentContextMenu(event: React.MouseEvent, file: RecentFile) {
+		openContextMenu(event, [
+			{
+				label: "Open containing folder",
+				icon: HiFolderOpen,
+				onClick: () => openPath(dirname(file.path)).catch(() => undefined),
+			},
+			{ kind: "separator" },
+			{
+				label: "Remove from recents",
+				icon: HiTrash,
+				danger: true,
+				onClick: () => removeRecentFile(file.path),
+			},
+		]);
+	}
+
 	async function handlePinSource() {
 		const selected = await openDialog({
 			directory: true,
@@ -244,6 +269,20 @@ export function Sidebar() {
 						<NavAction icon={HiDocumentArrowUp} onClick={handleOpenFile}>
 							Open file…
 						</NavAction>
+						{recentFiles.slice(0, 4).map((r) => (
+							<li key={r.path}>
+								<button
+									type="button"
+									onClick={() => openPathAdHoc(r.path, navigate)}
+									onContextMenu={(e) => handleRecentContextMenu(e, r)}
+									title={r.path}
+									className="w-full flex items-center gap-2 pl-6 pr-2 py-1 rounded text-xs text-base-content/50 hover:bg-base-200 hover:text-base-content/80 transition-colors"
+								>
+									<HiDocument className="size-3 shrink-0 opacity-70" />
+									<span className="truncate">{r.name}</span>
+								</button>
+							</li>
+						))}
 					</ul>
 				</div>
 

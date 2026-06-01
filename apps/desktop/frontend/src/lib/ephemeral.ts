@@ -14,6 +14,7 @@ import { listen } from "@tauri-apps/api/event";
 import { api, type ScanReport } from "@/lib/tauri";
 import { basename, dirname } from "@/lib/paths";
 import { openFileDialogFilters } from "@/lib/previewFormats";
+import { useRecentFilesStore } from "@/stores/recentFilesStore";
 
 /// Hash-route for an ad-hoc preview of an absolute path.
 export function ephemeralPreviewRoute(absPath: string): string {
@@ -25,10 +26,24 @@ export function ephemeralEditRoute(absPath: string): string {
 	return `/edit?path=${encodeURIComponent(absPath)}`;
 }
 
+/// Open an absolute path ad-hoc: remember it in Recents and route to the
+/// ephemeral preview. The shared sink for every ad-hoc entry point — the
+/// picker, a window drop, an OS file association, or a Recents click. `navigate`
+/// is the router's navigate when the caller lives inside the router; callers
+/// outside it (the global hotkey, the window-drop handler) omit it and we fall
+/// back to setting `window.location.hash`.
+export function openPathAdHoc(
+	absPath: string,
+	navigate?: (to: string) => void,
+): void {
+	useRecentFilesStore.getState().record(absPath, basename(absPath));
+	const route = ephemeralPreviewRoute(absPath);
+	if (navigate) navigate(route);
+	else window.location.hash = `#${route}`;
+}
+
 /// Open the OS file picker (filtered to previewable media) and, on a pick,
-/// route to the ad-hoc preview. `navigate` is the router's navigate when the
-/// caller lives inside the router; the global hotkey handler lives outside it,
-/// so it omits `navigate` and we fall back to setting `window.location.hash`.
+/// route to the ad-hoc preview.
 export async function pickFileToPreview(
 	navigate?: (to: string) => void,
 ): Promise<void> {
@@ -38,9 +53,7 @@ export async function pickFileToPreview(
 		filters: openFileDialogFilters(),
 	});
 	if (typeof selected !== "string") return;
-	const route = ephemeralPreviewRoute(selected);
-	if (navigate) navigate(route);
-	else window.location.hash = `#${route}`;
+	openPathAdHoc(selected, navigate);
 }
 
 /// The "Add to library" upgrade path: register the file's parent folder as a
