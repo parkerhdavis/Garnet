@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Component, type ReactNode, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
 	HashRouter,
 	Navigate,
@@ -49,6 +50,7 @@ export default function App() {
 	useScanEventBridge();
 	useThumbnailReadyBridge();
 	useGlobalHotkeys();
+	useApplyZoom();
 	usePrefsRefreshBridge();
 
 	return (
@@ -379,6 +381,24 @@ function useGlobalHotkeys() {
 				return;
 			}
 
+			// ---- Application zoom: Ctrl/Cmd + (in), - (out), 0 (reset). ----
+			// "=" / "+" share a physical key; "-" / "_" likewise.
+			if (key === "=" || key === "+") {
+				e.preventDefault();
+				usePrefsStore.getState().zoomIn();
+				return;
+			}
+			if (key === "-" || key === "_") {
+				e.preventDefault();
+				usePrefsStore.getState().zoomOut();
+				return;
+			}
+			if (key === "0") {
+				e.preventDefault();
+				usePrefsStore.getState().resetZoom();
+				return;
+			}
+
 			// ---- Undo / redo. ----
 			if (key === "z" && !e.shiftKey) {
 				e.preventDefault();
@@ -391,6 +411,18 @@ function useGlobalHotkeys() {
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
 	}, []);
+}
+
+/// Applies the persisted zoom factor to the webview — on mount (restoring the
+/// last-used zoom) and whenever it changes via the Ctrl +/-/0 shortcuts. The
+/// webview's own zoom doesn't persist across launches, so we re-apply it here.
+function useApplyZoom() {
+	const zoom = usePrefsStore((s) => s.zoom);
+	useEffect(() => {
+		void getCurrentWebview()
+			.setZoom(zoom)
+			.catch(() => {});
+	}, [zoom]);
 }
 
 /// Re-runs the assets query whenever the user toggles a preference that

@@ -15,6 +15,15 @@ import type { AnimatedImagesBucket } from "@/lib/typeFilters";
  *  - `overwrite`: write back to the original path without prompting. */
 export type EditorSaveDefault = "new_file" | "overwrite";
 
+/** Application zoom (webview scale factor). 1 = 100%; clamped to a sane range
+ *  and snapped to one-decimal steps so repeated +/- doesn't drift. */
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3;
+const ZOOM_STEP = 0.1;
+function clampZoom(z: number): number {
+	return Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) * 10) / 10;
+}
+
 type PrefsState = {
 	/** Where GIF / APNG / animated WebP show up in the sidebar Types section.
 	 *  Default "images" matches the MIME-level intuition; the toggle is exposed
@@ -23,6 +32,11 @@ type PrefsState = {
 	setAnimatedImagesBucket: (bucket: AnimatedImagesBucket) => void;
 	editorSaveDefault: EditorSaveDefault;
 	setEditorSaveDefault: (mode: EditorSaveDefault) => void;
+	/** Application zoom factor, applied to the webview and persisted. */
+	zoom: number;
+	zoomIn: () => void;
+	zoomOut: () => void;
+	resetZoom: () => void;
 };
 
 export const usePrefsStore = create<PrefsState>()(
@@ -33,6 +47,10 @@ export const usePrefsStore = create<PrefsState>()(
 				set({ animatedImagesBucket: bucket }),
 			editorSaveDefault: "new_file",
 			setEditorSaveDefault: (mode) => set({ editorSaveDefault: mode }),
+			zoom: 1,
+			zoomIn: () => set((s) => ({ zoom: clampZoom(s.zoom + ZOOM_STEP) })),
+			zoomOut: () => set((s) => ({ zoom: clampZoom(s.zoom - ZOOM_STEP) })),
+			resetZoom: () => set({ zoom: 1 }),
 		}),
 		{ name: "garnet-prefs" },
 	),

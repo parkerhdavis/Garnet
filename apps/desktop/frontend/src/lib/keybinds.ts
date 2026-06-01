@@ -64,6 +64,22 @@ export const KEYBIND_CATEGORIES: KeybindCategory[] = [
 		hint: "On macOS, ⌘ substitutes for Ctrl on every shortcut listed here.",
 	},
 	{
+		title: "View",
+		items: [
+			{ keys: ["Ctrl", "="], description: "Zoom in" },
+			{ keys: ["Ctrl", "-"], description: "Zoom out" },
+			{ keys: ["Ctrl", "0"], description: "Reset zoom to 100%" },
+		],
+	},
+	{
+		title: "Music",
+		items: [
+			{ keys: ["Ctrl", "←"], description: "Previous track" },
+			{ keys: ["Ctrl", "→"], description: "Next track" },
+		],
+		hint: "Works app-wide whenever something is playing.",
+	},
+	{
 		title: "Image editor",
 		items: [
 			{
