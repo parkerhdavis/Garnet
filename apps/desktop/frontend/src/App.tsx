@@ -15,6 +15,7 @@ import { pickFileToPreview } from "@/lib/ephemeral";
 import { emitThumbnailReady, type ThumbnailReady } from "@/lib/thumbnailBus";
 import { useBgTasksStore } from "@/stores/bgTasksStore";
 import { useBootStore } from "@/stores/bootStore";
+import { BatchRenameDialogRoot } from "@/components/BatchRenameDialog";
 import { ConfirmDialogRoot } from "@/components/ConfirmDialog";
 import { ContextMenuRoot } from "@/components/ContextMenu";
 import { Layout } from "@/components/Layout";
@@ -25,6 +26,7 @@ import { useUndoStore } from "@/stores/undoStore";
 import { AppKeybindsPage } from "@/pages/AppKeybindsPage";
 import { AppStatsPage } from "@/pages/AppStatsPage";
 import { AssetDetailPage } from "@/pages/AssetDetailPage";
+import { DuplicatesPage } from "@/pages/DuplicatesPage";
 import { EditorPage } from "@/pages/EditorPage";
 import { AutomationsPage } from "@/pages/AutomationsPage";
 import { LibraryPage } from "@/pages/LibraryPage";
@@ -78,6 +80,8 @@ export default function App() {
 
 						<Route path="types/:kind" element={<LibraryPage />} />
 
+						<Route path="duplicates" element={<DuplicatesPage />} />
+
 						{/* `/` and `/sources/:id` mount the same LibraryPage; the
 						    page reads useParams to decide whether to apply the
 						    pinned-source filter. This keeps StrictMode from
@@ -115,6 +119,7 @@ export default function App() {
 			<ContextMenuRoot />
 			<ConfirmDialogRoot />
 			<PromptDialogRoot />
+			<BatchRenameDialogRoot />
 
 			{!splashGone && <Splash fadeOut={loaded} />}
 		</ErrorBoundary>

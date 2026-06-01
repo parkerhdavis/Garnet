@@ -24,8 +24,13 @@ mod thumbnails;
 mod watcher;
 mod workspaces;
 
-use asset_ops::{move_asset, move_file, rename_asset, restore_from_trash, trash_asset};
-use assets::{describe_file, get_asset, list_asset_formats, list_assets, search_assets};
+use asset_ops::{
+	copy_asset, move_asset, move_file, rename_asset, rename_assets, restore_from_trash,
+	trash_asset, trash_file,
+};
+use assets::{
+	describe_file, find_duplicates, get_asset, list_asset_formats, list_assets, search_assets,
+};
 use automations::{
 	delete_automation_preset, load_automation_presets, preview_automation, run_automation,
 	save_automation_preset,
@@ -315,10 +320,14 @@ fn main() {
 			get_asset,
 			describe_file,
 			list_asset_formats,
+			find_duplicates,
 			rename_asset,
+			rename_assets,
 			move_asset,
 			move_file,
+			copy_asset,
 			trash_asset,
+			trash_file,
 			restore_from_trash,
 			list_asset_metadata,
 			get_thumbnail,

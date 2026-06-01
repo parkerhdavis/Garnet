@@ -34,6 +34,7 @@ import {
 	HiCommandLine,
 	HiCube,
 	HiDocumentArrowUp,
+	HiDocumentDuplicate,
 	HiEllipsisHorizontalCircle,
 	HiFilm,
 	HiFolder,
@@ -320,6 +321,12 @@ export function Sidebar() {
 						</NavItem>
 						<NavItem to="/types/other" icon={HiEllipsisHorizontalCircle}>
 							Other
+						</NavItem>
+					</NavSection>
+
+					<NavSection title="Tools">
+						<NavItem to="/duplicates" icon={HiDocumentDuplicate}>
+							Duplicates
 						</NavItem>
 					</NavSection>
 				</NavGroup>

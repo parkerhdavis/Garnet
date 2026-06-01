@@ -11,16 +11,19 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
 	HiArrowPath,
 	HiArrowsRightLeft,
+	HiDocumentDuplicate,
 	HiPencilSquare,
 	HiTrash,
 } from "react-icons/hi2";
 import type { Asset } from "@/lib/tauri";
 import { api } from "@/lib/tauri";
 import { absPathFor, basename, dirname } from "@/lib/paths";
+import { batchRename } from "@/components/BatchRenameDialog";
 import { confirm } from "@/components/ConfirmDialog";
 import type { ContextMenuItem } from "@/components/ContextMenu";
 import { prompt } from "@/components/PromptDialog";
 import { useAssetsStore } from "@/stores/assetsStore";
+import { useSelectionStore } from "@/stores/selectionStore";
 import { useUndoStore } from "@/stores/undoStore";
 import { loadModelThumbnailer } from "@/lib/loadModelThumbnailer";
 
@@ -54,12 +57,49 @@ function showError(message: string) {
 /// Returns the menu items for right-clicking an asset. The handlers are
 /// imperative: they open dialogs, run the IPC call, and push the inverse
 /// onto the undo stack on success.
-export function buildAssetContextMenu(asset: Asset): ContextMenuItem[] {
+///
+/// `visibleAssets` (the current page's rows) lets the menu act on a multi-
+/// selection: when two or more selected rows include the right-clicked one,
+/// the menu switches to batch actions (rename N, copy N) over that selection.
+export function buildAssetContextMenu(
+	asset: Asset,
+	visibleAssets?: Asset[],
+): ContextMenuItem[] {
+	const selIds = useSelectionStore.getState().ids;
+	const pool = visibleAssets ?? [asset];
+	const selected = pool.filter((a) => selIds.has(a.id));
+	if (selected.length > 1 && selIds.has(asset.id)) {
+		return [
+			{
+				label: `Rename ${selected.length} items…`,
+				icon: HiPencilSquare,
+				onClick: () => batchRenameAction(selected),
+			},
+			{
+				label: `Copy ${selected.length} items to…`,
+				icon: HiDocumentDuplicate,
+				onClick: () => copyManyAction(selected),
+			},
+			{ kind: "separator" },
+			{
+				label: `Trash ${selected.length} items`,
+				icon: HiTrash,
+				danger: true,
+				onClick: () => trashManyAction(selected),
+			},
+		];
+	}
+
 	const items: ContextMenuItem[] = [
 		{
 			label: "Rename…",
 			icon: HiPencilSquare,
 			onClick: () => renameAction(asset),
+		},
+		{
+			label: "Copy to…",
+			icon: HiDocumentDuplicate,
+			onClick: () => copyAction(asset),
 		},
 		{
 			label: "Move to…",
@@ -82,6 +122,174 @@ export function buildAssetContextMenu(asset: Asset): ContextMenuItem[] {
 		onClick: () => trashAction(asset),
 	});
 	return items;
+}
+
+/// Open a single-folder picker, defaulting near `near`'s current location.
+/// Returns the chosen absolute path, or null on cancel / error.
+async function pickDir(title: string, near: Asset): Promise<string | null> {
+	const defaultDir =
+		`${near.root_path}/${dirname(near.relative_path) || ""}`.replace(/\/$/, "");
+	try {
+		const selected = await openDialog({
+			directory: true,
+			multiple: false,
+			defaultPath: defaultDir || near.root_path,
+			title,
+		});
+		return typeof selected === "string" ? selected : null;
+	} catch (err) {
+		showError(`Folder picker failed: ${String(err)}`);
+		return null;
+	}
+}
+
+async function copyAction(asset: Asset) {
+	const filename = basename(asset.relative_path);
+	const destDir = await pickDir(`Copy “${filename}” to…`, asset);
+	if (destDir === null) return;
+
+	let result: Awaited<ReturnType<typeof api.copyAsset>>;
+	try {
+		result = await api.copyAsset(asset.id, destDir);
+	} catch (err) {
+		showError(`Copy failed: ${String(err)}`);
+		return;
+	}
+	refresh();
+
+	// Undo trashes the copy by path (it may have been indexed as a new asset
+	// by now, so we can't address it by id); redo re-copies from the
+	// untouched source.
+	useUndoStore.getState().push({
+		description: `Copy ${filename}`,
+		undo: async () => {
+			await api.trashFile(result.copied_abs_path);
+			refresh();
+		},
+		redo: async () => {
+			await api.copyAsset(asset.id, destDir);
+			refresh();
+		},
+	});
+}
+
+async function copyManyAction(assets: Asset[]) {
+	const destDir = await pickDir(`Copy ${assets.length} items to…`, assets[0]);
+	if (destDir === null) return;
+
+	const copiedPaths: string[] = [];
+	try {
+		for (const a of assets) {
+			const r = await api.copyAsset(a.id, destDir);
+			copiedPaths.push(r.copied_abs_path);
+		}
+	} catch (err) {
+		showError(`Copy failed: ${String(err)}`);
+		refresh();
+		return;
+	}
+	refresh();
+
+	useUndoStore.getState().push({
+		description: `Copy ${assets.length} items`,
+		undo: async () => {
+			for (const p of copiedPaths) {
+				await api.trashFile(p).catch(() => undefined);
+			}
+			refresh();
+		},
+		redo: async () => {
+			for (const a of assets) {
+				await api.copyAsset(a.id, destDir).catch(() => undefined);
+			}
+			refresh();
+		},
+	});
+}
+
+async function batchRenameAction(assets: Asset[]) {
+	const pairs = await batchRename(assets);
+	if (pairs === null || pairs.length === 0) return;
+
+	// Snapshot the original names (for the renamed subset) before applying, so
+	// undo can put them back through the same collision-safe path.
+	const originals = pairs.map((p) => {
+		const a = assets.find((x) => x.id === p.asset_id);
+		return { asset_id: p.asset_id, new_name: basename(a?.relative_path ?? "") };
+	});
+
+	try {
+		await api.renameAssets(pairs);
+	} catch (err) {
+		showError(`Rename failed: ${String(err)}`);
+		return;
+	}
+	refresh();
+
+	useUndoStore.getState().push({
+		description: `Rename ${pairs.length} items`,
+		undo: async () => {
+			await api.renameAssets(originals);
+			refresh();
+		},
+		redo: async () => {
+			await api.renameAssets(pairs);
+			refresh();
+		},
+	});
+}
+
+async function trashManyAction(assets: Asset[]) {
+	const ok = await confirm({
+		title: `Trash ${assets.length} items?`,
+		message: `These will be moved to Garnet's trash folder. You can undo this with Ctrl+Z.`,
+		confirmLabel: "Trash",
+		danger: true,
+	});
+	if (!ok) return;
+
+	// One restore/re-trash record per asset, mirroring the single trash flow.
+	const entries: { trashPath: string; originalPath: string; rootId: number }[] =
+		[];
+	try {
+		for (const a of assets) {
+			const res = await api.trashAsset(a.id);
+			entries.push({
+				trashPath: res.trash_path,
+				originalPath: res.original_abs_path,
+				rootId: a.root_id,
+			});
+		}
+	} catch (err) {
+		showError(`Trash failed: ${String(err)}`);
+		refresh();
+		return;
+	}
+	refresh();
+
+	useUndoStore.getState().push({
+		description: `Trash ${assets.length} items`,
+		undo: async () => {
+			for (const e of entries) {
+				await api
+					.restoreFromTrash(e.trashPath, e.originalPath)
+					.catch(() => undefined);
+			}
+			refresh();
+		},
+		redo: async () => {
+			// Each restored file re-indexes under a fresh id; look it up by its
+			// original path before re-trashing, and rebind the trash path.
+			for (const e of entries) {
+				const found = await waitForAssetAtPath(e.originalPath, e.rootId);
+				if (found) {
+					const re = await api.trashAsset(found.id);
+					e.trashPath = re.trash_path;
+				}
+			}
+			refresh();
+		},
+	});
 }
 
 async function refreshModelThumbnailAction(asset: Asset) {

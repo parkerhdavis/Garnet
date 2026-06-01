@@ -15,6 +15,7 @@ import {
 	HiCommandLine,
 	HiCube,
 	HiDocumentArrowUp,
+	HiDocumentDuplicate,
 	HiEllipsisHorizontalCircle,
 	HiFilm,
 	HiFolder,
@@ -176,6 +177,13 @@ export function CommandPalette() {
 				label: "Other",
 				icon: HiEllipsisHorizontalCircle,
 				run: go("/types/other"),
+			},
+			{
+				key: "go-duplicates",
+				group: "Go to",
+				label: "Duplicates",
+				icon: HiDocumentDuplicate,
+				run: go("/duplicates"),
 			},
 			{
 				key: "go-plugins",
