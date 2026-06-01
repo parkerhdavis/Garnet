@@ -13,10 +13,12 @@ import { api } from "@/lib/tauri";
 import {
 	allAutomationSteps,
 	allGlobals,
+	allPaletteSources,
 	allWorkflows,
 } from "@/plugins/registry";
 import type {
 	AutomationStepContribution,
+	PaletteSourceContribution,
 	WorkflowContribution,
 } from "@/plugins/types";
 
@@ -86,6 +88,15 @@ export function enabledWorkflows(): WorkflowContribution[] {
 export function enabledAutomationSteps(): AutomationStepContribution[] {
 	const isEnabled = usePluginsStore.getState().isEnabled;
 	return allAutomationSteps()
+		.filter((s) => isEnabled(s.pluginId))
+		.map((s) => s.contribution);
+}
+
+/// Command-palette sources for enabled plugins. The palette should subscribe to
+/// `usePluginsStore(s => s.enabledIds)` so this re-resolves on toggle.
+export function enabledPaletteSources(): PaletteSourceContribution[] {
+	const isEnabled = usePluginsStore.getState().isEnabled;
+	return allPaletteSources()
 		.filter((s) => isEnabled(s.pluginId))
 		.map((s) => s.contribution);
 }

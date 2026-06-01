@@ -10,6 +10,7 @@ import { HiMusicalNote } from "react-icons/hi2";
 import { AUDIO_FORMATS } from "@/lib/typeFilters";
 import { MusicGlobalPlayer } from "@/plugins/music/components/MusicGlobalPlayer";
 import { MusicWorkflow } from "@/plugins/music/MusicWorkflow";
+import { musicPaletteSource } from "@/plugins/music/palette";
 import { registerPlugin } from "@/plugins/registry";
 
 registerPlugin({
@@ -31,6 +32,8 @@ registerPlugin({
 			defaultFileFilters: AUDIO_FORMATS.join(" "),
 		},
 	],
+	// Album/artist search in the Ctrl+K command palette.
+	paletteSources: [musicPaletteSource],
 	// Persistent player bar, mounted app-wide so playback survives leaving the
 	// music workspace.
 	global: MusicGlobalPlayer,

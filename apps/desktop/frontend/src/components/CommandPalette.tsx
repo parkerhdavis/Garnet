@@ -25,13 +25,16 @@ import {
 	HiPhoto,
 	HiPuzzlePiece,
 	HiSparkles,
+	HiSquares2X2,
 	HiSwatch,
 } from "react-icons/hi2";
 import { api, type Asset } from "@/lib/tauri";
 import { pickFileToPreview } from "@/lib/ephemeral";
 import { abbreviatePath, basename } from "@/lib/paths";
 import { workspaceTypeMeta } from "@/lib/workspaceTypes";
+import type { PaletteItemContribution } from "@/plugins/types";
 import { useCommandPaletteStore } from "@/stores/commandPaletteStore";
+import { enabledPaletteSources, usePluginsStore } from "@/stores/pluginsStore";
 import { useWorkspacesStore } from "@/stores/workspacesStore";
 
 const ASSET_LIMIT = 8;
@@ -50,9 +53,14 @@ export function CommandPalette() {
 	const close = useCommandPaletteStore((s) => s.close);
 	const navigate = useNavigate();
 	const workspaces = useWorkspacesStore((s) => s.workspaces);
+	// Subscribe so enabledPaletteSources() re-resolves when a plugin is toggled.
+	const enabledIds = usePluginsStore((s) => s.enabledIds);
 
 	const [query, setQuery] = useState("");
 	const [assets, setAssets] = useState<Asset[]>([]);
+	const [pluginGroups, setPluginGroups] = useState<
+		{ group: string; items: PaletteItemContribution[] }[]
+	>([]);
 	const [active, setActive] = useState(0);
 	const inputRef = useRef<HTMLInputElement | null>(null);
 	const listRef = useRef<HTMLDivElement | null>(null);
@@ -62,6 +70,7 @@ export function CommandPalette() {
 		if (!open) return;
 		setQuery("");
 		setAssets([]);
+		setPluginGroups([]);
 		setActive(0);
 		const t = setTimeout(() => inputRef.current?.focus(), 0);
 		return () => clearTimeout(t);
@@ -83,6 +92,35 @@ export function CommandPalette() {
 		}, 200);
 		return () => clearTimeout(t);
 	}, [query, open]);
+
+	// Debounced plugin-contributed sources (e.g. Music albums/artists). Each
+	// runs independently; failures and empties just drop out.
+	useEffect(() => {
+		if (!open) return;
+		const q = query.trim();
+		const sources = enabledPaletteSources();
+		if (!q || sources.length === 0) {
+			setPluginGroups([]);
+			return;
+		}
+		let cancelled = false;
+		const t = setTimeout(() => {
+			void Promise.all(
+				sources.map((s) =>
+					s
+						.search(q)
+						.then((items) => ({ group: s.group, items }))
+						.catch(() => ({ group: s.group, items: [] })),
+				),
+			).then((groups) => {
+				if (!cancelled) setPluginGroups(groups.filter((g) => g.items.length));
+			});
+		}, 200);
+		return () => {
+			cancelled = true;
+			clearTimeout(t);
+		};
+	}, [query, open, enabledIds]);
 
 	const commands = useMemo<Item[]>(() => {
 		const go = (to: string) => () => {
@@ -225,6 +263,19 @@ export function CommandPalette() {
 					navigate(`/workspaces/${w.id}`);
 				},
 			}));
+		const plugins: Item[] = pluginGroups.flatMap((g) =>
+			g.items.map((it) => ({
+				key: `${g.group}-${it.id}`,
+				group: g.group,
+				label: it.label,
+				sublabel: it.sublabel,
+				icon: it.icon ?? HiSquares2X2,
+				run: () => {
+					close();
+					navigate(it.to);
+				},
+			})),
+		);
 		const ats: Item[] = assets.map((a) => ({
 			key: `asset-${a.id}`,
 			group: "Assets",
@@ -236,8 +287,8 @@ export function CommandPalette() {
 				navigate(`/asset/${a.id}`);
 			},
 		}));
-		return [...cmds, ...wss, ...ats];
-	}, [commands, workspaces, assets, query, close, navigate]);
+		return [...cmds, ...wss, ...plugins, ...ats];
+	}, [commands, workspaces, assets, pluginGroups, query, close, navigate]);
 
 	// Keep the active index in range as results change.
 	useEffect(() => {

@@ -8,6 +8,7 @@
 import type {
 	AutomationStepContribution,
 	GarnetPlugin,
+	PaletteSourceContribution,
 	WorkflowContribution,
 } from "@/plugins/types";
 
@@ -51,6 +52,16 @@ export function allAutomationSteps(): Owned<AutomationStepContribution>[] {
 	const out: Owned<AutomationStepContribution>[] = [];
 	for (const p of plugins.values()) {
 		for (const c of p.automationSteps ?? []) {
+			out.push({ pluginId: p.id, contribution: c });
+		}
+	}
+	return out;
+}
+
+export function allPaletteSources(): Owned<PaletteSourceContribution>[] {
+	const out: Owned<PaletteSourceContribution>[] = [];
+	for (const p of plugins.values()) {
+		for (const c of p.paletteSources ?? []) {
 			out.push({ pluginId: p.id, contribution: c });
 		}
 	}
