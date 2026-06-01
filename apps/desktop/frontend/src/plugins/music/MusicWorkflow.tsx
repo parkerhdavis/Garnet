@@ -158,7 +158,7 @@ export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
 								<div className="join">
 									<button
 										type="button"
-										className={`btn btn-xs join-item gap-1 ${view === "albums" ? "btn-active" : ""}`}
+										className={`btn btn-xs join-item gap-1 ${view === "albums" ? "btn-primary" : ""}`}
 										onClick={() => setView("albums")}
 									>
 										<HiSquares2X2 className="size-3.5" />
@@ -166,7 +166,7 @@ export function MusicWorkflow({ workspace }: { workspace: Workspace }) {
 									</button>
 									<button
 										type="button"
-										className={`btn btn-xs join-item gap-1 ${view === "artists" ? "btn-active" : ""}`}
+										className={`btn btn-xs join-item gap-1 ${view === "artists" ? "btn-primary" : ""}`}
 										onClick={() => setView("artists")}
 									>
 										<HiUserGroup className="size-3.5" />

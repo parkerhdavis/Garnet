@@ -3,11 +3,13 @@
 //! a seekable waveform, and a volume control. Playback runs through the native
 //! Rust engine (useNativeAudio); the waveform renders pre-computed peaks.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	HiArrowPath,
 	HiArrowsRightLeft,
 	HiBackward,
+	HiChevronDown,
+	HiChevronUp,
 	HiForward,
 	HiPause,
 	HiPlay,
@@ -16,8 +18,10 @@ import {
 	HiSpeakerXMark,
 } from "react-icons/hi2";
 import { useNavigate } from "react-router-dom";
+import type { MusicTrack } from "@/lib/tauri";
 import { AlbumArt } from "@/plugins/music/components/AlbumArt";
 import { HiResBadge } from "@/plugins/music/components/HiResBadge";
+import { PlayingBars } from "@/plugins/music/components/PlayingBars";
 import { Waveform } from "@/plugins/music/components/Waveform";
 import { useNativeAudio } from "@/plugins/music/hooks/useNativeAudio";
 import { usePeaks } from "@/plugins/music/hooks/usePeaks";
@@ -48,6 +52,8 @@ export function PlayerBar() {
 	const cycleRepeat = useMusicStore((s) => s.cycleRepeat);
 	const queueOpen = useMusicStore((s) => s.queueOpen);
 	const toggleQueue = useMusicStore((s) => s.toggleQueue);
+	const playerCollapsed = useMusicStore((s) => s.playerCollapsed);
+	const setPlayerCollapsed = useMusicStore((s) => s.setPlayerCollapsed);
 	const playbackWorkspaceId = useMusicStore((s) => s.playbackWorkspaceId);
 	const workspaces = useWorkspacesStore((s) => s.workspaces);
 	const navigate = useNavigate();
@@ -95,6 +101,18 @@ export function PlayerBar() {
 		setPlaybackStatus(player.status);
 	}, [player.status, setPlaybackStatus]);
 
+	// Bring a collapsed bar back when playback resumes from a pause. (Starting
+	// new playback already clears the flag in the store.) Tracking the previous
+	// status keeps an end-of-track auto-advance — ended → playing — from
+	// reopening it, so the bar stays hidden across a whole album if you want.
+	const prevStatusRef = useRef(player.status);
+	useEffect(() => {
+		if (prevStatusRef.current === "paused" && player.status === "playing") {
+			setPlayerCollapsed(false);
+		}
+		prevStatusRef.current = player.status;
+	}, [player.status, setPlayerCollapsed]);
+
 	// Apply live volume changes.
 	useEffect(() => {
 		player.setVolumeDb(volumeDb);
@@ -103,6 +121,21 @@ export function PlayerBar() {
 	if (!nowPlaying) return null;
 
 	const isPlaying = player.status === "playing";
+
+	// Collapsed: hide the bar but keep this component (and its audio hook)
+	// mounted so playback continues — unmounting would fire audio_stop. A small
+	// floating control restores it; it also reopens on its own when playback
+	// resumes (see the effect above) or when something new is played.
+	if (playerCollapsed) {
+		return (
+			<CollapsedPlayer
+				track={nowPlaying}
+				isPlaying={isPlaying}
+				onExpand={() => setPlayerCollapsed(false)}
+			/>
+		);
+	}
+
 	const quality = qualityShort(nowPlaying);
 	const hiRes = isHiRes(nowPlaying);
 
@@ -288,6 +321,50 @@ export function PlayerBar() {
 					aria-label="Volume"
 				/>
 			</div>
+
+			{/* Collapse: hides the bar (playback keeps going); it reopens when
+			    playback resumes or something new is played. */}
+			<button
+				type="button"
+				className="btn btn-ghost btn-sm btn-circle shrink-0"
+				onClick={() => setPlayerCollapsed(true)}
+				title="Hide player"
+			>
+				<HiChevronDown className="size-4" />
+			</button>
 		</div>
+	);
+}
+
+/// Compact stand-in shown when the player bar is collapsed: identifies what's
+/// playing and restores the full bar on click. Rendered (instead of the bar)
+/// by PlayerBar itself, so the audio hook stays mounted and playback continues.
+function CollapsedPlayer({
+	track,
+	isPlaying,
+	onExpand,
+}: {
+	track: MusicTrack;
+	isPlaying: boolean;
+	onExpand: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			onClick={onExpand}
+			title="Show player"
+			className="fixed bottom-4 right-4 z-30 flex items-center gap-2 rounded-full border border-base-300 bg-base-100 py-1.5 pl-1.5 pr-3 shadow-xl transition hover:bg-base-200"
+		>
+			<AlbumArt
+				absPath={track.abs_path}
+				className="size-8"
+				rounded="rounded-full"
+			/>
+			{isPlaying ? (
+				<PlayingBars className="text-primary" />
+			) : (
+				<HiChevronUp className="size-4 text-base-content/60" />
+			)}
+		</button>
 	);
 }
