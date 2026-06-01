@@ -116,9 +116,12 @@ export default function App() {
 	);
 }
 
-/// Pre-warms the initial library + assets queries. Once both report
-/// loading=false AND `SPLASH_MIN_MS` has elapsed, `loaded` flips (starts the
-/// fade); SPLASH_FADE_MS later `splashGone` flips (unmounts the splash).
+/// Pre-warms the initial library + assets queries and drives the splash. The
+/// window starts hidden and is revealed once React commits (see the reveal
+/// effect); `SPLASH_MIN_MS` is then counted from that reveal, so the splash is
+/// shown on-screen for its full duration. Once both queries report
+/// loading=false AND that dwell has elapsed, `loaded` flips (starts the fade);
+/// SPLASH_FADE_MS later `splashGone` flips (unmounts the splash).
 ///
 /// The router is always rendered from the first frame — the splash overlays
 /// it with `fixed inset-0` and a high z-index, so when the splash fades its
@@ -130,7 +133,11 @@ function useSplashTimer() {
 	const refreshAssets = useAssetsStore((s) => s.refresh);
 	const libraryLoading = useLibraryStore((s) => s.loading);
 	const assetsLoading = useAssetsStore((s) => s.loading);
-	const [mountedAt] = useState(() => performance.now());
+	// Set to the timestamp at which we reveal the (initially hidden) window.
+	// The splash min-dwell is measured from here, not from React mount, so the
+	// splash is always shown on-screen for its full duration regardless of how
+	// long the window stayed hidden while the webview warmed up.
+	const [revealedAt, setRevealedAt] = useState<number | null>(null);
 	const [loaded, setLoaded] = useState(false);
 	const [splashGone, setSplashGone] = useState(false);
 
@@ -139,6 +146,7 @@ function useSplashTimer() {
 	// the report. Refs survive the strict-mode double-invoke.
 	const marks = useRef({
 		reactMounted: false,
+		windowRevealed: false,
 		dataLoaded: false,
 		splashMin: false,
 		splashGone: false,
@@ -150,10 +158,28 @@ function useSplashTimer() {
 		void api.markStartupPhase(label).catch(() => {});
 	};
 
-	// Earliest moment React has run its first effect — close enough to "first
-	// paint" for our purposes (the splash overlay is the first thing painted).
+	// Reveal the window once React has committed the splash. The window is
+	// created hidden (tauri.conf.json `visible: false`) so the OS never shows
+	// the unpainted webview, the static `index.html` loading fallback, or the
+	// live `set_size` resize in Rust `.setup()`. Its first on-screen frame is
+	// the splash.
+	//
+	// We schedule the reveal with setTimeout, NOT requestAnimationFrame:
+	// webkit2gtk does not service rAF while the window is hidden (nothing is
+	// being composited), so an rAF-gated reveal never fires — the splash would
+	// then animate and time out entirely off-screen and the window would pop
+	// straight to the library. setTimeout fires regardless of visibility. The
+	// window's `backgroundColor` is the splash colour, so the first frame is
+	// seamless even before the icon PNG decodes. A Rust-side safety timer is
+	// the last-resort backstop if this never runs at all.
 	useEffect(() => {
 		markOnce("reactMounted", "frontend: React mounted");
+		const t = setTimeout(() => {
+			setRevealedAt((prev) => prev ?? performance.now());
+			markOnce("windowRevealed", "frontend: window revealed");
+			void api.showMainWindow().catch(() => {});
+		}, 0);
+		return () => clearTimeout(t);
 	}, []);
 
 	useEffect(() => {
@@ -164,15 +190,18 @@ function useSplashTimer() {
 
 	useEffect(() => {
 		if (loaded) return;
+		// Hold the splash until the window is actually visible AND the initial
+		// data has landed; only then start counting down the minimum dwell.
+		if (revealedAt === null) return;
 		if (libraryLoading || assetsLoading) return;
-		const elapsed = performance.now() - mountedAt;
+		const elapsed = performance.now() - revealedAt;
 		const waitMore = Math.max(0, SPLASH_MIN_MS - elapsed);
 		const t = setTimeout(() => {
 			markOnce("splashMin", "frontend: splash min elapsed (fade starts)");
 			setLoaded(true);
 		}, waitMore);
 		return () => clearTimeout(t);
-	}, [libraryLoading, assetsLoading, mountedAt, loaded]);
+	}, [libraryLoading, assetsLoading, revealedAt, loaded]);
 
 	useEffect(() => {
 		if (!loaded || splashGone) return;
@@ -456,6 +485,11 @@ class ErrorBoundary extends Component<
 
 	componentDidCatch(error: Error, info: { componentStack?: string | null }) {
 		console.error("Garnet render error:", error, info.componentStack);
+		// The window is created hidden and normally revealed once the splash
+		// paints. If the app throws during initial render the splash never
+		// mounts, so reveal the window here to surface this error message
+		// rather than waiting on the Rust safety timer.
+		void api.showMainWindow().catch(() => {});
 	}
 
 	render() {

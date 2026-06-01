@@ -20,7 +20,9 @@
 				"minWidth": 1000,
 				"minHeight": 700,
 				"resizable": true,
-				"dragDropEnabled": false
+				"dragDropEnabled": false,
+				"visible": false,
+				"backgroundColor": "#0c0b09"
 			}
 		],
 		"security": {
