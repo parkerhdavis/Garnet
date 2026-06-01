@@ -19,6 +19,7 @@ import { ConfirmDialogRoot } from "@/components/ConfirmDialog";
 import { ContextMenuRoot } from "@/components/ContextMenu";
 import { Layout } from "@/components/Layout";
 import { PromptDialogRoot } from "@/components/PromptDialog";
+import { useCommandPaletteStore } from "@/stores/commandPaletteStore";
 import { useSelectionStore } from "@/stores/selectionStore";
 import { useUndoStore } from "@/stores/undoStore";
 import { AppKeybindsPage } from "@/pages/AppKeybindsPage";
@@ -352,6 +353,22 @@ function useGlobalHotkeys() {
 		}
 
 		function onKey(e: KeyboardEvent) {
+			// ---- Command palette: Ctrl/Cmd+K toggles it. Checked before the
+			// editable guard so it works even while focus is in a text field. ----
+			if (
+				(e.ctrlKey || e.metaKey) &&
+				!e.altKey &&
+				!e.shiftKey &&
+				e.key.toLowerCase() === "k"
+			) {
+				e.preventDefault();
+				useCommandPaletteStore.getState().toggle();
+				return;
+			}
+			// While the palette is open it owns the keyboard (its own handler
+			// drives arrows/enter/escape) — suppress the app-level shortcuts.
+			if (useCommandPaletteStore.getState().open) return;
+
 			if (isEditable(e.target)) return;
 
 			// ---- Navigation: Alt+Left/Right (history) + Alt+Up/Down (sidebar)

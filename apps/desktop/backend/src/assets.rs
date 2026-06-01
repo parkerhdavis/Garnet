@@ -488,6 +488,25 @@ pub fn list_assets(state: State<AppState>, query: AssetQuery) -> Result<AssetPag
 	list_assets_impl(&conn, &query).map_err(stringify)
 }
 
+/// Lightweight name/path search across every root, independent of any view's
+/// filter state — backs the Ctrl+K command palette. Reuses the main query
+/// builder with just a path substring + limit; serde defaults fill the rest
+/// (path-sorted, no format/tag/date filters).
+#[tauri::command]
+pub fn search_assets(
+	state: State<AppState>,
+	query: String,
+	limit: i64,
+) -> Result<Vec<Asset>, String> {
+	let q: AssetQuery = serde_json::from_value(serde_json::json!({
+		"path_search": query,
+		"limit": limit,
+	}))
+	.map_err(stringify)?;
+	let conn = state.db.lock().map_err(stringify)?;
+	Ok(list_assets_impl(&conn, &q).map_err(stringify)?.assets)
+}
+
 #[tauri::command]
 pub fn list_asset_formats(
 	state: State<AppState>,

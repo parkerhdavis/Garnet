@@ -67,6 +67,30 @@ export interface AutomationStepContribution {
 	ParamsEditor?: AutomationStepParamsEditor;
 }
 
+/// One result a command-palette source can return. The core palette renders it
+/// and navigates to `to` when chosen, so plugins stay decoupled from the
+/// router.
+export interface PaletteItemContribution {
+	/// Unique within the contributing source (used for the React key).
+	id: string;
+	label: string;
+	sublabel?: string;
+	icon?: IconType;
+	/// HashRouter path to navigate to on select (e.g. "/workspaces/3?album=…").
+	to: string;
+}
+
+/// A command-palette result provider contributed by a plugin (e.g. the Music
+/// Library searching albums/artists). The palette calls `search` — debounced,
+/// with the user's query — and lists the results under `group`. Return [] when
+/// there's nothing to offer (empty query, data unavailable, etc.).
+export interface PaletteSourceContribution {
+	id: string;
+	/// Heading shown above this source's results in the palette.
+	group: string;
+	search: (query: string) => Promise<PaletteItemContribution[]>;
+}
+
 /// A first-party plugin compiled into Garnet. Registered at startup via a
 /// static-import side effect (see `src/plugins/index.ts`).
 export interface GarnetPlugin {
@@ -81,6 +105,9 @@ export interface GarnetPlugin {
 	version?: string;
 	workflows?: WorkflowContribution[];
 	automationSteps?: AutomationStepContribution[];
+	/// Command-palette result providers, queried when the user types in the
+	/// Ctrl+K palette (e.g. the Music Library searching albums/artists).
+	paletteSources?: PaletteSourceContribution[];
 	/// An always-mounted, app-global component (gated on the plugin being
 	/// enabled), rendered by the Layout above the footer regardless of route.
 	/// The Music Library uses it for a persistent player that keeps playing

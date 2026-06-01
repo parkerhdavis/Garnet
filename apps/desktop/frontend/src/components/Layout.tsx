@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Outlet } from "react-router-dom";
+import { CommandPalette } from "@/components/CommandPalette";
 import { Footer } from "@/components/Footer";
 import { Sidebar } from "@/components/Sidebar";
 import { enabledGlobals, usePluginsStore } from "@/stores/pluginsStore";
@@ -28,6 +29,7 @@ export function Layout() {
 				))}
 				<Footer />
 			</div>
+			<CommandPalette />
 		</div>
 	);
 }

@@ -242,6 +242,9 @@ export const api = {
 	scanLibraryRoot: (id: number) => invoke<void>("scan_library_root", { id }),
 	listAssets: (query: AssetQuery) =>
 		invoke<AssetPage>("list_assets", { query }),
+	/// Name/path search across all roots for the command palette.
+	searchAssets: (query: string, limit: number) =>
+		invoke<Asset[]>("search_assets", { query, limit }),
 	getAsset: (id: number) => invoke<Asset>("get_asset", { id }),
 	/// Stat a single on-disk file and describe it as an ephemeral asset
 	/// (id = -1, not in the catalog). Backs the ad-hoc "open a loose file"
