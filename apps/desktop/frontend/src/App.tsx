@@ -472,7 +472,8 @@ function useApplyZoom() {
 /// Applies the chosen accent preset by writing its hue to `--garnet-hue` on the
 /// root element — on mount (restoring the persisted choice) and on every
 /// change. The theme's primary/accent colors read that variable, so the whole
-/// accent family (and the masked brand logo) recolors live.
+/// accent family (and the masked brand logo) recolors live. Also swaps the
+/// running window's OS icon to the matching gem.
 function useApplyAccent() {
 	const accentId = usePrefsStore((s) => s.accentId);
 	useEffect(() => {
@@ -480,6 +481,7 @@ function useApplyAccent() {
 			"--garnet-hue",
 			String(accentHue(accentId)),
 		);
+		void api.setAppIcon(accentId).catch(() => {});
 	}, [accentId]);
 }
 
