@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Component, type ReactNode, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
 	HashRouter,
 	Navigate,
@@ -49,6 +50,7 @@ export default function App() {
 	useScanEventBridge();
 	useThumbnailReadyBridge();
 	useGlobalHotkeys();
+	useApplyZoom();
 	usePrefsRefreshBridge();
 
 	return (
@@ -290,6 +292,37 @@ function useThumbnailReadyBridge() {
 	}, []);
 }
 
+/// Move the active selection up/down the sidebar's nav items (Alt+Up/Down).
+/// Reads the rendered links straight from the DOM in document (= visual) order
+/// rather than duplicating the sidebar's structure, so dynamic items
+/// (workspaces, pinned sources) are included automatically. The active item
+/// carries NavLink's `aria-current="page"`; from an off-sidebar route (e.g. an
+/// asset detail page) we enter at the first (down) or last (up) item. Clamps at
+/// the ends rather than wrapping.
+function navigateSidebar(direction: 1 | -1) {
+	const links = Array.from(
+		document.querySelectorAll<HTMLAnchorElement>('aside nav a[href^="#/"]'),
+	);
+	if (links.length === 0) return;
+	let idx = links.findIndex((a) => a.getAttribute("aria-current") === "page");
+	if (idx < 0) {
+		const hash = window.location.hash || "#/";
+		idx = links.findIndex((a) => a.getAttribute("href") === hash);
+	}
+	let nextIdx: number;
+	if (idx < 0) {
+		nextIdx = direction === 1 ? 0 : links.length - 1;
+	} else {
+		nextIdx = idx + direction;
+		if (nextIdx < 0 || nextIdx >= links.length) return; // clamp at ends
+	}
+	const next = links[nextIdx];
+	const href = next.getAttribute("href");
+	if (!href) return;
+	window.location.hash = href;
+	next.scrollIntoView({ block: "nearest" });
+}
+
 /// App-wide keyboard shortcuts. Lives at the App level so any focused
 /// page sees them — skips when an editable element currently owns focus
 /// so typing into a text field doesn't unexpectedly trigger.
@@ -319,7 +352,8 @@ function useGlobalHotkeys() {
 		function onKey(e: KeyboardEvent) {
 			if (isEditable(e.target)) return;
 
-			// ---- Navigation: Alt+Left/Right + macOS Cmd+[/Cmd+]. ----
+			// ---- Navigation: Alt+Left/Right (history) + Alt+Up/Down (sidebar)
+			// + macOS Cmd+[/Cmd+]. ----
 			if (e.altKey && !e.ctrlKey && !e.metaKey) {
 				if (e.key === "ArrowLeft") {
 					e.preventDefault();
@@ -329,6 +363,16 @@ function useGlobalHotkeys() {
 				if (e.key === "ArrowRight") {
 					e.preventDefault();
 					window.history.forward();
+					return;
+				}
+				if (e.key === "ArrowUp") {
+					e.preventDefault();
+					navigateSidebar(-1);
+					return;
+				}
+				if (e.key === "ArrowDown") {
+					e.preventDefault();
+					navigateSidebar(1);
 					return;
 				}
 			}
@@ -379,6 +423,24 @@ function useGlobalHotkeys() {
 				return;
 			}
 
+			// ---- Application zoom: Ctrl/Cmd + (in), - (out), 0 (reset). ----
+			// "=" / "+" share a physical key; "-" / "_" likewise.
+			if (key === "=" || key === "+") {
+				e.preventDefault();
+				usePrefsStore.getState().zoomIn();
+				return;
+			}
+			if (key === "-" || key === "_") {
+				e.preventDefault();
+				usePrefsStore.getState().zoomOut();
+				return;
+			}
+			if (key === "0") {
+				e.preventDefault();
+				usePrefsStore.getState().resetZoom();
+				return;
+			}
+
 			// ---- Undo / redo. ----
 			if (key === "z" && !e.shiftKey) {
 				e.preventDefault();
@@ -391,6 +453,18 @@ function useGlobalHotkeys() {
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
 	}, []);
+}
+
+/// Applies the persisted zoom factor to the webview — on mount (restoring the
+/// last-used zoom) and whenever it changes via the Ctrl +/-/0 shortcuts. The
+/// webview's own zoom doesn't persist across launches, so we re-apply it here.
+function useApplyZoom() {
+	const zoom = usePrefsStore((s) => s.zoom);
+	useEffect(() => {
+		void getCurrentWebview()
+			.setZoom(zoom)
+			.catch(() => {});
+	}, [zoom]);
 }
 
 /// Re-runs the assets query whenever the user toggles a preference that
