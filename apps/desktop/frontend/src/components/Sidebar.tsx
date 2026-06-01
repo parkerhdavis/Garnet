@@ -56,11 +56,7 @@ import {
 import { confirm } from "@/components/ConfirmDialog";
 import { openContextMenu } from "@/components/ContextMenu";
 import { openPathAdHoc, pickFileToPreview } from "@/lib/ephemeral";
-import { dirname } from "@/lib/paths";
-import {
-	type RecentFile,
-	useRecentFilesStore,
-} from "@/stores/recentFilesStore";
+import { useRecentFilesStore } from "@/stores/recentFilesStore";
 import {
 	NewWorkspaceDialog,
 	type NewWorkspaceOptions,
@@ -83,7 +79,6 @@ export function Sidebar() {
 	} = usePinnedSourcesStore();
 	const roots = useLibraryStore((s) => s.roots);
 	const recentFiles = useRecentFilesStore((s) => s.recents);
-	const removeRecentFile = useRecentFilesStore((s) => s.remove);
 	const workspaces = useWorkspacesStore((s) => s.workspaces);
 	const refreshWorkspaces = useWorkspacesStore((s) => s.refresh);
 	const createWorkspace = useWorkspacesStore((s) => s.create);
@@ -212,21 +207,20 @@ export function Sidebar() {
 		await pickFileToPreview((to) => navigate(to));
 	}
 
-	function handleRecentContextMenu(event: React.MouseEvent, file: RecentFile) {
-		openContextMenu(event, [
-			{
-				label: "Open containing folder",
-				icon: HiFolderOpen,
-				onClick: () => openPath(dirname(file.path)).catch(() => undefined),
-			},
-			{ kind: "separator" },
-			{
-				label: "Remove from recents",
-				icon: HiTrash,
-				danger: true,
-				onClick: () => removeRecentFile(file.path),
-			},
-		]);
+	// Recently-opened ad-hoc files live in the "Open File…" right-click menu
+	// rather than as always-visible sidebar rows, to keep the sidebar tidy.
+	function handleOpenFileContextMenu(event: React.MouseEvent) {
+		const recents = recentFiles.slice(0, 10);
+		openContextMenu(
+			event,
+			recents.length === 0
+				? [{ label: "No recent files", disabled: true, onClick: () => {} }]
+				: recents.map((file) => ({
+						label: file.name,
+						icon: HiDocument,
+						onClick: () => openPathAdHoc(file.path, navigate),
+					})),
+		);
 	}
 
 	async function handlePinSource() {
@@ -254,9 +248,6 @@ export function Sidebar() {
 					<div className="text-base font-semibold tracking-tight leading-none">
 						Garnet
 					</div>
-					<div className="text-[10px] text-base-content/60 mt-1">
-						v{__APP_VERSION__}
-					</div>
 				</div>
 			</Link>
 
@@ -266,23 +257,13 @@ export function Sidebar() {
 				    not a curation of the library (cf. Pin source). */}
 				<div>
 					<ul className="flex flex-col gap-0.5 pl-1">
-						<NavAction icon={HiDocumentArrowUp} onClick={handleOpenFile}>
-							Open file…
+						<NavAction
+							icon={HiDocumentArrowUp}
+							onClick={handleOpenFile}
+							onContextMenu={handleOpenFileContextMenu}
+						>
+							Open File…
 						</NavAction>
-						{recentFiles.slice(0, 4).map((r) => (
-							<li key={r.path}>
-								<button
-									type="button"
-									onClick={() => openPathAdHoc(r.path, navigate)}
-									onContextMenu={(e) => handleRecentContextMenu(e, r)}
-									title={r.path}
-									className="w-full flex items-center gap-2 pl-6 pr-2 py-1 rounded text-xs text-base-content/50 hover:bg-base-200 hover:text-base-content/80 transition-colors"
-								>
-									<HiDocument className="size-3 shrink-0 opacity-70" />
-									<span className="truncate">{r.name}</span>
-								</button>
-							</li>
-						))}
 					</ul>
 				</div>
 
@@ -407,7 +388,7 @@ export function Sidebar() {
 			</nav>
 
 			<footer className="p-3 text-[10px] text-base-content/40 border-t border-base-300 flex items-center justify-between">
-				<span>Phase 1 — base toolkit</span>
+				<span>v{__APP_VERSION__}</span>
 				<HiSquares2X2 className="size-3 opacity-60" />
 			</footer>
 
@@ -525,11 +506,13 @@ function NavAction({
 	icon: Icon,
 	children,
 	onClick,
+	onContextMenu,
 	disabled,
 }: {
 	icon: IconType;
 	children: React.ReactNode;
 	onClick?: () => void;
+	onContextMenu?: (e: React.MouseEvent) => void;
 	disabled?: boolean;
 }) {
 	return (
@@ -537,6 +520,7 @@ function NavAction({
 			<button
 				type="button"
 				onClick={onClick}
+				onContextMenu={onContextMenu}
 				disabled={disabled}
 				className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-base-content/55 hover:bg-base-200 hover:text-base-content/85 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 			>
