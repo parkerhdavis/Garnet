@@ -3,7 +3,7 @@
 .PHONY: help \
         setup install \
         dev dev-frontend down \
-        build build-linux build-windows build-macos check \
+        build build-linux build-windows build-macos notarize check \
         lint lint-fix format typecheck test \
         icons \
         version \
@@ -284,12 +284,96 @@ build-windows:
 
 build-macos: icons
 	@echo "Building macOS installers (.dmg, .app)..."
+	@if [ -f .env ]; then \
+		echo "  -> Loading signing config from .env"; \
+	else \
+		echo "  -> WARNING: No .env file found — build will not be signed"; \
+		echo "     Copy .env.example to .env and fill in your Apple credentials"; \
+	fi
 	@echo "  -> Building frontend..."
 	@cd $(DESKTOP_DIR) && $(BUN) run build
 	@echo "  -> Building Tauri app for macOS..."
-	@cd $(BACKEND_DIR) && $(TAURI) build
+	@if [ -f .env ]; then \
+		. ./.env && \
+		( unset APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID && cd $(BACKEND_DIR) && $(TAURI) build ); \
+	else \
+		cd $(BACKEND_DIR) && $(TAURI) build; \
+	fi
+	@if [ -f .env ]; then \
+		. ./.env && \
+		echo "" && \
+		echo "Re-signing with hardened runtime and secure timestamp..." && \
+		echo "  (Tauri's bundler omits --timestamp; re-signing to fix)" && \
+		codesign --force --options runtime --timestamp \
+			--entitlements $(BACKEND_DIR)/entitlements.plist \
+			--sign "$$APPLE_SIGNING_IDENTITY" \
+			./target/release/bundle/macos/Garnet.app/Contents/MacOS/garnet && \
+		codesign --force --options runtime --timestamp \
+			--entitlements $(BACKEND_DIR)/entitlements.plist \
+			--sign "$$APPLE_SIGNING_IDENTITY" \
+			./target/release/bundle/macos/Garnet.app && \
+		echo "  -> Re-signed .app bundle" && \
+		echo "" && \
+		echo "Rebuilding DMG from re-signed .app..." && \
+		VERSION=$$(grep '^version = ' $(BACKEND_DIR)/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/') && \
+		ARCH=$$(uname -m | sed 's/arm64/aarch64/') && \
+		DMG_NAME="Garnet_$${VERSION}_$${ARCH}.dmg" && \
+		DMG_PATH="./target/release/bundle/dmg/$${DMG_NAME}" && \
+		rm -f "$${DMG_PATH}" && \
+		hdiutil create -volname "Garnet" \
+			-srcfolder ./target/release/bundle/macos/Garnet.app \
+			-ov -format UDZO \
+			"$${DMG_PATH}" && \
+		codesign --force --timestamp \
+			--sign "$$APPLE_SIGNING_IDENTITY" \
+			"$${DMG_PATH}" && \
+		echo "  -> DMG rebuilt and signed: $${DMG_PATH}" && \
+		echo "" && \
+		echo "Verifying code signature..." && \
+		codesign --verify --deep --strict ./target/release/bundle/macos/Garnet.app && \
+		echo "  -> Code signature: OK"; \
+	fi
 	@echo ""
 	@echo "macOS build complete!"
+	@echo ""
+	@echo "Build outputs in ./target/release/bundle/:"
+	@echo "  - DMG:  ./target/release/bundle/dmg/"
+	@echo "  - App:  ./target/release/bundle/macos/"
+	@if [ -f .env ]; then \
+		echo "" && \
+		echo "To notarize, run: make notarize"; \
+	fi
+
+notarize: ## Submit macOS build for Apple notarization
+	@if [ ! -f .env ]; then \
+		echo "ERROR: .env file required for notarization"; \
+		echo "  Copy .env.example to .env and fill in your Apple credentials"; \
+		exit 1; \
+	fi
+	@. ./.env && \
+	VERSION=$$(grep '^version = ' $(BACKEND_DIR)/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/') && \
+	ARCH=$$(uname -m | sed 's/arm64/aarch64/') && \
+	DMG_NAME="Garnet_$${VERSION}_$${ARCH}.dmg" && \
+	DMG_PATH="./target/release/bundle/dmg/$${DMG_NAME}" && \
+	if [ ! -f "$${DMG_PATH}" ]; then \
+		echo "ERROR: DMG not found at $${DMG_PATH}"; \
+		echo "  Run 'make build-macos' first"; \
+		exit 1; \
+	fi && \
+	echo "Submitting $${DMG_NAME} for notarization..." && \
+	xcrun notarytool submit "$${DMG_PATH}" \
+		--apple-id "$$APPLE_ID" \
+		--password "$$APPLE_PASSWORD" \
+		--team-id "$$APPLE_TEAM_ID" \
+		--wait && \
+	echo "" && \
+	echo "Stapling notarization ticket..." && \
+	xcrun stapler staple "$${DMG_PATH}" && \
+	echo "  -> Notarization complete: $${DMG_PATH}" && \
+	echo "" && \
+	echo "Verifying Gatekeeper assessment..." && \
+	spctl --assess --type open --context context:primary-signature "$${DMG_PATH}" 2>&1 && \
+	echo "  -> Gatekeeper: OK"
 endif
 
 ifeq ($(DETECTED_OS),windows)
