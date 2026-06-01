@@ -15,7 +15,7 @@ export type AccentPreset = {
 
 export const ACCENT_PRESETS: AccentPreset[] = [
 	{ id: "garnet", name: "Garnet", hue: 28 },
-	{ id: "amber", name: "Amber", hue: 65 },
+	{ id: "citrine", name: "Citrine", hue: 90 },
 	{ id: "emerald", name: "Emerald", hue: 150 },
 	{ id: "sapphire", name: "Sapphire", hue: 250 },
 	{ id: "amethyst", name: "Amethyst", hue: 300 },

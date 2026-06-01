@@ -101,7 +101,7 @@ fn show_main_window(app: tauri::AppHandle) {
 fn set_app_icon(app: tauri::AppHandle, preset: String) -> Result<(), String> {
 	let bytes: &[u8] = match preset.as_str() {
 		"garnet" => include_bytes!("../../../../resources/icons/presets/garnet.png"),
-		"amber" => include_bytes!("../../../../resources/icons/presets/amber.png"),
+		"citrine" => include_bytes!("../../../../resources/icons/presets/citrine.png"),
 		"emerald" => include_bytes!("../../../../resources/icons/presets/emerald.png"),
 		"sapphire" => include_bytes!("../../../../resources/icons/presets/sapphire.png"),
 		"amethyst" => include_bytes!("../../../../resources/icons/presets/amethyst.png"),

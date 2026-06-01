@@ -141,11 +141,13 @@ else
 fi
 
 # ─── Accent preset icons (runtime window-icon swap) ─────────────────────
-# One recolored gem per accent preset (mirrors frontend lib/accent.ts). The gem
-# colour is oklch(0.285 0.117 <hue>) → the deep accent for that hue. Embedded by
-# the backend's set_app_icon command (include_bytes!) and applied at runtime via
-# window.set_icon when the user picks an accent — the installed launcher icon is
-# unaffected (it's baked at build time). One 256px size is enough; the OS scales.
+# One recolored gem per accent preset (mirrors frontend lib/accent.ts). Gem
+# colour is the deep accent for that hue — oklch(0.285 0.117 <hue>) — except
+# Citrine, which is lightened to a true gold (that hue reads as muddy brown at
+# the deep lightness). Embedded by the backend's set_app_icon command
+# (include_bytes!) and applied at runtime via window.set_icon when the user
+# picks an accent — the installed launcher icon is unaffected (it's baked at
+# build time). One 256px size is enough; the OS scales.
 
 echo ""
 echo "Generating accent preset icons..."
@@ -154,7 +156,7 @@ mkdir -p presets
 # id:gem-hex — keep ids in sync with ACCENT_PRESETS in frontend lib/accent.ts.
 PRESET_ICONS=(
 	"garnet:#560002"
-	"amber:#4e1500"
+	"citrine:#9c7a0f"
 	"emerald:#003801"
 	"sapphire:#002960"
 	"amethyst:#34145a"
