@@ -59,29 +59,25 @@ xattr = "1.3"
 [dev-dependencies]
 tempfile = "3"
 
-# Image decode/encode/resize is painfully slow in an unoptimized debug build;
-# bumping just the `image` crate to opt-level 3 keeps editor previews and batch
-# automations responsive in `make dev` without optimizing the whole tree.
-[profile.dev.package.image]
+# Image/audio decode/encode/resize and hashing are painfully slow in an
+# unoptimized debug build — saving a single 30 MP JPEG in `make dev` took ~12s
+# (≈7s decode + ≈4s encode) versus ~1.3s in release. The heavy work lives in
+# dependency sub-crates (zune-jpeg + jpeg-encoder for JPEG, exr, symphonia
+# codecs, blake3 for hashing, rayon, …), and per-crate opt-level entries kept
+# missing the ones that mattered. So optimize *every* dependency in dev — but
+# NOT our own crate, so incremental app rebuilds stay fast. The one-time cost is
+# a slower first/clean build; everything after is cached. Keeps the editor,
+# 3D Texturing, Music player, and Automations responsive in `make dev`.
+[profile.dev.package."*"]
 opt-level = 3
 
-# Symphonia audio decode is just as slow unoptimized — a full-file decode (for
-# waveform peaks on first play) takes several seconds in a debug build, which
-# stalls playback. Bump the codec/format crates so the Music player stays
-# responsive in `make dev`, scoped to the audio crates like `image` above.
-[profile.dev.package.symphonia-core]
-opt-level = 3
-[profile.dev.package.symphonia-bundle-flac]
-opt-level = 3
-[profile.dev.package.symphonia-bundle-mp3]
-opt-level = 3
-[profile.dev.package.symphonia-codec-aac]
-opt-level = 3
-[profile.dev.package.symphonia-codec-alac]
-opt-level = 3
-[profile.dev.package.symphonia-codec-vorbis]
-opt-level = 3
-[profile.dev.package.symphonia-format-isomp4]
-opt-level = 3
-[profile.dev.package.symphonia-format-ogg]
-opt-level = 3
+# Bump OUR crate to opt-level 1 too — the per-package bump above doesn't reach
+# the code that actually dominates a save. The `image` crate's JPEG encode (and
+# the f32→u8 conversions) are generic, so their hot loops monomorphize into the
+# *call site* (this crate) and compile at this crate's opt-level, not `image`'s.
+# At debug opt-0 a 30 MP JPEG encode took ~4s; opt-1 drops it to ~0.8s and the
+# f32 editor/texturing pipelines from ~0.85s to ~0.3s — a ~12s save becomes
+# ~1.5s, near release. opt-1 (not 2/3, and no LTO — that re-links the whole
+# binary every change, ~50s) keeps incremental rebuilds tolerable.
+[profile.dev]
+opt-level = 1
