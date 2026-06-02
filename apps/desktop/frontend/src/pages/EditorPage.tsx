@@ -13,6 +13,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { HiArrowLeft, HiCheck, HiNoSymbol } from "react-icons/hi2";
+import { confirm } from "@/components/ConfirmDialog";
 import CropOverlay, { type CropRect } from "@/components/CropOverlay";
 import EditorCanvas from "@/components/EditorCanvas";
 import { EditorTools } from "@/components/EditorTools";
@@ -78,6 +79,9 @@ export function EditorPage() {
 	const [saving, setSaving] = useState(false);
 	const [savedAt, setSavedAt] = useState<string | null>(null);
 	const [exportFormat, setExportFormat] = useState<string>("png8");
+	// Re-entry guard so mashing Esc/Ctrl+R can't stack confirm dialogs (and so
+	// the Escape that dismisses a confirm doesn't immediately reopen it).
+	const confirmPending = useRef(false);
 	const [sourceDims, setSourceDims] = useState<{ w: number; h: number } | null>(
 		null,
 	);
@@ -240,6 +244,7 @@ export function EditorPage() {
 	}, [setViewMode]);
 
 	async function handleSave() {
+		if (saving) return;
 		if (!sourcePath || !asset || pendingOps.length === 0) return;
 		setSaving(true);
 		setSavedAt(null);
@@ -295,10 +300,39 @@ export function EditorPage() {
 		}
 	}
 
-	function handleRevert() {
-		if (pendingOps.length === 0) return;
+	async function handleRevert() {
+		if (saving || confirmPending.current) return;
+		if (useEditorStore.getState().pendingOps.length === 0) return;
+		confirmPending.current = true;
+		const ok = await confirm({
+			title: "Revert all edits?",
+			message: "Discard every pending edit and return to the original image?",
+			confirmLabel: "Revert",
+			cancelLabel: "Keep editing",
+			danger: true,
+		});
+		confirmPending.current = false;
+		if (!ok) return;
 		void useEditorStore.getState().setOps([]);
 		clearUndo();
+	}
+
+	// Leave the editor. Confirms only when there are unsaved edits to lose.
+	async function handleExit() {
+		if (saving || confirmPending.current) return;
+		if (useEditorStore.getState().dirty) {
+			confirmPending.current = true;
+			const ok = await confirm({
+				title: "Discard unsaved edits?",
+				message: "You have unsaved changes. Leave the editor and discard them?",
+				confirmLabel: "Discard & exit",
+				cancelLabel: "Keep editing",
+				danger: true,
+			});
+			confirmPending.current = false;
+			if (!ok) return;
+		}
+		navigate(-1);
 	}
 
 	function handleCropDone(rect: CropRect) {
@@ -322,6 +356,43 @@ export function EditorPage() {
 	function handleCropCancel() {
 		setCropEditMode(false);
 	}
+
+	// Hold the latest handlers in a ref so the global key listener always calls
+	// the current closures (fresh state) without re-subscribing each render.
+	const actionsRef = useRef({
+		save: handleSave,
+		revert: handleRevert,
+		exit: handleExit,
+	});
+	actionsRef.current = {
+		save: handleSave,
+		revert: handleRevert,
+		exit: handleExit,
+	};
+
+	// Editor shortcuts: Ctrl/Cmd+S save, Ctrl/Cmd+R revert, Esc exit. (`\`
+	// peek/toggle is handled by its own effect above.)
+	useEffect(() => {
+		function onKey(e: KeyboardEvent) {
+			const mod = e.ctrlKey || e.metaKey;
+			if (mod && (e.key === "s" || e.key === "S")) {
+				e.preventDefault();
+				void actionsRef.current.save();
+			} else if (mod && (e.key === "r" || e.key === "R")) {
+				// preventDefault also stops the webview from reloading.
+				e.preventDefault();
+				void actionsRef.current.revert();
+			} else if (e.key === "Escape") {
+				// Let an open input or the crop overlay own Escape.
+				if (isTypingTarget(e.target)) return;
+				if (useEditorStore.getState().cropEditMode) return;
+				e.preventDefault();
+				void actionsRef.current.exit();
+			}
+		}
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, []);
 
 	// Derive view state up here — these must run on every render to
 	// satisfy React's hook-ordering rule, even when an early-return
@@ -438,11 +509,27 @@ export function EditorPage() {
 
 	return (
 		<div className="flex-1 min-h-0 flex flex-col">
+			{/* Modal save overlay: dims the app, shows a spinner, and swallows all
+			    pointer input until the commit finishes so nothing changes mid-save.
+			    Keyboard shortcuts also no-op while `saving` (see handlers). */}
+			{saving && (
+				<div
+					className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-base-300/60 backdrop-blur-[1px] cursor-wait select-none"
+					role="status"
+					aria-live="polite"
+				>
+					<span className="loading loading-spinner loading-lg text-primary" />
+					<span className="text-sm font-medium text-base-content/80">
+						Saving…
+					</span>
+				</div>
+			)}
 			<header className="px-4 py-2.5 border-b border-base-300 bg-base-100 flex items-center gap-2 shrink-0">
 				<button
 					type="button"
 					className="btn btn-xs btn-ghost"
-					onClick={() => navigate(-1)}
+					onClick={handleExit}
+					title="Exit editing (Esc)"
 				>
 					<HiArrowLeft className="size-3.5" />
 					Back
@@ -476,6 +563,7 @@ export function EditorPage() {
 					className="btn btn-xs"
 					onClick={handleRevert}
 					disabled={pendingOps.length === 0 || saving}
+					title="Revert all edits (Ctrl+R)"
 				>
 					<HiNoSymbol className="size-3.5" />
 					Revert
@@ -499,6 +587,7 @@ export function EditorPage() {
 					className="btn btn-xs btn-primary"
 					onClick={handleSave}
 					disabled={!dirty || saving}
+					title="Save (Ctrl+S)"
 				>
 					<HiCheck className="size-3.5" />
 					{saving ? "Saving…" : "Save"}
@@ -562,6 +651,19 @@ function normalizeFormat(ext: string): string {
 	if (e === "jpeg") return "jpg";
 	if (e === "tif") return "tiff";
 	return e;
+}
+
+/// True when a keystroke is destined for a text field, so global editor
+/// shortcuts (e.g. Escape) should yield to it.
+function isTypingTarget(t: EventTarget | null): boolean {
+	const el = t as HTMLElement | null;
+	if (!el) return false;
+	return (
+		el.tagName === "INPUT" ||
+		el.tagName === "TEXTAREA" ||
+		el.tagName === "SELECT" ||
+		el.isContentEditable
+	);
 }
 
 const CURVE_FILTER_ID = "garnet-curve-lut";

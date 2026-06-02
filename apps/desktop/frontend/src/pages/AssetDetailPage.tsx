@@ -79,6 +79,29 @@ export function AssetDetailPage() {
 	const isBlend = !!ext && BLEND_EXTS.has(ext);
 	const [blendPreview, setBlendPreview] = useState<string | null>(null);
 
+	// Ctrl/Cmd+E opens the editor for an editable asset (mirrors the Edit
+	// button), unless the user is typing in a field.
+	useEffect(() => {
+		if (!isEditable) return;
+		function onKey(e: KeyboardEvent) {
+			if (!((e.ctrlKey || e.metaKey) && (e.key === "e" || e.key === "E")))
+				return;
+			const el = e.target as HTMLElement | null;
+			if (
+				el &&
+				(el.tagName === "INPUT" ||
+					el.tagName === "TEXTAREA" ||
+					el.tagName === "SELECT" ||
+					el.isContentEditable)
+			)
+				return;
+			e.preventDefault();
+			navigate(ephemeral ? ephemeralEditRoute(absPath) : `/edit/${asset?.id}`);
+		}
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [isEditable, ephemeral, absPath, asset, navigate]);
+
 	useEffect(() => {
 		let cancelled = false;
 		setLoading(true);
@@ -316,7 +339,7 @@ export function AssetDetailPage() {
 								ephemeral ? ephemeralEditRoute(absPath) : `/edit/${asset.id}`,
 							)
 						}
-						title="Open in the editor"
+						title="Open in the editor (Ctrl+E)"
 					>
 						<HiPencilSquare className="size-3.5" />
 						Edit
