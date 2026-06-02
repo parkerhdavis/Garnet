@@ -219,45 +219,43 @@ pub fn load_dynamic_image(path: &str) -> Result<DynamicImage, String> {
 		.map_err(|e| format!("Failed to decode image: {}", e))
 }
 
-/// Load an OpenEXR file as an RGBA8 DynamicImage (tone-mapped for preview).
+/// Load an OpenEXR file as a full-precision `Rgba32F` DynamicImage. Values are
+/// kept in their native linear-light float range (may exceed 1.0 for HDR); the
+/// pipeline works in f32, and quantization happens only on save. Preview
+/// encoders clamp to 8-bit at encode time (see `encode_to_base64_png`).
 fn load_exr(path: &str) -> Result<DynamicImage, String> {
 	use exr::prelude::*;
 
 	let image = read_first_rgba_layer_from_file(
 		path,
 		|resolution, _| {
-			image::RgbaImage::new(resolution.width() as u32, resolution.height() as u32)
+			image::Rgba32FImage::new(resolution.width() as u32, resolution.height() as u32)
 		},
-		|img, position, (r, g, b, a): (f32, f32, f32, f32)| {
-			// Tone-map HDR → 8-bit: simple linear clamp.
-			let to_u8 = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+		|img: &mut image::Rgba32FImage, position, (r, g, b, a): (f32, f32, f32, f32)| {
 			img.put_pixel(
 				position.x() as u32,
 				position.y() as u32,
-				image::Rgba([to_u8(r), to_u8(g), to_u8(b), to_u8(a)]),
+				image::Rgba([r, g, b, a]),
 			);
 		},
 	)
 	.map_err(|e| format!("Failed to read EXR: {}", e))?;
 
-	Ok(DynamicImage::ImageRgba8(image.layer_data.channel_data.pixels))
+	Ok(DynamicImage::ImageRgba32F(image.layer_data.channel_data.pixels))
 }
 
-/// Save a DynamicImage as OpenEXR (RGBA float32).
+/// Save a DynamicImage as OpenEXR (RGBA float32). Preserves full float
+/// precision when the source is already f32 (the pipeline's working type);
+/// `to_rgba32f` normalizes 8/16-bit sources into the same 0..1 range.
 fn save_exr(img: &DynamicImage, path: &str) -> Result<(), String> {
 	use exr::prelude::*;
 
-	let rgba = img.to_rgba8();
+	let rgba = img.to_rgba32f();
 	let (w, h) = rgba.dimensions();
 
 	let channels = SpecificChannels::rgba(|position: Vec2<usize>| {
 		let pixel = rgba.get_pixel(position.x() as u32, position.y() as u32);
-		(
-			pixel[0] as f32 / 255.0,
-			pixel[1] as f32 / 255.0,
-			pixel[2] as f32 / 255.0,
-			pixel[3] as f32 / 255.0,
-		)
+		(pixel[0], pixel[1], pixel[2], pixel[3])
 	});
 
 	let layer = Layer::new(
@@ -282,7 +280,10 @@ pub fn encode_to_base64_png(img: &DynamicImage) -> Result<String, String> {
 	let mut buf = Vec::new();
 	let cursor = Cursor::new(&mut buf);
 	let encoder = PngEncoder::new_with_quality(cursor, CompressionType::Fast, FilterType::Sub);
-	img.write_with_encoder(encoder)
+	// Previews are display-only: collapse to 8-bit (PNG can't carry f32, and a
+	// 16-bit preview wastes bandwidth). `to_rgba8` clamps f32 sources to 0..1.
+	img.to_rgba8()
+		.write_with_encoder(encoder)
 		.map_err(|e| format!("Failed to encode PNG: {}", e))?;
 
 	Ok(base64::engine::general_purpose::STANDARD.encode(&buf))
@@ -299,8 +300,11 @@ pub fn maybe_resize(img: DynamicImage, max_size: Option<u32>) -> DynamicImage {
 	img
 }
 
-/// Save a DynamicImage to a path and format. Format string carries bit-depth
-/// intent: "png8" (8-bit), "png16" (16-bit). Supports png/tga/jpg/exr.
+/// Save a DynamicImage to a path and format. The format string carries
+/// bit-depth intent that the file extension can't express: "png8" (8-bit) vs
+/// "png16" (16-bit), "tiff16" (16-bit TIFF). Quantization from the pipeline's
+/// f32 working buffer happens here — `to_rgba16`/`to_rgba32f` give real high-bit
+/// output. TGA/JPEG/BMP/GIF are 8-bit by format; EXR is float32.
 pub fn save_image(img: &DynamicImage, path: &str, format: &str) -> Result<(), String> {
 	let output_path = Path::new(path);
 
@@ -331,6 +335,9 @@ pub fn save_image(img: &DynamicImage, path: &str, format: &str) -> Result<(), St
 		"tiff" | "tif" => DynamicImage::ImageRgba8(img.to_rgba8())
 			.save_with_format(output_path, ImageFormat::Tiff)
 			.map_err(|e| format!("Failed to save TIFF: {}", e))?,
+		"tiff16" => DynamicImage::ImageRgba16(img.to_rgba16())
+			.save_with_format(output_path, ImageFormat::Tiff)
+			.map_err(|e| format!("Failed to save TIFF 16-bit: {}", e))?,
 		"gif" => DynamicImage::ImageRgba8(img.to_rgba8())
 			.save_with_format(output_path, ImageFormat::Gif)
 			.map_err(|e| format!("Failed to save GIF: {}", e))?,

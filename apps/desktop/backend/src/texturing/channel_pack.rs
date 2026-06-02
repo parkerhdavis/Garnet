@@ -3,8 +3,14 @@
 //! Ported from Packi's channel_pack.rs. Channel index convention: 0=R, 1=G,
 //! 2=B, 3=A, 4=Luminance. Preview commands return base64 PNG; export commands
 //! write files.
+//!
+//! Works on a normalized `Rgba32FImage` (channel values 0..1) so packing a
+//! higher-bit source channel (e.g. a 16-bit height/AO map) and exporting
+//! `png16` preserves real precision rather than truncating to 8-bit.
+//! Quantization to the chosen output depth happens in `save_image`; previews
+//! collapse to 8-bit at encode time.
 
-use image::{DynamicImage, GenericImageView, RgbaImage};
+use image::{DynamicImage, Rgba, Rgba32FImage};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -36,7 +42,7 @@ pub async fn pack_channels(
 ) -> Result<String, String> {
 	tokio::task::spawn_blocking(move || {
 		let packed = do_pack(&config)?;
-		let preview = maybe_resize(DynamicImage::ImageRgba8(packed), max_preview_size);
+		let preview = maybe_resize(DynamicImage::ImageRgba32F(packed), max_preview_size);
 		encode_to_base64_png(&preview)
 	})
 	.await
@@ -52,13 +58,13 @@ pub async fn export_packed(
 ) -> Result<(), String> {
 	tokio::task::spawn_blocking(move || {
 		let packed = do_pack(&config)?;
-		save_image(&DynamicImage::ImageRgba8(packed), &output_path, &format)
+		save_image(&DynamicImage::ImageRgba32F(packed), &output_path, &format)
 	})
 	.await
 	.map_err(|e| format!("Task failed: {}", e))?
 }
 
-fn do_pack(config: &PackConfig) -> Result<RgbaImage, String> {
+fn do_pack(config: &PackConfig) -> Result<Rgba32FImage, String> {
 	let (target_w, target_h) = if let Some(res) = config.target_resolution {
 		res
 	} else {
@@ -76,7 +82,7 @@ fn do_pack(config: &PackConfig) -> Result<RgbaImage, String> {
 		config.a.as_ref(),
 	];
 
-	let channel_data: Vec<Option<Vec<u8>>> = channels
+	let channel_data: Vec<Option<Vec<f32>>> = channels
 		.par_iter()
 		.map(|ch_config| {
 			ch_config
@@ -85,64 +91,59 @@ fn do_pack(config: &PackConfig) -> Result<RgbaImage, String> {
 		})
 		.collect::<Result<Vec<_>, _>>()?;
 
-	let mut packed = RgbaImage::new(target_w, target_h);
+	let mut packed = Rgba32FImage::new(target_w, target_h);
 	let pixel_count = (target_w * target_h) as usize;
 
 	for i in 0..pixel_count {
-		let r = channel_data[0].as_ref().map_or(0u8, |d| d[i]);
-		let g = channel_data[1].as_ref().map_or(0u8, |d| d[i]);
-		let b = channel_data[2].as_ref().map_or(0u8, |d| d[i]);
-		let a = channel_data[3].as_ref().map_or(255u8, |d| d[i]);
+		let r = channel_data[0].as_ref().map_or(0.0, |d| d[i]);
+		let g = channel_data[1].as_ref().map_or(0.0, |d| d[i]);
+		let b = channel_data[2].as_ref().map_or(0.0, |d| d[i]);
+		let a = channel_data[3].as_ref().map_or(1.0, |d| d[i]);
 		packed.put_pixel(
 			(i as u32) % target_w,
 			(i as u32) / target_w,
-			image::Rgba([r, g, b, a]),
+			Rgba([r, g, b, a]),
 		);
 	}
 
 	Ok(packed)
 }
 
-/// Extract a single channel from a source image as a flat Vec<u8>.
+/// Extract a single channel from a source image as a flat `Vec<f32>` (0..1).
 fn extract_channel(
 	config: &ChannelSourceConfig,
 	target_w: u32,
 	target_h: u32,
-) -> Result<Vec<u8>, String> {
-	let img = load_dynamic_image(&config.path)?;
-	let img = {
-		let (w, h) = img.dimensions();
-		if w != target_w || h != target_h {
-			img.resize_exact(target_w, target_h, image::imageops::FilterType::Lanczos3)
-		} else {
-			img
-		}
+) -> Result<Vec<f32>, String> {
+	let buf = load_dynamic_image(&config.path)?.to_rgba32f();
+	let buf = if buf.width() != target_w || buf.height() != target_h {
+		image::imageops::resize(
+			&buf,
+			target_w,
+			target_h,
+			image::imageops::FilterType::Lanczos3,
+		)
+	} else {
+		buf
 	};
 
-	let rgba = img.to_rgba8();
 	let mut data = Vec::with_capacity((target_w * target_h) as usize);
-
-	for pixel in rgba.pixels() {
+	for pixel in buf.pixels() {
 		let val = sample_channel(pixel, config.source_channel);
-		data.push(if config.invert { 255 - val } else { val });
+		data.push(if config.invert { 1.0 - val } else { val });
 	}
 
 	Ok(data)
 }
 
 /// Sample a channel value (0=R..3=A, anything else = Rec.709 luminance).
-fn sample_channel(pixel: &image::Rgba<u8>, channel: u8) -> u8 {
+fn sample_channel(pixel: &Rgba<f32>, channel: u8) -> f32 {
 	match channel {
 		0 => pixel[0],
 		1 => pixel[1],
 		2 => pixel[2],
 		3 => pixel[3],
-		_ => {
-			let r = pixel[0] as f32;
-			let g = pixel[1] as f32;
-			let b = pixel[2] as f32;
-			(0.2126 * r + 0.7152 * g + 0.0722 * b).round() as u8
-		}
+		_ => 0.2126 * pixel[0] + 0.7152 * pixel[1] + 0.0722 * pixel[2],
 	}
 }
 
@@ -163,16 +164,16 @@ pub async fn unpack_channels(
 	max_preview_size: Option<u32>,
 ) -> Result<UnpackResult, String> {
 	tokio::task::spawn_blocking(move || {
-		let img = maybe_resize(load_dynamic_image(&path)?, max_preview_size);
-		let rgba = img.to_rgba8();
-		let (w, h) = rgba.dimensions();
+		let buf = maybe_resize(load_dynamic_image(&path)?, max_preview_size).to_rgba32f();
+		let (w, h) = buf.dimensions();
 
 		let channels: Vec<String> = (0u8..4)
 			.into_par_iter()
 			.map(|ch_idx| {
+				// 8-bit grayscale is sufficient for the on-screen channel preview.
 				let mut gray = image::GrayImage::new(w, h);
-				for (x, y, pixel) in rgba.enumerate_pixels() {
-					gray.put_pixel(x, y, image::Luma([pixel[ch_idx as usize]]));
+				for (x, y, pixel) in buf.enumerate_pixels() {
+					gray.put_pixel(x, y, image::Luma([f32_to_u8(pixel[ch_idx as usize])]));
 				}
 				encode_to_base64_png(&DynamicImage::ImageLuma8(gray))
 			})
@@ -189,7 +190,9 @@ pub async fn unpack_channels(
 	.map_err(|e| format!("Task failed: {}", e))?
 }
 
-/// Export a single channel from a packed image as a grayscale file.
+/// Export a single channel from a packed image as a grayscale file. Carried as
+/// replicated RGB(+opaque alpha) f32 so `save_image` can emit real high-bit
+/// output (`save_image` quantizes to the requested depth).
 #[tauri::command]
 pub async fn export_unpacked(
 	path: String,
@@ -198,13 +201,14 @@ pub async fn export_unpacked(
 	format: String,
 ) -> Result<(), String> {
 	tokio::task::spawn_blocking(move || {
-		let rgba = load_dynamic_image(&path)?.to_rgba8();
-		let (w, h) = rgba.dimensions();
-		let mut gray = image::GrayImage::new(w, h);
-		for (x, y, pixel) in rgba.enumerate_pixels() {
-			gray.put_pixel(x, y, image::Luma([sample_channel(pixel, channel)]));
+		let buf = load_dynamic_image(&path)?.to_rgba32f();
+		let (w, h) = buf.dimensions();
+		let mut out = Rgba32FImage::new(w, h);
+		for (x, y, pixel) in buf.enumerate_pixels() {
+			let v = sample_channel(pixel, channel);
+			out.put_pixel(x, y, Rgba([v, v, v, 1.0]));
 		}
-		save_image(&DynamicImage::ImageLuma8(gray), &output_path, &format)
+		save_image(&DynamicImage::ImageRgba32F(out), &output_path, &format)
 	})
 	.await
 	.map_err(|e| format!("Task failed: {}", e))?
@@ -224,24 +228,24 @@ pub struct SwizzleConfig {
 	pub a_invert: bool,
 }
 
-fn read_source(pixel: &image::Rgba<u8>, source: u8, invert: bool) -> u8 {
+fn read_source(pixel: &Rgba<f32>, source: u8, invert: bool) -> f32 {
 	let val = sample_channel(pixel, source);
 	if invert {
-		255 - val
+		1.0 - val
 	} else {
 		val
 	}
 }
 
-fn do_swizzle(img: &DynamicImage, config: &SwizzleConfig) -> RgbaImage {
-	let rgba = img.to_rgba8();
-	let (w, h) = rgba.dimensions();
-	let mut out = RgbaImage::new(w, h);
-	for (x, y, pixel) in rgba.enumerate_pixels() {
+fn do_swizzle(img: &DynamicImage, config: &SwizzleConfig) -> Rgba32FImage {
+	let buf = img.to_rgba32f();
+	let (w, h) = buf.dimensions();
+	let mut out = Rgba32FImage::new(w, h);
+	for (x, y, pixel) in buf.enumerate_pixels() {
 		out.put_pixel(
 			x,
 			y,
-			image::Rgba([
+			Rgba([
 				read_source(pixel, config.r_source, config.r_invert),
 				read_source(pixel, config.g_source, config.g_invert),
 				read_source(pixel, config.b_source, config.b_invert),
@@ -262,7 +266,7 @@ pub async fn swizzle_channels(
 	tokio::task::spawn_blocking(move || {
 		let img = maybe_resize(load_dynamic_image(&path)?, max_preview_size);
 		let result = do_swizzle(&img, &config);
-		encode_to_base64_png(&DynamicImage::ImageRgba8(result))
+		encode_to_base64_png(&DynamicImage::ImageRgba32F(result))
 	})
 	.await
 	.map_err(|e| format!("Task failed: {}", e))?
@@ -279,10 +283,15 @@ pub async fn export_swizzled(
 	tokio::task::spawn_blocking(move || {
 		let img = load_dynamic_image(&path)?;
 		let result = do_swizzle(&img, &config);
-		save_image(&DynamicImage::ImageRgba8(result), &output_path, &format)
+		save_image(&DynamicImage::ImageRgba32F(result), &output_path, &format)
 	})
 	.await
 	.map_err(|e| format!("Task failed: {}", e))?
+}
+
+/// Quantize a normalized f32 channel value to 8-bit for previews.
+fn f32_to_u8(v: f32) -> u8 {
+	(v.clamp(0.0, 1.0) * 255.0).round() as u8
 }
 
 /// Find the maximum resolution among the source images (header read only).
@@ -304,21 +313,32 @@ fn find_max_resolution(config: &PackConfig) -> Result<(u32, u32), String> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use image::RgbaImage;
+
+	const EPS: f32 = 1.5 / 255.0;
+
+	fn close(a: f32, b: f32) -> bool {
+		(a - b).abs() <= EPS
+	}
 
 	#[test]
 	fn sample_channel_and_invert() {
-		let pixel = image::Rgba([10, 20, 30, 40]);
-		assert_eq!(sample_channel(&pixel, 0), 10);
-		assert_eq!(sample_channel(&pixel, 3), 40);
-		// Luminance of [100,150,200] ≈ 144
-		assert!((sample_channel(&image::Rgba([100, 150, 200, 255]), 4) as i16 - 144).abs() <= 1);
-		assert_eq!(read_source(&image::Rgba([100, 0, 255, 128]), 0, true), 155);
+		// Values in normalized 0..1 space.
+		let pixel = Rgba([10.0 / 255.0, 20.0 / 255.0, 30.0 / 255.0, 40.0 / 255.0]);
+		assert!(close(sample_channel(&pixel, 0), 10.0 / 255.0));
+		assert!(close(sample_channel(&pixel, 3), 40.0 / 255.0));
+		// Luminance of [100,150,200] ≈ 143
+		let lum = sample_channel(&Rgba([100.0 / 255.0, 150.0 / 255.0, 200.0 / 255.0, 1.0]), 4);
+		assert!(close(lum, 143.0 / 255.0));
+		// Inverted red of 100/255 → 155/255.
+		let inv = read_source(&Rgba([100.0 / 255.0, 0.0, 1.0, 0.5]), 0, true);
+		assert!(close(inv, 155.0 / 255.0));
 	}
 
 	#[test]
 	fn swizzle_remap_and_invert() {
 		let mut img = RgbaImage::new(1, 1);
-		img.put_pixel(0, 0, image::Rgba([10, 20, 30, 40]));
+		img.put_pixel(0, 0, Rgba([10, 20, 30, 40]));
 		// R←B, G←A, B←R, A←G
 		let cfg = SwizzleConfig {
 			r_source: 2,
@@ -331,7 +351,8 @@ mod tests {
 			a_invert: false,
 		};
 		let result = do_swizzle(&DynamicImage::ImageRgba8(img), &cfg);
-		assert_eq!(*result.get_pixel(0, 0), image::Rgba([30, 40, 10, 20]));
+		let p = DynamicImage::ImageRgba32F(result).to_rgba8();
+		assert_eq!(*p.get_pixel(0, 0), Rgba([30, 40, 10, 20]));
 	}
 
 	#[test]
@@ -340,7 +361,7 @@ mod tests {
 		let path = tmp.path().join("src.png");
 		let mut img = RgbaImage::new(2, 2);
 		for pixel in img.pixels_mut() {
-			*pixel = image::Rgba([100, 100, 100, 255]);
+			*pixel = Rgba([100, 100, 100, 255]);
 		}
 		img.save(&path).unwrap();
 
@@ -355,7 +376,7 @@ mod tests {
 			a: None,
 			target_resolution: Some((2, 2)),
 		};
-		let result = do_pack(&cfg).unwrap();
+		let result = DynamicImage::ImageRgba32F(do_pack(&cfg).unwrap()).to_rgba8();
 		let p = result.get_pixel(0, 0);
 		assert_eq!(p[0], 155); // inverted 100
 		assert_eq!(p[3], 255); // alpha default

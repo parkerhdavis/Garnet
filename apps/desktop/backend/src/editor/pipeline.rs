@@ -9,7 +9,7 @@
 //! incremental caches add a lot of state for very little win at this
 //! scale. Revisit if perf becomes a bottleneck on large images.
 
-use image::DynamicImage;
+use image::{DynamicImage, Rgba32FImage};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -102,46 +102,76 @@ pub fn apply_pipeline(img: &DynamicImage, ops: &[Operation]) -> Result<DynamicIm
 	if ops.is_empty() {
 		return Ok(img.clone());
 	}
-	let mut current = apply_one(img, &ops[0])?;
-	for op in &ops[1..] {
-		current = apply_one(&current, op)?;
+	// Promote to a normalized f32 working buffer once, run every op in f32 so
+	// chained adjustments lose no precision, and let `save_image` quantize to
+	// the chosen output depth. `to_rgba32f` normalizes 8/16-bit sources to
+	// 0..1 and passes f32/EXR sources through unchanged.
+	let ordered = reorder_for_preview_parity(ops);
+	let mut buf = img.to_rgba32f();
+	for op in &ordered {
+		buf = apply_one(buf, op)?;
 	}
-	Ok(current)
+	Ok(DynamicImage::ImageRgba32F(buf))
 }
 
-fn apply_one(img: &DynamicImage, op: &Operation) -> Result<DynamicImage, String> {
-	match op {
-		Operation::AdjustHue { offset } => {
-			Ok(DynamicImage::ImageRgba8(apply_hue(img.to_rgba8(), *offset)))
+/// Canonicalize op order to match the live CSS-filter preview, so the saved
+/// file looks like what the editor showed. The preview's `filter:` chain always
+/// applies the luminance curve and white-balance *after* the hue/sat/
+/// brightness/contrast primitives (they're separate SVG filters appended last),
+/// and the geometric transforms wrap the already-filtered image. Relative order
+/// within each group is preserved. Color ops are per-pixel so reordering them
+/// ahead of geometry doesn't change the result; reordering curve/white-balance
+/// to the end is what fixes the preview-vs-save mismatch.
+fn reorder_for_preview_parity(ops: &[Operation]) -> Vec<Operation> {
+	let mut color = Vec::new();
+	let mut curve = Vec::new();
+	let mut white_balance = Vec::new();
+	let mut geometry = Vec::new();
+	for op in ops {
+		match op {
+			Operation::AdjustHue { .. }
+			| Operation::AdjustSaturation { .. }
+			| Operation::AdjustBrightness { .. }
+			| Operation::AdjustContrast { .. } => color.push(op.clone()),
+			Operation::LuminanceCurve { .. } => curve.push(op.clone()),
+			Operation::AdjustTemperature { .. } | Operation::AdjustTint { .. } => {
+				white_balance.push(op.clone())
+			}
+			Operation::Crop { .. }
+			| Operation::Resize { .. }
+			| Operation::Rotate { .. }
+			| Operation::CornerRound { .. } => geometry.push(op.clone()),
 		}
-		Operation::AdjustSaturation { offset } => {
-			Ok(DynamicImage::ImageRgba8(apply_saturation(img.to_rgba8(), *offset)))
-		}
-		Operation::AdjustBrightness { offset } => {
-			Ok(DynamicImage::ImageRgba8(apply_brightness(img.to_rgba8(), *offset)))
-		}
-		Operation::AdjustContrast { amount } => {
-			Ok(DynamicImage::ImageRgba8(apply_contrast(img.to_rgba8(), *amount)))
-		}
-		Operation::AdjustTemperature { amount } => {
-			Ok(DynamicImage::ImageRgba8(apply_temperature(img.to_rgba8(), *amount)))
-		}
-		Operation::AdjustTint { amount } => {
-			Ok(DynamicImage::ImageRgba8(apply_tint(img.to_rgba8(), *amount)))
-		}
+	}
+	color
+		.into_iter()
+		.chain(curve)
+		.chain(white_balance)
+		.chain(geometry)
+		.collect()
+}
+
+fn apply_one(img: Rgba32FImage, op: &Operation) -> Result<Rgba32FImage, String> {
+	Ok(match op {
+		Operation::AdjustHue { offset } => apply_hue(img, *offset),
+		Operation::AdjustSaturation { offset } => apply_saturation(img, *offset),
+		Operation::AdjustBrightness { offset } => apply_brightness(img, *offset),
+		Operation::AdjustContrast { amount } => apply_contrast(img, *amount),
+		Operation::AdjustTemperature { amount } => apply_temperature(img, *amount),
+		Operation::AdjustTint { amount } => apply_tint(img, *amount),
 		Operation::LuminanceCurve { lut } => {
 			if lut.len() != 256 {
 				return Err(format!("LUT must have 256 entries, got {}", lut.len()));
 			}
 			let mut arr = [0u8; 256];
 			arr.copy_from_slice(lut);
-			Ok(DynamicImage::ImageRgba8(apply_luminance_curve(img.to_rgba8(), &arr)))
+			apply_luminance_curve(img, &arr)
 		}
-		Operation::Crop { x, y, w, h } => Ok(crop(img, *x, *y, *w, *h)),
-		Operation::Resize { w, h } => resize(img, *w, *h),
-		Operation::Rotate { angle } => Ok(rotate(img, *angle)),
-		Operation::CornerRound { radius } => Ok(corner_round(img, *radius)),
-	}
+		Operation::Crop { x, y, w, h } => crop(&img, *x, *y, *w, *h),
+		Operation::Resize { w, h } => resize(&img, *w, *h)?,
+		Operation::Rotate { angle } => rotate(&img, *angle),
+		Operation::CornerRound { radius } => corner_round(&img, *radius),
+	})
 }
 
 /// Apply the pipeline at a downscaled preview size and return the
@@ -229,6 +259,28 @@ mod tests {
 	}
 
 	#[test]
+	fn pipeline_preserves_subbyte_precision() {
+		// 512 distinct 16-bit gray levels — more than 8 bits can represent.
+		let mut src = image::ImageBuffer::<image::Rgba<u16>, Vec<u16>>::new(512, 1);
+		for (x, _y, p) in src.enumerate_pixels_mut() {
+			let v = (x * 128) as u16;
+			*p = image::Rgba([v, v, v, 65535]);
+		}
+		let src = DynamicImage::ImageRgba16(src);
+		// A gentle contrast stays monotonic and avoids clamping mid-range, so
+		// distinct inputs stay distinct.
+		let out = apply_pipeline(&src, &[Operation::AdjustContrast { amount: 0.1 }]).unwrap();
+		let out16 = out.to_rgba16();
+		let distinct: std::collections::HashSet<u16> = out16.pixels().map(|p| p[0]).collect();
+		// An 8-bit pipeline would collapse these to ≤256 distinct levels.
+		assert!(
+			distinct.len() > 256,
+			"expected >256 distinct 16-bit levels, got {}",
+			distinct.len()
+		);
+	}
+
+	#[test]
 	fn crop_then_resize_composes() {
 		let img = solid(100, 100, [200, 100, 50, 255]);
 		let out = apply_pipeline(
@@ -301,5 +353,157 @@ mod tests {
 		assert!(json.contains("\"type\":\"crop\""));
 		let decoded: Vec<Operation> = serde_json::from_str(&json).unwrap();
 		assert_eq!(decoded.len(), 3);
+	}
+}
+
+/// Wall-time benchmark for the commit path (apply_pipeline + encode), used to
+/// gauge the cost of the f32 precision upgrade against the prior 8-bit path.
+/// Ignored by default — run explicitly:
+///   cargo test -p garnet --release bench_commit -- --ignored --nocapture
+/// `GARNET_BENCH_8K=1` adds the 8K case (~4 GB+ working buffers).
+#[cfg(test)]
+mod bench {
+	use super::*;
+	use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba, RgbaImage};
+	use std::time::Instant;
+
+	fn grad_rgba8(side: u32) -> DynamicImage {
+		let mut img = RgbaImage::new(side, side);
+		for (x, y, p) in img.enumerate_pixels_mut() {
+			*p = Rgba([
+				(x % 256) as u8,
+				(y % 256) as u8,
+				((x + y) % 256) as u8,
+				255,
+			]);
+		}
+		DynamicImage::ImageRgba8(img)
+	}
+
+	fn grad_rgba16(side: u32) -> DynamicImage {
+		let mut img: ImageBuffer<Rgba<u16>, Vec<u16>> = ImageBuffer::new(side, side);
+		for (x, y, p) in img.enumerate_pixels_mut() {
+			// 16-bit gradient with sub-8-bit steps to expose precision loss.
+			*p = Rgba([
+				((x * 257) % 65536) as u16,
+				((y * 257) % 65536) as u16,
+				(((x + y) * 131) % 65536) as u16,
+				65535,
+			]);
+		}
+		DynamicImage::ImageRgba16(img)
+	}
+
+	fn rep_ops() -> Vec<Operation> {
+		// Representative "photo edit": tonal curve + hue + contrast.
+		let lut: Vec<u8> = (0..256).map(|i| i as u8).collect();
+		vec![
+			Operation::LuminanceCurve { lut },
+			Operation::AdjustHue { offset: 18.0 },
+			Operation::AdjustContrast { amount: 0.25 },
+		]
+	}
+
+	fn time_case(label: &str, src: &DynamicImage, ops: &[Operation], fmt: &str) {
+		let ext = match fmt {
+			"png8" | "png16" => "png",
+			"jpg" | "jpeg" => "jpg",
+			"tiff16" => "tiff",
+			other => other,
+		};
+		let tmp = std::env::temp_dir()
+			.join(format!("garnet-bench-{}.{}", label.replace(' ', "_"), ext));
+		// Warm one pass (allocator, rayon pool) then time the next.
+		let _ = apply_pipeline(src, ops).unwrap();
+		let t0 = Instant::now();
+		let result = apply_pipeline(src, ops).unwrap();
+		let proc_ms = t0.elapsed().as_secs_f64() * 1000.0;
+		let t1 = Instant::now();
+		save_image(&result, tmp.to_str().unwrap(), fmt).unwrap();
+		let save_ms = t1.elapsed().as_secs_f64() * 1000.0;
+		let _ = std::fs::remove_file(&tmp);
+		println!(
+			"{:<28} process={:>8.1}ms  save({})={:>8.1}ms  total={:>8.1}ms",
+			label,
+			proc_ms,
+			fmt,
+			save_ms,
+			proc_ms + save_ms
+		);
+	}
+
+	fn mean_rgb(img: &DynamicImage) -> (f64, f64, f64) {
+		let rgb = img.to_rgb8();
+		let (mut r, mut g, mut b) = (0u64, 0u64, 0u64);
+		for p in rgb.pixels() {
+			r += p[0] as u64;
+			g += p[1] as u64;
+			b += p[2] as u64;
+		}
+		let n = rgb.pixels().len() as f64;
+		(r as f64 / n, g as f64 / n, b as f64 / n)
+	}
+
+	/// Repro for the "slow save + corrupted output" reports. Loads the real
+	/// image, applies a warm/bright edit, times each stage, writes PNG+JPG to
+	/// /tmp for visual inspection, and prints channel means.
+	#[test]
+	#[ignore]
+	fn repro_commit_real() {
+		// Local diagnostic: point GARNET_REPRO_IMAGE at any image to profile the
+		// commit path + eyeball /tmp/garnet-repro.png. Skips if unset/missing.
+		let Ok(path) = std::env::var("GARNET_REPRO_IMAGE") else {
+			println!("[repro] set GARNET_REPRO_IMAGE to run");
+			return;
+		};
+		if !std::path::Path::new(&path).exists() {
+			println!("[repro] {path} not found; skipping");
+			return;
+		}
+		let t0 = Instant::now();
+		let src = load_dynamic_image(&path).unwrap();
+		let load_ms = t0.elapsed().as_secs_f64() * 1000.0;
+		let (sw, sh) = src.dimensions();
+		let ops = vec![
+			Operation::AdjustHue { offset: 50.0 },
+			Operation::AdjustSaturation { offset: 0.4 },
+			Operation::AdjustBrightness { offset: 0.3 },
+			Operation::AdjustTemperature { amount: 0.5 },
+			Operation::AdjustTint { amount: 0.3 },
+		];
+		let t1 = Instant::now();
+		let result = apply_pipeline(&src, &ops).unwrap();
+		let proc_ms = t1.elapsed().as_secs_f64() * 1000.0;
+		let t2 = Instant::now();
+		save_image(&result, "/tmp/garnet-repro.jpg", "jpg").unwrap();
+		let jpg_ms = t2.elapsed().as_secs_f64() * 1000.0;
+		save_image(&result, "/tmp/garnet-repro.png", "png8").unwrap();
+		let (ir, ig, ib) = mean_rgb(&src);
+		let (or, og, ob) = mean_rgb(&result);
+		println!(
+			"\n[repro] {sw}x{sh}  load={load_ms:.0}ms  process={proc_ms:.0}ms  save_jpg={jpg_ms:.0}ms"
+		);
+		println!("[repro] input  meanRGB = ({ir:.1}, {ig:.1}, {ib:.1})");
+		println!("[repro] output meanRGB = ({or:.1}, {og:.1}, {ob:.1})  (warm edit ⇒ R↑ B↓ expected)");
+	}
+
+	#[test]
+	#[ignore]
+	fn bench_commit() {
+		println!("\n=== commit-path benchmark (apply_pipeline + save) ===");
+		let mut sides = vec![2048u32, 4096];
+		if std::env::var("GARNET_BENCH_8K").is_ok() {
+			sides.push(8192);
+		}
+		let ops = rep_ops();
+		for side in sides {
+			let mp = (side as f64 * side as f64) / 1_000_000.0;
+			println!("\n-- {side}x{side} ({mp:.1} MP) --");
+			let src8 = grad_rgba8(side);
+			time_case(&format!("{side} src8 -> png8"), &src8, &ops, "png8");
+			time_case(&format!("{side} src8 -> png16"), &src8, &ops, "png16");
+			let src16 = grad_rgba16(side);
+			time_case(&format!("{side} src16 -> png16"), &src16, &ops, "png16");
+		}
 	}
 }

@@ -247,13 +247,13 @@ fn process_single_file(
 				output_name = apply_rename_pattern(pattern, stem, &output_ext, idx);
 			}
 			AutomationStep::FlipGreen => {
-				img = image::DynamicImage::ImageRgba8(
-					crate::texturing::normal_map::flip_green_on_image(img.to_rgba8()),
+				img = image::DynamicImage::ImageRgba32F(
+					crate::texturing::normal_map::flip_green_on_image(img.to_rgba32f()),
 				);
 			}
 			AutomationStep::Normalize => {
-				img = image::DynamicImage::ImageRgba8(
-					crate::texturing::normal_map::normalize_on_image(img.to_rgba8()),
+				img = image::DynamicImage::ImageRgba32F(
+					crate::texturing::normal_map::normalize_on_image(img.to_rgba32f()),
 				);
 			}
 		}
