@@ -7,9 +7,6 @@ I built Garnet as a media-first companion to one of my favorite and most persona
 
 Rather than investing time, money, and complexity into a variety of esoteric media tools (or at least, more than I already had) for the simple work of managing, previewing, and performing basic edits on my files, I designed Garnet as the simple surface layer over all of that content.
 
-> [!NOTE]
-> Garnet is still in an early stage of development, with notable functionality limitations. What's there should work without issue, but you'll see a lot of gaps where core or plugin functions have yet to be built.
-
 ---
 
 ## Core Features
