@@ -106,11 +106,49 @@ pub fn apply_pipeline(img: &DynamicImage, ops: &[Operation]) -> Result<DynamicIm
 	// chained adjustments lose no precision, and let `save_image` quantize to
 	// the chosen output depth. `to_rgba32f` normalizes 8/16-bit sources to
 	// 0..1 and passes f32/EXR sources through unchanged.
+	let ordered = reorder_for_preview_parity(ops);
 	let mut buf = img.to_rgba32f();
-	for op in ops {
+	for op in &ordered {
 		buf = apply_one(buf, op)?;
 	}
 	Ok(DynamicImage::ImageRgba32F(buf))
+}
+
+/// Canonicalize op order to match the live CSS-filter preview, so the saved
+/// file looks like what the editor showed. The preview's `filter:` chain always
+/// applies the luminance curve and white-balance *after* the hue/sat/
+/// brightness/contrast primitives (they're separate SVG filters appended last),
+/// and the geometric transforms wrap the already-filtered image. Relative order
+/// within each group is preserved. Color ops are per-pixel so reordering them
+/// ahead of geometry doesn't change the result; reordering curve/white-balance
+/// to the end is what fixes the preview-vs-save mismatch.
+fn reorder_for_preview_parity(ops: &[Operation]) -> Vec<Operation> {
+	let mut color = Vec::new();
+	let mut curve = Vec::new();
+	let mut white_balance = Vec::new();
+	let mut geometry = Vec::new();
+	for op in ops {
+		match op {
+			Operation::AdjustHue { .. }
+			| Operation::AdjustSaturation { .. }
+			| Operation::AdjustBrightness { .. }
+			| Operation::AdjustContrast { .. } => color.push(op.clone()),
+			Operation::LuminanceCurve { .. } => curve.push(op.clone()),
+			Operation::AdjustTemperature { .. } | Operation::AdjustTint { .. } => {
+				white_balance.push(op.clone())
+			}
+			Operation::Crop { .. }
+			| Operation::Resize { .. }
+			| Operation::Rotate { .. }
+			| Operation::CornerRound { .. } => geometry.push(op.clone()),
+		}
+	}
+	color
+		.into_iter()
+		.chain(curve)
+		.chain(white_balance)
+		.chain(geometry)
+		.collect()
 }
 
 fn apply_one(img: Rgba32FImage, op: &Operation) -> Result<Rgba32FImage, String> {
@@ -326,7 +364,7 @@ mod tests {
 #[cfg(test)]
 mod bench {
 	use super::*;
-	use image::{DynamicImage, ImageBuffer, Rgba, RgbaImage};
+	use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba, RgbaImage};
 	use std::time::Instant;
 
 	fn grad_rgba8(side: u32) -> DynamicImage {
@@ -392,6 +430,61 @@ mod bench {
 			save_ms,
 			proc_ms + save_ms
 		);
+	}
+
+	fn mean_rgb(img: &DynamicImage) -> (f64, f64, f64) {
+		let rgb = img.to_rgb8();
+		let (mut r, mut g, mut b) = (0u64, 0u64, 0u64);
+		for p in rgb.pixels() {
+			r += p[0] as u64;
+			g += p[1] as u64;
+			b += p[2] as u64;
+		}
+		let n = rgb.pixels().len() as f64;
+		(r as f64 / n, g as f64 / n, b as f64 / n)
+	}
+
+	/// Repro for the "slow save + corrupted output" reports. Loads the real
+	/// image, applies a warm/bright edit, times each stage, writes PNG+JPG to
+	/// /tmp for visual inspection, and prints channel means.
+	#[test]
+	#[ignore]
+	fn repro_commit_real() {
+		// Local diagnostic: point GARNET_REPRO_IMAGE at any image to profile the
+		// commit path + eyeball /tmp/garnet-repro.png. Skips if unset/missing.
+		let Ok(path) = std::env::var("GARNET_REPRO_IMAGE") else {
+			println!("[repro] set GARNET_REPRO_IMAGE to run");
+			return;
+		};
+		if !std::path::Path::new(&path).exists() {
+			println!("[repro] {path} not found; skipping");
+			return;
+		}
+		let t0 = Instant::now();
+		let src = load_dynamic_image(&path).unwrap();
+		let load_ms = t0.elapsed().as_secs_f64() * 1000.0;
+		let (sw, sh) = src.dimensions();
+		let ops = vec![
+			Operation::AdjustHue { offset: 50.0 },
+			Operation::AdjustSaturation { offset: 0.4 },
+			Operation::AdjustBrightness { offset: 0.3 },
+			Operation::AdjustTemperature { amount: 0.5 },
+			Operation::AdjustTint { amount: 0.3 },
+		];
+		let t1 = Instant::now();
+		let result = apply_pipeline(&src, &ops).unwrap();
+		let proc_ms = t1.elapsed().as_secs_f64() * 1000.0;
+		let t2 = Instant::now();
+		save_image(&result, "/tmp/garnet-repro.jpg", "jpg").unwrap();
+		let jpg_ms = t2.elapsed().as_secs_f64() * 1000.0;
+		save_image(&result, "/tmp/garnet-repro.png", "png8").unwrap();
+		let (ir, ig, ib) = mean_rgb(&src);
+		let (or, og, ob) = mean_rgb(&result);
+		println!(
+			"\n[repro] {sw}x{sh}  load={load_ms:.0}ms  process={proc_ms:.0}ms  save_jpg={jpg_ms:.0}ms"
+		);
+		println!("[repro] input  meanRGB = ({ir:.1}, {ig:.1}, {ib:.1})");
+		println!("[repro] output meanRGB = ({or:.1}, {og:.1}, {ob:.1})  (warm edit ⇒ R↑ B↓ expected)");
 	}
 
 	#[test]
