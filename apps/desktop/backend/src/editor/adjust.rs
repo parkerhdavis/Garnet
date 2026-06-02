@@ -18,8 +18,9 @@
 //! table). All math is in the stored sRGB-encoded space, like the CSS filters,
 //! with no linearization.
 //!
-//! This diverges from standalone Packi (still HSL); a shared processing crate
-//! should adopt this version. Parallelized with rayon across pixel rows.
+//! (This math diverges from standalone Packi's HSL version, which no longer
+//! matters: Packi is being retired in favor of Garnet, so there's no shared
+//! crate to keep in sync.) Parallelized with rayon across pixel rows.
 
 use image::Rgba32FImage;
 use rayon::prelude::*;

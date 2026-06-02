@@ -14,12 +14,12 @@
 //!   removed via `DELETE`, which also cascades `asset_metadata`,
 //!   `asset_tags`, and `collection_assets`.
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -242,6 +242,216 @@ pub fn scan_root(conn: &Connection, root_id: i64, root_path: &Path) -> rusqlite:
 		report.files_skipped,
 	);
 	Ok(report)
+}
+
+/// Above this many changed paths, a bulk operation is in play (folder
+/// copy/move/delete) and one full `scan_root` is simpler and cheaper than many
+/// per-path updates.
+const MAX_TARGETED_PATHS: usize = 64;
+
+/// Incrementally sync just the given changed paths — same modify / insert /
+/// rename / delete semantics as [`scan_root`], but without walking the whole
+/// tree. This is the watcher's fast path: editing a file in place touches one
+/// row instead of stat-ing every file in the root.
+///
+/// Returns `Ok(None)` when the change set is ambiguous enough that a full scan
+/// is the safe choice, and the caller should fall back to [`scan_root`]:
+/// - a changed path is currently a directory (a folder was created/moved — its
+///   subtree needs walking),
+/// - a deleted path still has tracked children (a directory was removed — its
+///   subtree needs the full-scan "rows not visited → delete" sweep),
+/// - the batch is large (a bulk operation).
+///
+/// All risk checks run read-only *before* any writes, so a fallback decision
+/// never leaves partial mutations behind.
+pub fn update_paths(
+	conn: &Connection,
+	root_id: i64,
+	root_path: &Path,
+	paths: &[PathBuf],
+) -> rusqlite::Result<Option<ScanReport>> {
+	let mut existing_files: Vec<(PathBuf, String)> = Vec::new(); // (abs, relative)
+	let mut missing_rels: Vec<String> = Vec::new();
+	let mut seen_rel: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+	for abs in paths {
+		let rel = match abs.strip_prefix(root_path) {
+			Ok(r) if !r.as_os_str().is_empty() => r.to_string_lossy().to_string(),
+			// Outside the root, or the root dir itself — nothing to index.
+			_ => continue,
+		};
+		if !seen_rel.insert(rel.clone()) {
+			continue; // duplicate path within the batch
+		}
+		if seen_rel.len() > MAX_TARGETED_PATHS {
+			return Ok(None); // bulk op → full scan
+		}
+		match std::fs::symlink_metadata(abs) {
+			Ok(m) if m.is_dir() => return Ok(None), // directory event → full scan
+			Ok(m) if m.is_file() => existing_files.push((abs.clone(), rel)),
+			// Symlinks / sockets / etc. — mirror scan_root's is_file() filter.
+			Ok(_) => {}
+			// Gone: a deletion, or the source half of a rename.
+			Err(_) => missing_rels.push(rel),
+		}
+	}
+
+	// A removed path that still has tracked descendants means a directory was
+	// deleted; pruning the subtree needs the full-scan sweep.
+	for rel in &missing_rels {
+		if has_tracked_children(conn, root_id, rel)? {
+			return Ok(None);
+		}
+	}
+
+	let mut report = ScanReport {
+		root_id,
+		..Default::default()
+	};
+	let tx = conn.unchecked_transaction()?;
+
+	// Creates / modifies / rename targets first, so a rename re-paths the
+	// existing row before its old path is considered for deletion below.
+	for (abs, rel) in &existing_files {
+		report.files_seen += 1;
+		let meta = match std::fs::metadata(abs) {
+			Ok(m) => m,
+			Err(_) => {
+				report.files_skipped += 1;
+				continue;
+			}
+		};
+		let size = meta.len() as i64;
+		let mtime = meta
+			.modified()
+			.ok()
+			.and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+			.map(|d| d.as_secs() as i64);
+		let format = abs
+			.extension()
+			.and_then(|s| s.to_str())
+			.map(|s| s.to_ascii_lowercase());
+
+		if let Some(row) = select_existing(&tx, root_id, rel)? {
+			if row.size == Some(size) && row.mtime == mtime {
+				report.files_skipped += 1; // unchanged
+				continue;
+			}
+			let hash = hash_file(abs).ok();
+			tx.execute(
+				"UPDATE assets SET size = ?1, mtime = ?2, format = ?3, content_hash = ?4 WHERE id = ?5",
+				params![size, mtime, format, hash, row.id],
+			)?;
+			refresh_metadata(&tx, row.id, abs, format.as_deref())?;
+			report.files_updated += 1;
+			report.metadata_extracted += 1;
+			continue;
+		}
+
+		// No row at this path: brand-new, or a rename whose source is now gone.
+		let hash = hash_file(abs).ok();
+		if let Some(src_id) = find_rename_source(&tx, root_id, root_path, hash.as_deref())? {
+			tx.execute(
+				"UPDATE assets SET relative_path = ?1, size = ?2, mtime = ?3, format = ?4 WHERE id = ?5",
+				params![rel, size, mtime, format, src_id],
+			)?;
+			report.files_renamed += 1;
+			continue;
+		}
+
+		tx.execute(
+			"INSERT INTO assets (root_id, relative_path, size, mtime, format, content_hash)
+			 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+			params![root_id, rel, size, mtime, format, hash],
+		)?;
+		let new_id = tx.last_insert_rowid();
+		refresh_metadata(&tx, new_id, abs, format.as_deref())?;
+		crate::garnet_metadata::seed_from_mirror(&tx, new_id, abs);
+		report.files_inserted += 1;
+		report.metadata_extracted += 1;
+	}
+
+	// Deletions: a gone path whose row wasn't just re-pathed by a rename above.
+	for rel in &missing_rels {
+		if let Some(row) = select_existing(&tx, root_id, rel)? {
+			tx.execute("DELETE FROM assets WHERE id = ?1", params![row.id])?;
+			report.files_deleted += 1;
+		}
+	}
+
+	tx.commit()?;
+	tracing::info!(
+		"targeted update: root_id={} seen={} inserted={} updated={} renamed={} deleted={} skipped={}",
+		root_id,
+		report.files_seen,
+		report.files_inserted,
+		report.files_updated,
+		report.files_renamed,
+		report.files_deleted,
+		report.files_skipped,
+	);
+	Ok(Some(report))
+}
+
+/// One existing asset row by relative path, if any.
+fn select_existing(
+	conn: &Connection,
+	root_id: i64,
+	rel: &str,
+) -> rusqlite::Result<Option<ExistingRow>> {
+	conn.query_row(
+		"SELECT id, size, mtime, content_hash FROM assets WHERE root_id = ?1 AND relative_path = ?2",
+		params![root_id, rel],
+		|r| {
+			Ok(ExistingRow {
+				id: r.get(0)?,
+				size: r.get(1)?,
+				mtime: r.get(2)?,
+				content_hash: r.get(3)?,
+			})
+		},
+	)
+	.optional()
+}
+
+/// An existing row in this root whose content hash matches and whose on-disk
+/// path no longer exists — i.e. the source of a rename to some new path.
+fn find_rename_source(
+	conn: &Connection,
+	root_id: i64,
+	root_path: &Path,
+	hash: Option<&str>,
+) -> rusqlite::Result<Option<i64>> {
+	let Some(h) = hash else { return Ok(None) };
+	let mut stmt =
+		conn.prepare("SELECT id, relative_path FROM assets WHERE root_id = ?1 AND content_hash = ?2")?;
+	let rows = stmt.query_map(params![root_id, h], |r| {
+		Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+	})?;
+	for row in rows {
+		let (id, rel) = row?;
+		if !root_path.join(&rel).exists() {
+			return Ok(Some(id));
+		}
+	}
+	Ok(None)
+}
+
+/// Whether any tracked asset sits beneath `rel` (i.e. `rel` was a directory).
+fn has_tracked_children(conn: &Connection, root_id: i64, rel: &str) -> rusqlite::Result<bool> {
+	let pattern = format!("{}/%", escape_like(rel));
+	conn.query_row(
+		"SELECT EXISTS(SELECT 1 FROM assets WHERE root_id = ?1 AND relative_path LIKE ?2 ESCAPE '\\')",
+		params![root_id, pattern],
+		|r| r.get::<_, bool>(0),
+	)
+}
+
+/// Escape LIKE wildcards so a path is matched literally (with `ESCAPE '\'`).
+fn escape_like(s: &str) -> String {
+	s.replace('\\', "\\\\")
+		.replace('%', "\\%")
+		.replace('_', "\\_")
 }
 
 fn find_unseen_by_hash(
@@ -743,5 +953,160 @@ mod tests {
 		assert!(!keys.contains(&"audio.title"), "whitespace-only title omitted");
 		assert!(!keys.contains(&"audio.has_cover"), "no cover omitted");
 		assert!(keys.contains(&"audio.album"));
+	}
+
+	fn row_count(conn: &Connection, root_id: i64) -> i64 {
+		conn.query_row(
+			"SELECT COUNT(*) FROM assets WHERE root_id = ?1",
+			[root_id],
+			|r| r.get(0),
+		)
+		.unwrap()
+	}
+
+	#[test]
+	fn targeted_update_modifies_in_place() {
+		let tmp = tempfile::tempdir().unwrap();
+		let f = tmp.path().join("a.txt");
+		std::fs::write(&f, b"hello").unwrap();
+		let conn = fresh_db();
+		let root_id = register_root(&conn, tmp.path());
+		scan_root(&conn, root_id, tmp.path()).unwrap();
+		let hash_before: Option<String> = conn
+			.query_row(
+				"SELECT content_hash FROM assets WHERE root_id = ?1 AND relative_path = 'a.txt'",
+				[root_id],
+				|r| r.get(0),
+			)
+			.unwrap();
+
+		// Different length → size differs → detected as a modification.
+		std::fs::write(&f, b"hello, a much longer body now").unwrap();
+		let report = update_paths(&conn, root_id, tmp.path(), std::slice::from_ref(&f))
+			.unwrap()
+			.expect("targeted, not fallback");
+		assert_eq!(report.files_updated, 1);
+		assert_eq!(report.files_inserted, 0);
+		assert_eq!(row_count(&conn, root_id), 1);
+		let hash_after: Option<String> = conn
+			.query_row(
+				"SELECT content_hash FROM assets WHERE root_id = ?1 AND relative_path = 'a.txt'",
+				[root_id],
+				|r| r.get(0),
+			)
+			.unwrap();
+		assert_ne!(hash_before, hash_after, "content hash re-derived");
+	}
+
+	#[test]
+	fn targeted_update_inserts_new_file() {
+		let tmp = tempfile::tempdir().unwrap();
+		let conn = fresh_db();
+		let root_id = register_root(&conn, tmp.path());
+		let f = tmp.path().join("new.txt");
+		std::fs::write(&f, b"fresh").unwrap();
+		let report = update_paths(&conn, root_id, tmp.path(), &[f])
+			.unwrap()
+			.expect("targeted");
+		assert_eq!(report.files_inserted, 1);
+		assert_eq!(row_count(&conn, root_id), 1);
+	}
+
+	#[test]
+	fn targeted_update_deletes_missing() {
+		let tmp = tempfile::tempdir().unwrap();
+		let a = tmp.path().join("a.txt");
+		let b = tmp.path().join("b.txt");
+		std::fs::write(&a, b"a").unwrap();
+		std::fs::write(&b, b"b").unwrap();
+		let conn = fresh_db();
+		let root_id = register_root(&conn, tmp.path());
+		scan_root(&conn, root_id, tmp.path()).unwrap();
+
+		std::fs::remove_file(&a).unwrap();
+		let report = update_paths(&conn, root_id, tmp.path(), &[a])
+			.unwrap()
+			.expect("targeted");
+		assert_eq!(report.files_deleted, 1);
+		assert_eq!(row_count(&conn, root_id), 1);
+	}
+
+	#[test]
+	fn targeted_update_handles_rename() {
+		let tmp = tempfile::tempdir().unwrap();
+		let a = tmp.path().join("a.txt");
+		std::fs::write(&a, b"stable content").unwrap();
+		let conn = fresh_db();
+		let root_id = register_root(&conn, tmp.path());
+		scan_root(&conn, root_id, tmp.path()).unwrap();
+		let id_before: i64 = conn
+			.query_row(
+				"SELECT id FROM assets WHERE root_id = ?1 AND relative_path = 'a.txt'",
+				[root_id],
+				|r| r.get(0),
+			)
+			.unwrap();
+
+		let b = tmp.path().join("b.txt");
+		std::fs::rename(&a, &b).unwrap();
+		let report = update_paths(&conn, root_id, tmp.path(), &[a, b])
+			.unwrap()
+			.expect("targeted");
+		assert_eq!(report.files_renamed, 1);
+		assert_eq!(report.files_deleted, 0);
+		assert_eq!(report.files_inserted, 0);
+		assert_eq!(row_count(&conn, root_id), 1, "same row, new path");
+		// Identity preserved: same id now at the new path (so tags travel with it).
+		let id_after: i64 = conn
+			.query_row(
+				"SELECT id FROM assets WHERE root_id = ?1 AND relative_path = 'b.txt'",
+				[root_id],
+				|r| r.get(0),
+			)
+			.unwrap();
+		assert_eq!(id_before, id_after);
+	}
+
+	#[test]
+	fn targeted_update_falls_back_on_directory() {
+		let tmp = tempfile::tempdir().unwrap();
+		let sub = tmp.path().join("sub");
+		std::fs::create_dir(&sub).unwrap();
+		let conn = fresh_db();
+		let root_id = register_root(&conn, tmp.path());
+		// A directory in the change set → None (caller runs a full scan).
+		assert!(update_paths(&conn, root_id, tmp.path(), &[sub])
+			.unwrap()
+			.is_none());
+	}
+
+	#[test]
+	fn targeted_update_falls_back_on_dir_deletion() {
+		let tmp = tempfile::tempdir().unwrap();
+		let sub = tmp.path().join("sub");
+		std::fs::create_dir(&sub).unwrap();
+		std::fs::write(sub.join("x.txt"), b"x").unwrap();
+		let conn = fresh_db();
+		let root_id = register_root(&conn, tmp.path());
+		scan_root(&conn, root_id, tmp.path()).unwrap();
+
+		std::fs::remove_dir_all(&sub).unwrap();
+		// `sub` is gone but still has a tracked child → None.
+		assert!(update_paths(&conn, root_id, tmp.path(), &[sub])
+			.unwrap()
+			.is_none());
+	}
+
+	#[test]
+	fn targeted_update_falls_back_on_bulk() {
+		let tmp = tempfile::tempdir().unwrap();
+		let conn = fresh_db();
+		let root_id = register_root(&conn, tmp.path());
+		let paths: Vec<PathBuf> = (0..MAX_TARGETED_PATHS + 1)
+			.map(|i| tmp.path().join(format!("f{i}.txt")))
+			.collect();
+		assert!(update_paths(&conn, root_id, tmp.path(), &paths)
+			.unwrap()
+			.is_none());
 	}
 }
