@@ -4,15 +4,15 @@
 //! `notify` crate. Events are coalesced by `notify-debouncer-mini` so a burst
 //! of writes (e.g., copying a folder of 10k files) produces a single fired
 //! batch rather than 10k callbacks. After each batch lands, we resolve which
-//! library root each event belongs to and enqueue one background scan per
-//! affected root via `library::spawn_scan`.
+//! library root each event belongs to and enqueue a background *targeted*
+//! update per affected root via `library::spawn_targeted_update`, handing it
+//! the specific changed paths.
 //!
-//! Reuses the existing scan pipeline rather than reinventing per-event
-//! updates: the indexer's diff-aware scan (size+mtime fast path, blake3 for
-//! renames/modifications) skips unchanged files cheaply, so a "scan everything
-//! when anything changes" approach is acceptable for V1 and keeps the code
-//! simple. We can layer in event-targeted updates later if scan throughput
-//! becomes a bottleneck.
+//! The targeted update touches only the changed rows (see
+//! `indexer::update_paths`) instead of walking the whole tree, so editing a
+//! file in a large library no longer stat-walks every file on every save. It
+//! falls back to a full `scan_root` when the change set is ambiguous (a
+//! directory was created/moved/deleted, or the batch is large).
 
 use crate::library;
 use notify::{RecommendedWatcher, RecursiveMode};
@@ -56,9 +56,9 @@ impl FileWatcher {
 					return;
 				}
 			};
-			// Group events by affected root. For each event, find the longest-
-			// matching watched root prefix and remember the (id, path).
-			let mut affected: HashMap<i64, PathBuf> = HashMap::new();
+			// Group events by affected root: the longest-matching watched root
+			// prefix, accumulating the changed paths under each.
+			let mut affected: HashMap<i64, (PathBuf, Vec<PathBuf>)> = HashMap::new();
 			for event in events {
 				let mut best_len: usize = 0;
 				let mut best: Option<(i64, PathBuf)> = None;
@@ -72,14 +72,22 @@ impl FileWatcher {
 					}
 				}
 				if let Some((id, p)) = best {
-					affected.insert(id, p);
+					affected
+						.entry(id)
+						.or_insert_with(|| (p, Vec::new()))
+						.1
+						.push(event.path.clone());
 				}
 			}
 			drop(guard);
 
-			for (id, path) in affected {
-				tracing::debug!("watcher: change in root_id={} triggering scan", id);
-				library::spawn_scan(app.clone(), id, path);
+			for (id, (root_path, paths)) in affected {
+				tracing::debug!(
+					"watcher: {} change(s) in root_id={} → targeted update",
+					paths.len(),
+					id
+				);
+				library::spawn_targeted_update(app.clone(), id, root_path, paths);
 			}
 		})
 		.map_err(|e| format!("watcher init: {e}"))?;

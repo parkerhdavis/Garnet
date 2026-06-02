@@ -281,3 +281,65 @@ fn run_scan(id: i64, root_path: &Path) -> anyhow::Result<ScanReport> {
 	)?;
 	Ok(indexer::scan_root(&conn, id, root_path)?)
 }
+
+/// Spawn a background *targeted* update for the changed `paths` in a root — the
+/// watcher's fast path, which touches only the changed rows instead of walking
+/// the whole tree (see `indexer::update_paths`). Shares the per-root scan slot
+/// with `spawn_scan`: if a scan is already running for this root, this records a
+/// pending full scan (a safe superset) rather than racing it. When
+/// `update_paths` decides the change set is ambiguous, it falls back to a full
+/// `scan_root`. Emits the same `scan:*` events so the UI refreshes either way.
+pub fn spawn_targeted_update(app: AppHandle, id: i64, root_path: PathBuf, paths: Vec<PathBuf>) {
+	if !claim_or_pending(id, app.clone(), root_path.clone()) {
+		return;
+	}
+
+	tauri::async_runtime::spawn_blocking(move || {
+		let _ = app.emit("scan:started", id);
+		let result = run_targeted(id, &root_path, &paths);
+
+		let follow_up = finish(id);
+
+		match result {
+			Ok(report) => {
+				tracing::info!(
+					"targeted update completed: root_id={} seen={} inserted={} updated={} renamed={} deleted={}",
+					id,
+					report.files_seen,
+					report.files_inserted,
+					report.files_updated,
+					report.files_renamed,
+					report.files_deleted,
+				);
+				let _ = app.emit("scan:completed", &report);
+			}
+			Err(e) => {
+				let msg = format!("{e:#}");
+				tracing::error!("targeted update failed: root_id={} err={}", id, msg);
+				let _ = app.emit(
+					"scan:failed",
+					ScanFailedPayload { root_id: id, error: msg },
+				);
+			}
+		}
+
+		if let Some((next_app, next_path)) = follow_up {
+			spawn_scan(next_app, id, next_path);
+		}
+	});
+}
+
+fn run_targeted(id: i64, root_path: &Path, paths: &[PathBuf]) -> anyhow::Result<ScanReport> {
+	let path = crate::db::db_path()?;
+	let conn = rusqlite::Connection::open(&path)?;
+	conn.execute_batch(
+		"PRAGMA foreign_keys = ON;
+		 PRAGMA journal_mode = WAL;
+		 PRAGMA busy_timeout = 5000;",
+	)?;
+	match indexer::update_paths(&conn, id, root_path, paths)? {
+		Some(report) => Ok(report),
+		// Ambiguous change set (dir/bulk/dir-deletion) — full scan is the safe path.
+		None => Ok(indexer::scan_root(&conn, id, root_path)?),
+	}
+}
