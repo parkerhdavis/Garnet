@@ -1,51 +1,77 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Pixel-space adjustments: hue, saturation, brightness, contrast, and a
-//! generic 256-entry luminance LUT. The HSL conversions and the hue /
-//! saturation primitives are ported from Packi's `adjust.rs` so behavior
-//! stays consistent across the two apps — keep the implementations in sync
-//! when one side changes.
+//! generic 256-entry luminance LUT. Operates on a normalized `Rgba32FImage`
+//! (channel values in 0..1; may exceed 1.0 for HDR sources) so chained
+//! adjustments preserve full precision — quantization to 8/16-bit happens only
+//! at save time. The HSL conversions and the hue / saturation curves were
+//! ported from Packi's 8-bit `adjust.rs`; the math is identical (Packi already
+//! computed in f32 internally and quantized per-op), just without the early
+//! round-trip to bytes. NOTE: Garnet's stack is now f32 while standalone Packi
+//! is still 8-bit — the eventual shared processing crate should adopt this f32
+//! version. All math stays in the stored (sRGB-encoded) space, matching the
+//! prior 8-bit behavior; no linearization.
 //!
 //! Every adjust function is parallelized with rayon across pixel rows.
 //! Slider drags fire many calls per second on multi-megapixel previews;
 //! single-threaded per-pixel HSL was the dominant cost in v1.
 
-use image::RgbaImage;
+use image::Rgba32FImage;
 use rayon::prelude::*;
 
-/// Apply a luminance curve LUT to an RGBA image in-place.
-pub fn apply_luminance_curve(mut rgba: RgbaImage, lut: &[u8; 256]) -> RgbaImage {
-	let buf: &mut [u8] = &mut rgba;
+/// Apply a 256-entry luminance curve LUT to an RGBA-f32 image. The LUT is
+/// authored in the 8-bit domain (the frontend's curve editor emits 256 u8
+/// entries), so for f32 inputs we linearly interpolate between the two nearest
+/// entries over the 0..1 range — an 8-bit-exact input reproduces the old
+/// nearest-index result, while 16-bit/float inputs get a smooth mapping.
+pub fn apply_luminance_curve(mut rgba: Rgba32FImage, lut: &[u8; 256]) -> Rgba32FImage {
+	let buf: &mut [f32] = &mut rgba;
 	buf.par_chunks_exact_mut(4).for_each(|p| {
-		p[0] = lut[p[0] as usize];
-		p[1] = lut[p[1] as usize];
-		p[2] = lut[p[2] as usize];
+		p[0] = sample_lut(lut, p[0]);
+		p[1] = sample_lut(lut, p[1]);
+		p[2] = sample_lut(lut, p[2]);
 	});
 	rgba
 }
 
-/// Brightness in [-1, 1]. Implemented as a linear add on each channel.
-pub fn apply_brightness(rgba: RgbaImage, offset: f32) -> RgbaImage {
-	let shift = (offset.clamp(-1.0, 1.0) * 255.0).round() as i16;
-	let lut = build_lut(|v| (v as i16 + shift).clamp(0, 255) as u8);
-	apply_luminance_curve(rgba, &lut)
+/// Interpolated 8-bit LUT lookup for a normalized channel value.
+fn sample_lut(lut: &[u8; 256], v: f32) -> f32 {
+	let x = v.clamp(0.0, 1.0) * 255.0;
+	let i0 = x.floor() as usize; // 0..=255
+	let i1 = (i0 + 1).min(255);
+	let frac = x - i0 as f32;
+	let a = lut[i0] as f32;
+	let b = lut[i1] as f32;
+	(a + (b - a) * frac) / 255.0
+}
+
+/// Brightness in [-1, 1]: a linear add on each channel (normalized).
+pub fn apply_brightness(mut rgba: Rgba32FImage, offset: f32) -> Rgba32FImage {
+	let shift = offset.clamp(-1.0, 1.0);
+	let buf: &mut [f32] = &mut rgba;
+	buf.par_chunks_exact_mut(4).for_each(|p| {
+		p[0] = (p[0] + shift).clamp(0.0, 1.0);
+		p[1] = (p[1] + shift).clamp(0.0, 1.0);
+		p[2] = (p[2] + shift).clamp(0.0, 1.0);
+	});
+	rgba
 }
 
 /// Contrast in [-1, 1]. 0 is identity, +1 doubles the slope around the
-/// midpoint, -1 collapses to flat gray.
-pub fn apply_contrast(rgba: RgbaImage, amount: f32) -> RgbaImage {
-	let a = amount.clamp(-1.0, 1.0);
-	let slope = 1.0 + a;
-	let lut = build_lut(|v| {
-		let centered = v as f32 - 127.5;
-		let scaled = centered * slope + 127.5;
-		scaled.clamp(0.0, 255.0).round() as u8
+/// midpoint (0.5), -1 collapses to flat mid-gray.
+pub fn apply_contrast(mut rgba: Rgba32FImage, amount: f32) -> Rgba32FImage {
+	let slope = 1.0 + amount.clamp(-1.0, 1.0);
+	let buf: &mut [f32] = &mut rgba;
+	buf.par_chunks_exact_mut(4).for_each(|p| {
+		p[0] = ((p[0] - 0.5) * slope + 0.5).clamp(0.0, 1.0);
+		p[1] = ((p[1] - 0.5) * slope + 0.5).clamp(0.0, 1.0);
+		p[2] = ((p[2] - 0.5) * slope + 0.5).clamp(0.0, 1.0);
 	});
-	apply_luminance_curve(rgba, &lut)
+	rgba
 }
 
 /// Shift hue by `offset` degrees.
-pub fn apply_hue(mut rgba: RgbaImage, offset: f32) -> RgbaImage {
-	let buf: &mut [u8] = &mut rgba;
+pub fn apply_hue(mut rgba: Rgba32FImage, offset: f32) -> Rgba32FImage {
+	let buf: &mut [f32] = &mut rgba;
 	buf.par_chunks_exact_mut(4).for_each(|p| {
 		let (h, s, l) = rgb_to_hsl(p[0], p[1], p[2]);
 		let (r, g, b) = hsl_to_rgb((h + offset).rem_euclid(360.0), s, l);
@@ -58,36 +84,33 @@ pub fn apply_hue(mut rgba: RgbaImage, offset: f32) -> RgbaImage {
 
 /// Channel-multiplier white-balance temperature in [-1, 1]. Positive
 /// values warm the image (boost R, attenuate B); negative values cool
-/// it. The 0.3 sensitivity matches what feels useful for normal
-/// content — full +1 is a strong tint, not a hard cap.
-pub fn apply_temperature(rgba: RgbaImage, amount: f32) -> RgbaImage {
+/// it. The 0.3 sensitivity matches Packi — full +1 is a strong tint, not
+/// a hard cap.
+pub fn apply_temperature(rgba: Rgba32FImage, amount: f32) -> Rgba32FImage {
 	let t = amount.clamp(-1.0, 1.0);
-	let r_mul = 1.0 + 0.3 * t;
-	let b_mul = 1.0 - 0.3 * t;
-	apply_rgb_scale(rgba, r_mul, 1.0, b_mul)
+	apply_rgb_scale(rgba, 1.0 + 0.3 * t, 1.0, 1.0 - 0.3 * t)
 }
 
 /// Channel-multiplier white-balance tint in [-1, 1]. Positive pushes
 /// toward magenta (attenuate G); negative pushes toward green (boost G).
-pub fn apply_tint(rgba: RgbaImage, amount: f32) -> RgbaImage {
+pub fn apply_tint(rgba: Rgba32FImage, amount: f32) -> Rgba32FImage {
 	let t = amount.clamp(-1.0, 1.0);
-	let g_mul = 1.0 - 0.3 * t;
-	apply_rgb_scale(rgba, 1.0, g_mul, 1.0)
+	apply_rgb_scale(rgba, 1.0, 1.0 - 0.3 * t, 1.0)
 }
 
-fn apply_rgb_scale(mut rgba: RgbaImage, r: f32, g: f32, b: f32) -> RgbaImage {
-	let buf: &mut [u8] = &mut rgba;
+fn apply_rgb_scale(mut rgba: Rgba32FImage, r: f32, g: f32, b: f32) -> Rgba32FImage {
+	let buf: &mut [f32] = &mut rgba;
 	buf.par_chunks_exact_mut(4).for_each(|p| {
-		p[0] = (p[0] as f32 * r).clamp(0.0, 255.0).round() as u8;
-		p[1] = (p[1] as f32 * g).clamp(0.0, 255.0).round() as u8;
-		p[2] = (p[2] as f32 * b).clamp(0.0, 255.0).round() as u8;
+		p[0] = (p[0] * r).clamp(0.0, 1.0);
+		p[1] = (p[1] * g).clamp(0.0, 1.0);
+		p[2] = (p[2] * b).clamp(0.0, 1.0);
 	});
 	rgba
 }
 
 /// Scale saturation by `offset` in [-1, 1]. Matches Packi's curve.
-pub fn apply_saturation(mut rgba: RgbaImage, offset: f32) -> RgbaImage {
-	let buf: &mut [u8] = &mut rgba;
+pub fn apply_saturation(mut rgba: Rgba32FImage, offset: f32) -> Rgba32FImage {
+	let buf: &mut [f32] = &mut rgba;
 	buf.par_chunks_exact_mut(4).for_each(|p| {
 		let (h, s, l) = rgb_to_hsl(p[0], p[1], p[2]);
 		let new_s = (s + offset * s.max(1.0 - s)).clamp(0.0, 1.0);
@@ -99,18 +122,8 @@ pub fn apply_saturation(mut rgba: RgbaImage, offset: f32) -> RgbaImage {
 	rgba
 }
 
-fn build_lut<F: Fn(u8) -> u8>(f: F) -> [u8; 256] {
-	let mut out = [0u8; 256];
-	for (i, slot) in out.iter_mut().enumerate() {
-		*slot = f(i as u8);
-	}
-	out
-}
-
-pub fn rgb_to_hsl(r: u8, g: u8, b: u8) -> (f32, f32, f32) {
-	let r = r as f32 / 255.0;
-	let g = g as f32 / 255.0;
-	let b = b as f32 / 255.0;
+/// RGB (normalized 0..1) → HSL. Hue in degrees, S/L in 0..1.
+pub fn rgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
 	let max = r.max(g).max(b);
 	let min = r.min(g).min(b);
 	let l = (max + min) / 2.0;
@@ -133,21 +146,18 @@ pub fn rgb_to_hsl(r: u8, g: u8, b: u8) -> (f32, f32, f32) {
 	(h * 60.0, s, l)
 }
 
-pub fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (u8, u8, u8) {
+/// HSL → RGB (normalized 0..1). Hue in degrees.
+pub fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (f32, f32, f32) {
 	if s.abs() < 1e-6 {
-		let v = (l * 255.0).round() as u8;
-		return (v, v, v);
+		return (l, l, l);
 	}
 	let q = if l < 0.5 { l * (1.0 + s) } else { l + s - l * s };
 	let p = 2.0 * l - q;
 	let h = h / 360.0;
-	let r = hue_to_rgb(p, q, h + 1.0 / 3.0);
-	let g = hue_to_rgb(p, q, h);
-	let b = hue_to_rgb(p, q, h - 1.0 / 3.0);
 	(
-		(r * 255.0).round() as u8,
-		(g * 255.0).round() as u8,
-		(b * 255.0).round() as u8,
+		hue_to_rgb(p, q, h + 1.0 / 3.0),
+		hue_to_rgb(p, q, h),
+		hue_to_rgb(p, q, h - 1.0 / 3.0),
 	)
 }
 
@@ -173,60 +183,83 @@ fn hue_to_rgb(p: f32, q: f32, mut t: f32) -> f32 {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use image::Rgba;
 
-	fn make_test_image() -> RgbaImage {
-		let mut img = RgbaImage::new(2, 2);
-		img.put_pixel(0, 0, image::Rgba([255, 0, 0, 255]));
-		img.put_pixel(1, 0, image::Rgba([0, 255, 0, 255]));
-		img.put_pixel(0, 1, image::Rgba([0, 0, 255, 255]));
-		img.put_pixel(1, 1, image::Rgba([128, 128, 128, 255]));
+	/// Tolerance for f32 channel comparisons (≈ <1 part in 1000).
+	const EPS: f32 = 1.0 / 1000.0;
+
+	fn make_test_image() -> Rgba32FImage {
+		let mut img = Rgba32FImage::new(2, 2);
+		img.put_pixel(0, 0, Rgba([1.0, 0.0, 0.0, 1.0]));
+		img.put_pixel(1, 0, Rgba([0.0, 1.0, 0.0, 1.0]));
+		img.put_pixel(0, 1, Rgba([0.0, 0.0, 1.0, 1.0]));
+		img.put_pixel(1, 1, Rgba([0.5, 0.5, 0.5, 1.0]));
 		img
+	}
+
+	fn close(a: f32, b: f32) -> bool {
+		(a - b).abs() <= EPS
 	}
 
 	#[test]
 	fn luminance_identity_lut_noop() {
 		let img = make_test_image();
 		let lut = std::array::from_fn::<u8, 256, _>(|i| i as u8);
-		assert_eq!(apply_luminance_curve(img.clone(), &lut), img);
+		let out = apply_luminance_curve(img.clone(), &lut);
+		for (p, q) in img.pixels().zip(out.pixels()) {
+			for ch in 0..3 {
+				assert!(close(p[ch], q[ch]), "ch{ch}: {} vs {}", p[ch], q[ch]);
+			}
+		}
+	}
+
+	#[test]
+	fn luminance_interpolates_subbyte_values() {
+		// A LUT that doubles input; a value between two LUT entries should
+		// interpolate rather than snap to the nearest entry.
+		let lut = std::array::from_fn::<u8, 256, _>(|i| (i * 2).min(255) as u8);
+		let mut img = Rgba32FImage::new(1, 1);
+		// 100.5/255 sits halfway between LUT[100]=200 and LUT[101]=202 → 201/255.
+		img.put_pixel(0, 0, Rgba([100.5 / 255.0, 0.0, 0.0, 1.0]));
+		let out = apply_luminance_curve(img, &lut);
+		assert!(close(out.get_pixel(0, 0)[0], 201.0 / 255.0));
 	}
 
 	#[test]
 	fn brightness_preserves_alpha() {
-		let mut img = RgbaImage::new(1, 1);
-		img.put_pixel(0, 0, image::Rgba([100, 100, 100, 42]));
+		let mut img = Rgba32FImage::new(1, 1);
+		img.put_pixel(0, 0, Rgba([0.4, 0.4, 0.4, 0.165]));
 		let out = apply_brightness(img, 0.5);
-		assert_eq!(out.get_pixel(0, 0)[3], 42);
+		assert!(close(out.get_pixel(0, 0)[3], 0.165));
 	}
 
 	#[test]
 	fn brightness_clamps_high() {
-		let mut img = RgbaImage::new(1, 1);
-		img.put_pixel(0, 0, image::Rgba([200, 200, 200, 255]));
+		let mut img = Rgba32FImage::new(1, 1);
+		img.put_pixel(0, 0, Rgba([0.8, 0.8, 0.8, 1.0]));
 		let out = apply_brightness(img, 1.0);
-		assert_eq!(out.get_pixel(0, 0)[0], 255);
+		assert!(close(out.get_pixel(0, 0)[0], 1.0));
 	}
 
 	#[test]
 	fn contrast_zero_is_noop() {
 		let img = make_test_image();
 		let out = apply_contrast(img.clone(), 0.0);
-		// Allow ±1 for float rounding around the midpoint.
-		for (x, y, p) in img.enumerate_pixels() {
-			let q = out.get_pixel(x, y);
+		for (p, q) in img.pixels().zip(out.pixels()) {
 			for ch in 0..3 {
-				assert!((p[ch] as i16 - q[ch] as i16).abs() <= 1);
+				assert!(close(p[ch], q[ch]));
 			}
 		}
 	}
 
 	#[test]
 	fn contrast_minus_one_flattens_to_midgray() {
-		let mut img = RgbaImage::new(1, 1);
-		img.put_pixel(0, 0, image::Rgba([0, 255, 128, 255]));
+		let mut img = Rgba32FImage::new(1, 1);
+		img.put_pixel(0, 0, Rgba([0.0, 1.0, 0.5, 1.0]));
 		let out = apply_contrast(img, -1.0);
 		let p = out.get_pixel(0, 0);
 		for ch in 0..3 {
-			assert!((p[ch] as i16 - 128).abs() <= 1);
+			assert!(close(p[ch], 0.5), "ch{ch} = {}", p[ch]);
 		}
 	}
 
@@ -234,101 +267,93 @@ mod tests {
 	fn hue_zero_offset_is_noop() {
 		let img = make_test_image();
 		let out = apply_hue(img.clone(), 0.0);
-		assert_eq!(out.get_pixel(1, 1), img.get_pixel(1, 1));
+		let p = img.get_pixel(1, 1);
+		let q = out.get_pixel(1, 1);
+		for ch in 0..3 {
+			assert!(close(p[ch], q[ch]));
+		}
 	}
 
 	#[test]
 	fn hue_full_rotation_returns_original() {
 		let img = make_test_image();
 		let out = apply_hue(img.clone(), 360.0);
-		for (x, y, p) in img.enumerate_pixels() {
-			let q = out.get_pixel(x, y);
+		for (p, q) in img.pixels().zip(out.pixels()) {
 			for ch in 0..3 {
-				assert!((p[ch] as i16 - q[ch] as i16).abs() <= 1);
+				assert!(close(p[ch], q[ch]), "{} vs {}", p[ch], q[ch]);
 			}
 		}
 	}
 
 	#[test]
 	fn saturation_negative_desaturates_red() {
-		let mut img = RgbaImage::new(1, 1);
-		img.put_pixel(0, 0, image::Rgba([255, 0, 0, 255]));
+		let mut img = Rgba32FImage::new(1, 1);
+		img.put_pixel(0, 0, Rgba([1.0, 0.0, 0.0, 1.0]));
 		let out = apply_saturation(img, -0.5);
 		let p = out.get_pixel(0, 0);
-		assert!(p[0] < 255);
-		assert!(p[1] > 0);
-		assert!(p[2] > 0);
+		assert!(p[0] < 1.0);
+		assert!(p[1] > 0.0);
+		assert!(p[2] > 0.0);
 	}
 
 	#[test]
 	fn temperature_zero_is_noop() {
 		let img = make_test_image();
 		let out = apply_temperature(img.clone(), 0.0);
-		assert_eq!(out, img);
+		for (p, q) in img.pixels().zip(out.pixels()) {
+			for ch in 0..4 {
+				assert!(close(p[ch], q[ch]));
+			}
+		}
 	}
 
 	#[test]
 	fn temperature_positive_warms() {
-		let mut img = RgbaImage::new(1, 1);
-		img.put_pixel(0, 0, image::Rgba([100, 100, 100, 255]));
+		let mut img = Rgba32FImage::new(1, 1);
+		img.put_pixel(0, 0, Rgba([0.4, 0.4, 0.4, 1.0]));
 		let out = apply_temperature(img, 1.0);
 		let p = out.get_pixel(0, 0);
-		assert!(p[0] > 100, "R should rise");
-		assert!(p[2] < 100, "B should fall");
-		assert_eq!(p[1], 100, "G unchanged");
-		assert_eq!(p[3], 255);
+		assert!(p[0] > 0.4, "R should rise");
+		assert!(p[2] < 0.4, "B should fall");
+		assert!(close(p[1], 0.4), "G unchanged");
+		assert!(close(p[3], 1.0));
 	}
 
 	#[test]
 	fn temperature_negative_cools() {
-		let mut img = RgbaImage::new(1, 1);
-		img.put_pixel(0, 0, image::Rgba([100, 100, 100, 255]));
+		let mut img = Rgba32FImage::new(1, 1);
+		img.put_pixel(0, 0, Rgba([0.4, 0.4, 0.4, 1.0]));
 		let out = apply_temperature(img, -1.0);
 		let p = out.get_pixel(0, 0);
-		assert!(p[0] < 100);
-		assert!(p[2] > 100);
-	}
-
-	#[test]
-	fn tint_zero_is_noop() {
-		let img = make_test_image();
-		let out = apply_tint(img.clone(), 0.0);
-		assert_eq!(out, img);
+		assert!(p[0] < 0.4);
+		assert!(p[2] > 0.4);
 	}
 
 	#[test]
 	fn tint_positive_pushes_magenta() {
-		let mut img = RgbaImage::new(1, 1);
-		img.put_pixel(0, 0, image::Rgba([100, 100, 100, 255]));
+		let mut img = Rgba32FImage::new(1, 1);
+		img.put_pixel(0, 0, Rgba([0.4, 0.4, 0.4, 1.0]));
 		let out = apply_tint(img, 1.0);
 		let p = out.get_pixel(0, 0);
-		assert!(p[1] < 100, "G should fall (toward magenta)");
-		assert_eq!(p[0], 100);
-		assert_eq!(p[2], 100);
+		assert!(p[1] < 0.4, "G should fall (toward magenta)");
+		assert!(close(p[0], 0.4));
+		assert!(close(p[2], 0.4));
 	}
 
 	#[test]
-	fn temperature_clamps_to_byte_range() {
-		let mut img = RgbaImage::new(1, 1);
-		img.put_pixel(0, 0, image::Rgba([250, 250, 250, 255]));
+	fn temperature_clamps_to_unit_range() {
+		let mut img = Rgba32FImage::new(1, 1);
+		img.put_pixel(0, 0, Rgba([0.98, 0.98, 0.98, 1.0]));
 		let out = apply_temperature(img, 1.0);
-		assert_eq!(out.get_pixel(0, 0)[0], 255);
-	}
-
-	#[test]
-	fn temperature_preserves_alpha() {
-		let mut img = RgbaImage::new(1, 1);
-		img.put_pixel(0, 0, image::Rgba([100, 100, 100, 42]));
-		let out = apply_temperature(img, 0.5);
-		assert_eq!(out.get_pixel(0, 0)[3], 42);
+		assert!(close(out.get_pixel(0, 0)[0], 1.0));
 	}
 
 	#[test]
 	fn hsl_roundtrip_midtone() {
-		let (h, s, l) = rgb_to_hsl(100, 150, 200);
+		let (h, s, l) = rgb_to_hsl(100.0 / 255.0, 150.0 / 255.0, 200.0 / 255.0);
 		let (r, g, b) = hsl_to_rgb(h, s, l);
-		assert!((r as i16 - 100).abs() <= 1);
-		assert!((g as i16 - 150).abs() <= 1);
-		assert!((b as i16 - 200).abs() <= 1);
+		assert!(close(r, 100.0 / 255.0));
+		assert!(close(g, 150.0 / 255.0));
+		assert!(close(b, 200.0 / 255.0));
 	}
 }

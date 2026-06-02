@@ -22,6 +22,9 @@ import { type Operation, splitOps, useEditorStore } from "@/stores/editorStore";
 import { usePrefsStore } from "@/stores/prefsStore";
 import { useUndoStore } from "@/stores/undoStore";
 
+// Formats the editor can *open*: the canvas shows the original through an
+// `<img>`, so this is limited to browser-displayable rasters. TGA/EXR are
+// valid export targets but can't be loaded here.
 const SUPPORTED_EXTS = new Set([
 	"png",
 	"jpg",
@@ -32,6 +35,34 @@ const SUPPORTED_EXTS = new Set([
 	"tiff",
 	"webp",
 ]);
+
+// Export targets for the save flow. `value` is the format string `commit_edit`
+// understands (it carries bit-depth intent the extension can't); `ext` is the
+// on-disk extension. The pipeline works in f32, so PNG/TIFF 16-bit and EXR
+// carry real high-bit precision.
+const EXPORT_FORMATS: { value: string; label: string; ext: string }[] = [
+	{ value: "png8", label: "PNG · 8-bit", ext: "png" },
+	{ value: "png16", label: "PNG · 16-bit", ext: "png" },
+	{ value: "tiff16", label: "TIFF · 16-bit", ext: "tiff" },
+	{ value: "tga", label: "TGA", ext: "tga" },
+	{ value: "exr", label: "OpenEXR · 32-bit float", ext: "exr" },
+	{ value: "jpg", label: "JPEG", ext: "jpg" },
+];
+
+/// Pick a sensible default export format from the source's format, so the
+/// Save default round-trips the source where it can.
+function defaultExportFormat(sourceFormat: string): string {
+	switch (sourceFormat.toLowerCase()) {
+		case "jpg":
+		case "jpeg":
+			return "jpg";
+		case "tif":
+		case "tiff":
+			return "tiff16";
+		default:
+			return "png8";
+	}
+}
 
 export function EditorPage() {
 	const { id: idParam } = useParams();
@@ -46,6 +77,7 @@ export function EditorPage() {
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [savedAt, setSavedAt] = useState<string | null>(null);
+	const [exportFormat, setExportFormat] = useState<string>("png8");
 	const [sourceDims, setSourceDims] = useState<{ w: number; h: number } | null>(
 		null,
 	);
@@ -92,6 +124,7 @@ export function EditorPage() {
 					setLoadError(`Editor doesn't support .${ext || "?"} files yet.`);
 					return;
 				}
+				setExportFormat(defaultExportFormat(ext));
 				setAsset(a);
 			})
 			.catch((e) => {
@@ -211,32 +244,41 @@ export function EditorPage() {
 		setSaving(true);
 		setSavedAt(null);
 		try {
+			// The export-format selector is the source of truth for the output
+			// format + bit depth (the extension alone can't tell png8 from
+			// png16). It maps to the `format` string `commit_edit` understands.
+			const def =
+				EXPORT_FORMATS.find((f) => f.value === exportFormat) ??
+				EXPORT_FORMATS[0];
+			const { value: format, ext } = def;
+			const srcExt = normalizeFormat((asset.format ?? "png").toLowerCase());
+			const base = basename(sourcePath);
+			const stem = base.includes(".")
+				? base.slice(0, base.lastIndexOf("."))
+				: base;
+			const dir = dirname(sourcePath);
+
 			let outputPath: string;
-			let format: string;
-			const ext = (asset.format ?? "png").toLowerCase();
-			if (editorSaveDefault === "overwrite") {
+			if (editorSaveDefault === "overwrite" && ext === srcExt) {
+				// True in-place overwrite (e.g. png → png16 keeps the .png path).
 				outputPath = sourcePath;
-				format = normalizeFormat(ext);
+			} else if (editorSaveDefault === "overwrite") {
+				// Chosen format differs from the source extension — write a
+				// sibling rather than overwrite with a mismatched extension.
+				outputPath = `${dir}/${stem}.${ext}`;
 			} else {
-				const base = basename(sourcePath);
-				const stem = base.includes(".")
-					? base.slice(0, base.lastIndexOf("."))
-					: base;
-				const dir = dirname(sourcePath);
 				const suggested = `${dir}/${stem}-edited.${ext}`;
 				const picked = await saveDialog({
 					defaultPath: suggested,
-					filters: [{ name: "Image", extensions: Array.from(SUPPORTED_EXTS) }],
+					filters: [{ name: def.label, extensions: [ext] }],
 				});
 				if (!picked) {
 					setSaving(false);
 					return;
 				}
-				outputPath = picked;
-				const pickedExt = picked.includes(".")
-					? picked.slice(picked.lastIndexOf(".") + 1)
-					: ext;
-				format = normalizeFormat(pickedExt);
+				outputPath = picked.toLowerCase().endsWith(`.${ext}`)
+					? picked
+					: `${picked}.${ext}`;
 			}
 			await invoke<void>("commit_edit", {
 				path: sourcePath,
@@ -438,6 +480,20 @@ export function EditorPage() {
 					<HiNoSymbol className="size-3.5" />
 					Revert
 				</button>
+				<select
+					value={exportFormat}
+					onChange={(e) => setExportFormat(e.target.value)}
+					disabled={saving}
+					className="select select-xs select-bordered"
+					title="Export format & bit depth"
+					aria-label="Export format"
+				>
+					{EXPORT_FORMATS.map((f) => (
+						<option key={f.value} value={f.value}>
+							{f.label}
+						</option>
+					))}
+				</select>
 				<button
 					type="button"
 					className="btn btn-xs btn-primary"
