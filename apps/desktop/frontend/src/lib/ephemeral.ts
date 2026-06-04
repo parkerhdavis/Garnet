@@ -21,9 +21,14 @@ export function ephemeralPreviewRoute(absPath: string): string {
 	return `/preview?path=${encodeURIComponent(absPath)}`;
 }
 
-/// Hash-route for the ad-hoc editor on an absolute path.
+/// Hash-route for the ad-hoc image editor on an absolute path.
 export function ephemeralEditRoute(absPath: string): string {
 	return `/edit?path=${encodeURIComponent(absPath)}`;
+}
+
+/// Hash-route for the ad-hoc video editor on an absolute path.
+export function ephemeralEditVideoRoute(absPath: string): string {
+	return `/edit-video?path=${encodeURIComponent(absPath)}`;
 }
 
 /// Open an absolute path ad-hoc: remember it in Recents and route to the

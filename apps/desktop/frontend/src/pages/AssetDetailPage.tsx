@@ -21,7 +21,11 @@ import type { ModelStats } from "@/components/ModelPreview";
 import { MediaDiagnostic } from "@/components/MediaDiagnostic";
 import { GarnetMetadataEditor } from "@/components/GarnetMetadataEditor";
 import { confirm } from "@/components/ConfirmDialog";
-import { addPathToLibrary, ephemeralEditRoute } from "@/lib/ephemeral";
+import {
+	addPathToLibrary,
+	ephemeralEditRoute,
+	ephemeralEditVideoRoute,
+} from "@/lib/ephemeral";
 import {
 	AUDIO_EXTS,
 	BLEND_EXTS,
@@ -79,10 +83,11 @@ export function AssetDetailPage() {
 	const isBlend = !!ext && BLEND_EXTS.has(ext);
 	const [blendPreview, setBlendPreview] = useState<string | null>(null);
 
-	// Ctrl/Cmd+E opens the editor for an editable asset (mirrors the Edit
-	// button), unless the user is typing in a field.
+	// Ctrl/Cmd+E opens the editor (mirrors the Edit button), unless the user is
+	// typing in a field. An asset is either image-editable or video, so the
+	// single shortcut branches to the matching editor.
 	useEffect(() => {
-		if (!isEditable) return;
+		if (!isEditable && !isVideo) return;
 		function onKey(e: KeyboardEvent) {
 			if (!((e.ctrlKey || e.metaKey) && (e.key === "e" || e.key === "E")))
 				return;
@@ -96,11 +101,21 @@ export function AssetDetailPage() {
 			)
 				return;
 			e.preventDefault();
-			navigate(ephemeral ? ephemeralEditRoute(absPath) : `/edit/${asset?.id}`);
+			if (isVideo) {
+				navigate(
+					ephemeral
+						? ephemeralEditVideoRoute(absPath)
+						: `/edit-video/${asset?.id}`,
+				);
+			} else {
+				navigate(
+					ephemeral ? ephemeralEditRoute(absPath) : `/edit/${asset?.id}`,
+				);
+			}
 		}
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [isEditable, ephemeral, absPath, asset, navigate]);
+	}, [isEditable, isVideo, ephemeral, absPath, asset, navigate]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -343,6 +358,23 @@ export function AssetDetailPage() {
 					>
 						<HiPencilSquare className="size-3.5" />
 						Edit
+					</button>
+				)}
+				{isVideo && (
+					<button
+						type="button"
+						className="btn btn-xs"
+						onClick={() =>
+							navigate(
+								ephemeral
+									? ephemeralEditVideoRoute(absPath)
+									: `/edit-video/${asset.id}`,
+							)
+						}
+						title="Open in the video editor (Ctrl+E)"
+					>
+						<HiPencilSquare className="size-3.5" />
+						Edit video
 					</button>
 				)}
 				<button
