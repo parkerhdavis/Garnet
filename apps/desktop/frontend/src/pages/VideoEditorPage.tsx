@@ -73,6 +73,7 @@ export function VideoEditorPage() {
 	const frameUrl = useVideoEditorStore((s) => s.frameUrl);
 	const extracting = useVideoEditorStore((s) => s.extracting);
 	const playheadSecs = useVideoEditorStore((s) => s.playheadSecs);
+	const playing = useVideoEditorStore((s) => s.playing);
 	const dirty = useVideoEditorStore((s) => s.dirty);
 	const storeError = useVideoEditorStore((s) => s.error);
 	const cropEditMode = useVideoEditorStore((s) => s.cropEditMode);
@@ -80,6 +81,7 @@ export function VideoEditorPage() {
 	const setCropEditMode = useVideoEditorStore((s) => s.setCropEditMode);
 	const setOps = useVideoEditorStore((s) => s.setOps);
 	const setPlayhead = useVideoEditorStore((s) => s.setPlayhead);
+	const togglePlay = useVideoEditorStore((s) => s.togglePlay);
 	const load = useVideoEditorStore((s) => s.load);
 	const reset = useVideoEditorStore((s) => s.reset);
 
@@ -258,17 +260,41 @@ export function VideoEditorPage() {
 		navigate(-1);
 	}
 
+	// Set the trim in/out point to the current playhead (the [ and ] shortcuts +
+	// the Trim tool's Set in/out). One undo entry per press.
+	function setTrimEdge(edge: "in" | "out") {
+		const before = useVideoEditorStore.getState().pendingOps;
+		const cur = readTrim(before, duration);
+		const ph = useVideoEditorStore.getState().playheadSecs;
+		const range =
+			edge === "in"
+				? { start: Math.min(ph, cur.end - 0.05), end: cur.end }
+				: { start: cur.start, end: Math.max(ph, cur.start + 0.05) };
+		const next = withTrim(before, range, duration);
+		if (sameOps(before, next)) return;
+		setOps(next);
+		undoPush({
+			description: edge === "in" ? "Set trim in" : "Set trim out",
+			undo: () => setOps(before),
+			redo: () => setOps(next),
+		});
+	}
+
 	// Keep the latest handlers in a ref so the global key listener always calls
 	// fresh closures without re-subscribing.
 	const actionsRef = useRef({
 		save: handleSave,
 		revert: handleRevert,
 		exit: handleExit,
+		togglePlay,
+		setTrimEdge,
 	});
 	actionsRef.current = {
 		save: handleSave,
 		revert: handleRevert,
 		exit: handleExit,
+		togglePlay,
+		setTrimEdge,
 	};
 
 	useEffect(() => {
@@ -285,6 +311,21 @@ export function VideoEditorPage() {
 				if (useVideoEditorStore.getState().cropEditMode) return;
 				e.preventDefault();
 				void actionsRef.current.exit();
+			} else if (e.key === " " && !mod) {
+				// Spacebar toggles playback. Yield to text fields and the crop
+				// editor (Space may matter there); otherwise it's play/pause.
+				if (isTypingTarget(e.target)) return;
+				if (useVideoEditorStore.getState().cropEditMode) return;
+				e.preventDefault();
+				actionsRef.current.togglePlay();
+			} else if (e.key === "[" && !mod) {
+				if (isTypingTarget(e.target)) return;
+				e.preventDefault();
+				actionsRef.current.setTrimEdge("in");
+			} else if (e.key === "]" && !mod) {
+				if (isTypingTarget(e.target)) return;
+				e.preventDefault();
+				actionsRef.current.setTrimEdge("out");
 			}
 		}
 		window.addEventListener("keydown", onKey);
@@ -454,6 +495,8 @@ export function VideoEditorPage() {
 						durationSecs={duration}
 						playheadSecs={playheadSecs}
 						trim={trim}
+						playing={playing}
+						onTogglePlay={togglePlay}
 						onSeek={setPlayhead}
 						onTrimChange={handleTrimChange}
 					/>
@@ -466,26 +509,28 @@ export function VideoEditorPage() {
 }
 
 /// Translate the color ops into a CSS `filter:` chain for the live frame
-/// preview. Approximate (CSS hue-rotate vs ffmpeg `hue`); the committed
-/// transcode uses the exact ffmpeg math.
+/// preview. Emitted in a FIXED order — brightness → contrast → saturate → hue
+/// — regardless of which slider the user touched last, because the backend's
+/// ffmpeg color chain applies them in exactly that order; CSS `filter:` is
+/// order-sensitive, so a different order here would drift from the saved file.
+/// The backend replicates these same W3C operations (in RGB) on commit, so the
+/// preview and the output match.
 function videoCssFilter(ops: VideoOperation[]): string {
-	const parts: string[] = [];
+	let brightness = 0;
+	let contrast = 0;
+	let saturation = 0;
+	let hue = 0;
 	for (const op of ops) {
-		switch (op.type) {
-			case "adjust_brightness":
-				if (op.offset !== 0) parts.push(`brightness(${1 + op.offset})`);
-				break;
-			case "adjust_contrast":
-				if (op.amount !== 0) parts.push(`contrast(${1 + op.amount})`);
-				break;
-			case "adjust_saturation":
-				if (op.offset !== 0) parts.push(`saturate(${1 + op.offset})`);
-				break;
-			case "adjust_hue":
-				if (op.offset !== 0) parts.push(`hue-rotate(${op.offset}deg)`);
-				break;
-		}
+		if (op.type === "adjust_brightness") brightness = op.offset;
+		else if (op.type === "adjust_contrast") contrast = op.amount;
+		else if (op.type === "adjust_saturation") saturation = op.offset;
+		else if (op.type === "adjust_hue") hue = op.offset;
 	}
+	const parts: string[] = [];
+	if (brightness !== 0) parts.push(`brightness(${1 + brightness})`);
+	if (contrast !== 0) parts.push(`contrast(${1 + contrast})`);
+	if (saturation !== 0) parts.push(`saturate(${1 + saturation})`);
+	if (hue !== 0) parts.push(`hue-rotate(${hue}deg)`);
 	return parts.join(" ");
 }
 

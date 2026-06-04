@@ -32,6 +32,9 @@ export type VideoOperation =
 /// Preview frames are downscaled so scrubbing stays snappy; the commit always
 /// runs at full resolution.
 const PREVIEW_MAX_DIM = 960;
+/// Playback frames are smaller still — frame-stepping playback wants speed over
+/// crispness (each frame is a fresh ffmpeg seek+decode).
+const PLAYBACK_MAX_DIM = 640;
 /// Debounce for re-extracting a frame as the playhead moves — a scrub drag
 /// fires many ticks, but one ffmpeg seek per ~90ms is plenty for a preview.
 const SCRUB_DEBOUNCE_MS = 90;
@@ -71,6 +74,13 @@ interface VideoEditorState {
 	/// Move the playhead and (debounced) re-extract the frame at it.
 	setPlayhead: (secs: number) => void;
 	setCropEditMode: (b: boolean, initial?: CropRect | null) => void;
+	/// True while frame-stepping playback is running.
+	playing: boolean;
+	/// Toggle playback. Plays within the trim range (looping at the out-point),
+	/// advancing the playhead by wall-clock time and re-extracting frames. This
+	/// is frame-stepping (no audio, capped by extraction speed) rather than an
+	/// inline `<video>`, which is unreliable in Linux webkit2gtk.
+	togglePlay: () => void;
 }
 
 export type CropRect = { x: number; y: number; w: number; h: number };
@@ -105,6 +115,11 @@ export function withTrim(
 // store — no component subscribes to it.
 let frameToken = 0;
 let scrubTimer: ReturnType<typeof setTimeout> | null = null;
+// Playback anchor: wall-clock ms and playhead secs captured when play (re)starts,
+// so the loop derives the target time from real elapsed time and stays
+// time-accurate even when frame extraction can't keep up (it drops frames).
+let playStartWall = 0;
+let playStartHead = 0;
 
 export const useVideoEditorStore = create<VideoEditorState>((set, get) => ({
 	sourcePath: null,
@@ -118,6 +133,7 @@ export const useVideoEditorStore = create<VideoEditorState>((set, get) => ({
 	error: null,
 	cropEditMode: false,
 	cropEditorInitial: null,
+	playing: false,
 
 	load: async (path, name) => {
 		if (scrubTimer) {
@@ -136,6 +152,7 @@ export const useVideoEditorStore = create<VideoEditorState>((set, get) => ({
 			error: null,
 			cropEditMode: false,
 			cropEditorInitial: null,
+			playing: false,
 		});
 		try {
 			const info = await api.videoInfo(path);
@@ -170,6 +187,7 @@ export const useVideoEditorStore = create<VideoEditorState>((set, get) => ({
 			error: null,
 			cropEditMode: false,
 			cropEditorInitial: null,
+			playing: false,
 		});
 	},
 
@@ -179,12 +197,19 @@ export const useVideoEditorStore = create<VideoEditorState>((set, get) => ({
 		set({ cropEditMode: b, cropEditorInitial: b ? (initial ?? null) : null }),
 
 	setPlayhead: (secs) => {
-		const { info, sourcePath } = get();
+		const { info, sourcePath, playing } = get();
 		if (!sourcePath) return;
 		const clamped = info
 			? Math.max(0, Math.min(info.duration_secs, secs))
 			: Math.max(0, secs);
 		set({ playheadSecs: clamped });
+		// Scrubbing while playing re-anchors the loop so playback resumes from
+		// the new spot; the loop owns frame extraction, so skip the debounce.
+		if (playing) {
+			playStartWall = performance.now();
+			playStartHead = clamped;
+			return;
+		}
 		// Debounce the actual extraction so a scrub drag doesn't spawn an ffmpeg
 		// per pixel.
 		if (scrubTimer) clearTimeout(scrubTimer);
@@ -193,7 +218,64 @@ export const useVideoEditorStore = create<VideoEditorState>((set, get) => ({
 			void extractFrameAt(sourcePath, get().playheadSecs, set, get);
 		}, SCRUB_DEBOUNCE_MS);
 	},
+
+	togglePlay: () => {
+		const st = get();
+		if (st.playing) {
+			set({ playing: false });
+			return;
+		}
+		if (!st.sourcePath || !st.info) return;
+		const { start, end } = readTrim(st.pendingOps, st.info.duration_secs);
+		if (end - start < 0.05) return;
+		// Restart from the trim in-point if the playhead is parked at/after the
+		// out-point (or before the in-point).
+		let head = st.playheadSecs;
+		if (head < start || head >= end - 0.02) head = start;
+		playStartWall = performance.now();
+		playStartHead = head;
+		set({ playing: true });
+		void playLoop(set, get);
+	},
 }));
+
+/// Frame-stepping playback loop. Each pass derives the target time from real
+/// elapsed wall-clock (so timing stays accurate even if extraction lags —
+/// frames are dropped, not slowed), extracts a frame, then loops. Loops back to
+/// the trim in-point at the out-point. Stops when `playing` flips false (toggle,
+/// reset, or load).
+async function playLoop(
+	set: (partial: Partial<VideoEditorState>) => void,
+	get: () => VideoEditorState,
+): Promise<void> {
+	const st = get();
+	if (!st.playing || !st.sourcePath || !st.info) return;
+	const { start, end } = readTrim(st.pendingOps, st.info.duration_secs);
+	const elapsed = (performance.now() - playStartWall) / 1000;
+	let target = playStartHead + elapsed;
+	if (target >= end) {
+		target = start;
+		playStartWall = performance.now();
+		playStartHead = start;
+	}
+	set({ playheadSecs: target });
+	try {
+		const tmpPath = await api.videoFrame(
+			st.sourcePath,
+			target,
+			PLAYBACK_MAX_DIM,
+		);
+		const url = await mediaUrl(tmpPath);
+		if (!get().playing || get().sourcePath !== st.sourcePath) return;
+		set({ frameUrl: `${url}&t=${++frameToken}` });
+	} catch (e) {
+		set({ playing: false, error: String(e) });
+		return;
+	}
+	if (!get().playing) return;
+	// Extraction already consumed real time; loop immediately (no setTimeout).
+	void playLoop(set, get);
+}
 
 /// Extract + display the frame at `secs`, guarding against out-of-order
 /// results. Shared by `load` (immediate) and `setPlayhead` (debounced).

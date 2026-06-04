@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Scrub timeline for the video editor: a horizontal track with a draggable
-//! playhead plus two trim handles (in / out). The region outside [in, out] is
-//! dimmed so the kept span reads at a glance. All positions are in seconds;
-//! the component maps to/from pixels off its own measured width.
+//! Scrub timeline for the video editor: a play/pause button plus a horizontal
+//! track with a draggable playhead and two trim handles (in / out). The region
+//! outside [in, out] is dimmed so the kept span reads at a glance. All positions
+//! are in seconds; the component maps to/from pixels off its own measured width.
 //!
-//! There is no play button — the canvas shows a frame extracted at the
-//! playhead rather than an inline `<video>` (webkit2gtk's media element is
-//! unreliable on Linux). Scrubbing the playhead re-extracts the frame.
+//! Playback is frame-stepping (the canvas shows frames extracted at the
+//! playhead, not an inline `<video>` — webkit2gtk's media element is unreliable
+//! on Linux), so it has no audio and runs as fast as extraction allows.
 
 import { useCallback, useRef } from "react";
+import { HiPause, HiPlay } from "react-icons/hi2";
 
 export interface TrimRange {
 	start: number;
@@ -19,6 +20,8 @@ interface VideoTimelineProps {
 	durationSecs: number;
 	playheadSecs: number;
 	trim: TrimRange;
+	playing: boolean;
+	onTogglePlay: () => void;
 	/// Move the playhead (the store debounces frame extraction).
 	onSeek: (secs: number) => void;
 	/// Commit a new trim range (the page records one undo entry per gesture).
@@ -31,6 +34,8 @@ export function VideoTimeline({
 	durationSecs,
 	playheadSecs,
 	trim,
+	playing,
+	onTogglePlay,
 	onSeek,
 	onTrimChange,
 }: VideoTimelineProps) {
@@ -108,47 +113,63 @@ export function VideoTimeline({
 				<span>{fmtTime(durationSecs)}</span>
 			</div>
 
-			<div
-				ref={trackRef}
-				className="relative h-9 rounded bg-base-300 cursor-pointer touch-none"
-				onPointerDown={onTrackPointerDown}
-			>
-				{/* Dimmed regions outside the trim range. */}
-				<div
-					className="absolute inset-y-0 left-0 bg-base-100/70 rounded-l"
-					style={{ width: pct(trim.start) }}
-				/>
-				<div
-					className="absolute inset-y-0 right-0 bg-base-100/70 rounded-r"
-					style={{ left: pct(trim.end) }}
-				/>
-				{/* Kept span tint. */}
-				<div
-					className="absolute inset-y-0 bg-primary/15"
-					style={{
-						left: pct(trim.start),
-						right: `${100 - (trim.end / dur) * 100}%`,
-					}}
-				/>
-
-				{/* In/out handles. */}
-				<Handle
-					posPct={pct(trim.start)}
-					side="in"
-					onDown={(e) => startDrag("in", e)}
-				/>
-				<Handle
-					posPct={pct(trim.end)}
-					side="out"
-					onDown={(e) => startDrag("out", e)}
-				/>
-
-				{/* Playhead. */}
-				<div
-					className="absolute top-0 bottom-0 w-0.5 bg-primary pointer-events-none"
-					style={{ left: pct(playheadSecs) }}
+			<div className="flex items-center gap-2">
+				<button
+					type="button"
+					className="btn btn-sm btn-circle btn-primary shrink-0"
+					onClick={onTogglePlay}
+					title={playing ? "Pause (Space)" : "Play (Space)"}
+					aria-label={playing ? "Pause" : "Play"}
 				>
-					<div className="absolute -top-1 -left-[3px] size-2 rotate-45 bg-primary" />
+					{playing ? (
+						<HiPause className="size-4" />
+					) : (
+						<HiPlay className="size-4" />
+					)}
+				</button>
+
+				<div
+					ref={trackRef}
+					className="relative h-9 flex-1 rounded bg-base-300 cursor-pointer touch-none"
+					onPointerDown={onTrackPointerDown}
+				>
+					{/* Dimmed regions outside the trim range. */}
+					<div
+						className="absolute inset-y-0 left-0 bg-base-100/70 rounded-l"
+						style={{ width: pct(trim.start) }}
+					/>
+					<div
+						className="absolute inset-y-0 right-0 bg-base-100/70 rounded-r"
+						style={{ left: pct(trim.end) }}
+					/>
+					{/* Kept span tint. */}
+					<div
+						className="absolute inset-y-0 bg-primary/15"
+						style={{
+							left: pct(trim.start),
+							right: `${100 - (trim.end / dur) * 100}%`,
+						}}
+					/>
+
+					{/* In/out handles. */}
+					<Handle
+						posPct={pct(trim.start)}
+						side="in"
+						onDown={(e) => startDrag("in", e)}
+					/>
+					<Handle
+						posPct={pct(trim.end)}
+						side="out"
+						onDown={(e) => startDrag("out", e)}
+					/>
+
+					{/* Playhead. */}
+					<div
+						className="absolute top-0 bottom-0 w-0.5 bg-primary pointer-events-none"
+						style={{ left: pct(playheadSecs) }}
+					>
+						<div className="absolute -top-1 -left-[3px] size-2 rotate-45 bg-primary" />
+					</div>
 				</div>
 			</div>
 		</div>

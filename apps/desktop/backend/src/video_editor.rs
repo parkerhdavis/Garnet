@@ -339,10 +339,11 @@ fn temp_sibling(output_path: &str) -> PathBuf {
 // --------------------------------------------------------------------------
 
 /// Build the comma-joined `-vf` value from the geometry + color ops, in a
-/// fixed order (geometry before color): crop → scale → rotate → eq → hue.
-/// Returns an empty string when no filter-producing op is present. Excludes
-/// the even-dimension guard and the GIF palette wrapper (the commit adds those
-/// per output format).
+/// fixed order (geometry before color): crop → scale → rotate → color, where
+/// color is the W3C-matching RGB chain (see `build_color_filters`). Returns an
+/// empty string when no filter-producing op is present. Excludes the
+/// even-dimension guard and the GIF palette wrapper (the commit adds those per
+/// output format).
 fn build_filterchain(ops: &[VideoOperation]) -> String {
 	let mut parts: Vec<String> = Vec::new();
 
@@ -367,34 +368,113 @@ fn build_filterchain(ops: &[VideoOperation]) -> String {
 	parts.extend(scale);
 	parts.extend(rotate);
 
-	// Color: collapse brightness/contrast/saturation into one `eq=` filter.
-	let mut eq: Vec<String> = Vec::new();
-	let mut hue: Option<String> = None;
+	// Color, AFTER geometry. We replicate the CSS/W3C Filter Effects math in
+	// RGB so the saved file matches the editor's live CSS-filter preview.
+	//
+	// Why NOT ffmpeg's `eq`: `eq`'s brightness is *additive* (CSS brightness
+	// multiplies), its operations run in YUV (CSS is sRGB RGB), and the YUV
+	// round-trip tints neutral grays. Measured: a gray midtone the preview puts
+	// at ~157 came out ~177 with a green cast. Replicating W3C in RGB lands on
+	// ~157 with neutrals preserved. (Same lesson the image editor's adjust.rs
+	// learned: match the exact CSS-filter math or preview and output drift.)
+	parts.extend(build_color_filters(ops));
+
+	parts.join(",")
+}
+
+/// The W3C color pipeline as ffmpeg filters (or empty when identity), in the
+/// CSS order brightness → contrast → saturate → hue:
+///   - brightness(b) then contrast(c) fold to one per-channel affine
+///     `out = val*(b*c) + 127.5*(1-c)`, applied via `lutrgb`.
+///   - saturate(s) then hue(h) are linear 3×3 RGB matrices; we premultiply
+///     them (hue·sat) into one `colorchannelmixer`.
+///
+/// All in `gbrp` (full-range planar RGB) so the math matches CSS's sRGB space.
+fn build_color_filters(ops: &[VideoOperation]) -> Vec<String> {
+	let mut b = 1.0f64; // brightness multiplier (1 = identity)
+	let mut c = 1.0f64; // contrast (1 = identity)
+	let mut s = 1.0f64; // saturation (1 = identity)
+	let mut h = 0.0f64; // hue rotation, degrees
 	for op in ops {
 		match op {
-			VideoOperation::AdjustBrightness { offset } => {
-				eq.push(format!("brightness={}", fmt_num(*offset)));
-			}
-			VideoOperation::AdjustContrast { amount } => {
-				eq.push(format!("contrast={}", fmt_num((1.0 + amount).max(0.0))));
-			}
-			VideoOperation::AdjustSaturation { offset } => {
-				eq.push(format!("saturation={}", fmt_num((1.0 + offset).max(0.0))));
-			}
-			VideoOperation::AdjustHue { offset } => {
-				hue = Some(format!("hue=h={}", fmt_num(*offset)));
-			}
+			VideoOperation::AdjustBrightness { offset } => b = 1.0 + offset,
+			VideoOperation::AdjustContrast { amount } => c = 1.0 + amount,
+			VideoOperation::AdjustSaturation { offset } => s = 1.0 + offset,
+			VideoOperation::AdjustHue { offset } => h = *offset,
 			_ => {}
 		}
 	}
-	if !eq.is_empty() {
-		parts.push(format!("eq={}", eq.join(":")));
-	}
-	if let Some(h) = hue {
-		parts.push(h);
+
+	let k = b * c; // combined brightness×contrast gain
+	let m = 127.5 * (1.0 - c); // contrast pivot offset (in 0..255 space)
+	let affine = (k - 1.0).abs() > 1e-9 || m.abs() > 1e-9;
+	let matrix = (s - 1.0).abs() > 1e-9 || h.abs() > 1e-9;
+	if !affine && !matrix {
+		return Vec::new();
 	}
 
-	parts.join(",")
+	let mut out = vec!["format=gbrp".to_string()];
+	if affine {
+		let e = format!("clip(val*{k:.6}{m:+.6},0,255)");
+		out.push(format!("lutrgb=r='{e}':g='{e}':b='{e}'"));
+	}
+	if matrix {
+		// Apply saturate first, then hue: combined = hue · saturate.
+		let mat = mat3_mul(&hue_matrix(h), &saturate_matrix(s));
+		out.push(colorchannelmixer(&mat));
+	}
+	out
+}
+
+type Mat3 = [[f64; 3]; 3];
+
+/// W3C `saturate(s)` matrix (sRGB luma coefficients 0.213/0.715/0.072).
+fn saturate_matrix(s: f64) -> Mat3 {
+	[
+		[0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s],
+		[0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s],
+		[0.213 - 0.213 * s, 0.715 - 0.715 * s, 0.072 + 0.928 * s],
+	]
+}
+
+/// W3C `hue-rotate(deg)` matrix.
+fn hue_matrix(deg: f64) -> Mat3 {
+	let (sin, cos) = deg.to_radians().sin_cos();
+	[
+		[
+			0.213 + cos * 0.787 - sin * 0.213,
+			0.715 - cos * 0.715 - sin * 0.715,
+			0.072 - cos * 0.072 + sin * 0.928,
+		],
+		[
+			0.213 - cos * 0.213 + sin * 0.143,
+			0.715 + cos * 0.285 + sin * 0.140,
+			0.072 - cos * 0.072 - sin * 0.283,
+		],
+		[
+			0.213 - cos * 0.213 - sin * 0.787,
+			0.715 - cos * 0.715 + sin * 0.715,
+			0.072 + cos * 0.928 + sin * 0.072,
+		],
+	]
+}
+
+fn mat3_mul(a: &Mat3, b: &Mat3) -> Mat3 {
+	let mut o = [[0.0; 3]; 3];
+	for (i, row) in o.iter_mut().enumerate() {
+		for (j, cell) in row.iter_mut().enumerate() {
+			*cell = a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j];
+		}
+	}
+	o
+}
+
+/// Emit an ffmpeg `colorchannelmixer` for a 3×3 RGB matrix (no alpha mixing).
+fn colorchannelmixer(m: &Mat3) -> String {
+	format!(
+		"colorchannelmixer=rr={:.6}:rg={:.6}:rb={:.6}:gr={:.6}:gg={:.6}:gb={:.6}:br={:.6}:bg={:.6}:bb={:.6}",
+		m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2]
+	)
 }
 
 /// The transpose filter for a clockwise rotation, or `None` for a 0° (or
@@ -607,21 +687,44 @@ mod tests {
 	}
 
 	#[test]
-	fn color_collapses_to_one_eq() {
+	fn color_uses_w3c_rgb_chain() {
+		// brightness 0.2, contrast 0.5 → b=1.2, c=1.5 → k=1.8, m=127.5*(1-1.5)=-63.75.
+		// saturation -1.0 → s=0 (full grayscale) → colorchannelmixer present.
 		let c = build_filterchain(&[
 			VideoOperation::AdjustBrightness { offset: 0.2 },
 			VideoOperation::AdjustContrast { amount: 0.5 },
 			VideoOperation::AdjustSaturation { offset: -1.0 },
 		]);
-		assert_eq!(c, "eq=brightness=0.2:contrast=1.5:saturation=0");
+		assert!(c.starts_with("format=gbrp,"), "got {c}");
+		assert!(
+			c.contains("lutrgb=r='clip(val*1.800000-63.750000,0,255)'"),
+			"got {c}"
+		);
+		assert!(c.contains("colorchannelmixer=rr="), "got {c}");
+		// No additive `eq` brightness anywhere.
+		assert!(!c.contains("eq="), "got {c}");
 	}
 
 	#[test]
-	fn hue_filter() {
+	fn brightness_only_is_pure_multiply() {
+		// brightness 0.5 → b=1.5, c=1 → k=1.5, m=0; no contrast pivot, no matrix.
+		let c = build_filterchain(&[VideoOperation::AdjustBrightness { offset: 0.5 }]);
 		assert_eq!(
-			build_filterchain(&[VideoOperation::AdjustHue { offset: 30.0 }]),
-			"hue=h=30"
+			c,
+			"format=gbrp,lutrgb=r='clip(val*1.500000+0.000000,0,255)':g='clip(val*1.500000+0.000000,0,255)':b='clip(val*1.500000+0.000000,0,255)'"
 		);
+	}
+
+	#[test]
+	fn hue_only_is_a_matrix() {
+		let c = build_filterchain(&[VideoOperation::AdjustHue { offset: 30.0 }]);
+		assert!(c.starts_with("format=gbrp,colorchannelmixer=rr="), "got {c}");
+		assert!(!c.contains("lutrgb"), "got {c}"); // no affine when b=c=1
+	}
+
+	#[test]
+	fn no_color_ops_emit_no_color_filters() {
+		assert_eq!(build_filterchain(&[VideoOperation::Resize { w: 4, h: 4 }]), "scale=4:4");
 	}
 
 	#[test]
@@ -633,10 +736,23 @@ mod tests {
 			VideoOperation::Rotate { angle: 90 },
 			VideoOperation::Resize { w: 100, h: 50 },
 		]);
-		assert_eq!(
-			c,
-			"crop=200:100:0:0,scale=100:50,transpose=1,eq=brightness=0.1,hue=h=15"
+		// Geometry first (crop → scale → rotate), then the RGB color chain.
+		assert!(
+			c.starts_with("crop=200:100:0:0,scale=100:50,transpose=1,format=gbrp,"),
+			"got {c}"
 		);
+		assert!(c.contains("lutrgb=") && c.contains("colorchannelmixer="), "got {c}");
+	}
+
+	#[test]
+	fn saturate_matrix_preserves_neutral() {
+		// Rows of the saturate matrix sum to 1, so gray stays gray for any s.
+		for s in [0.0, 0.5, 1.0, 2.0] {
+			let m = saturate_matrix(s);
+			for row in &m {
+				assert!((row.iter().sum::<f64>() - 1.0).abs() < 1e-9);
+			}
+		}
 	}
 
 	#[test]
@@ -796,11 +912,16 @@ mod integration {
 		let frame = extract_frame(src.to_str().unwrap(), 1.0, Some(48)).unwrap();
 		assert!(std::path::Path::new(&frame).exists());
 
-		// Commit: trim + crop, export mp4_h264.
+		// Commit: trim + crop + color, export mp4_h264. The color ops exercise
+		// the W3C RGB chain (format=gbrp + lutrgb + colorchannelmixer) end-to-end.
 		let out = dir.join("garnet-test-out.mp4");
 		let ops = vec![
 			VideoOperation::Trim { start_secs: 0.5, end_secs: 1.5 },
 			VideoOperation::Crop { x: 1, y: 1, w: 33, h: 33 }, // odd dims → guard kicks in
+			VideoOperation::AdjustBrightness { offset: 0.2 },
+			VideoOperation::AdjustContrast { amount: 0.1 },
+			VideoOperation::AdjustSaturation { offset: -0.3 },
+			VideoOperation::AdjustHue { offset: 20.0 },
 		];
 		commit(src.to_str().unwrap(), &ops, out.to_str().unwrap(), "mp4_h264").unwrap();
 		let out_info = probe_video(out.to_str().unwrap()).unwrap();
