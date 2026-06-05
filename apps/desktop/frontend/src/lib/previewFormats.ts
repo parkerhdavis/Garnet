@@ -18,6 +18,11 @@ export const VIDEO_EXTS = new Set([
 	"wmv",
 ]);
 
+/// Video formats the editor can round-trip (ffmpeg reads them all). Currently
+/// the full `VIDEO_EXTS` set; kept as a distinct constant so the editability
+/// gate can diverge from the previewability gate later if needed.
+export const VIDEO_EDITABLE_EXTS = VIDEO_EXTS;
+
 /// Audio formats with an inline `<audio>` preview.
 export const AUDIO_EXTS = new Set([
 	"mp3",

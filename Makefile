@@ -148,15 +148,21 @@ ifeq ($(DETECTED_OS),linux)
 		echo "All recommended media codecs present."; \
 	fi
 	@echo ""
-	@echo "Checking ffmpeg (video thumbnail extraction)..."
+	@echo "Checking ffmpeg + ffprobe (video thumbnails + video editor)..."
 	@if ! command -v ffmpeg >/dev/null 2>&1; then \
 		echo "ffmpeg not on PATH."; \
 		echo ""; \
 		echo "Install with: sudo apt install ffmpeg"; \
 		echo ""; \
-		echo "Without it, video tiles in the library view fall back to the film icon."; \
+		echo "Without it, video tiles fall back to the film icon and the video editor is unavailable."; \
 	else \
 		echo "ffmpeg: $$(ffmpeg -version | head -1)"; \
+	fi
+	@if ! command -v ffprobe >/dev/null 2>&1; then \
+		echo "ffprobe not on PATH (ships with ffmpeg; install the ffmpeg package)."; \
+		echo "Without it, the video editor can't read duration/dimensions and won't open."; \
+	else \
+		echo "ffprobe: $$(ffprobe -version | head -1)"; \
 	fi
 else ifeq ($(DETECTED_OS),macos)
 	@echo ""

@@ -8,6 +8,7 @@ mod automations;
 mod blend_preview;
 mod db;
 mod editor;
+mod ffmpeg;
 mod garnet_metadata;
 mod image_io;
 mod indexer;
@@ -21,6 +22,7 @@ mod settings;
 mod startup_timing;
 mod texturing;
 mod thumbnails;
+mod video_editor;
 mod watcher;
 mod workspaces;
 
@@ -66,6 +68,7 @@ use startup_timing::{
 };
 use std::sync::{Arc, Mutex};
 use thumbnails::{ensure_thumbnail, get_thumbnail, save_model_thumbnail};
+use video_editor::{commit_video_edit, video_frame, video_info};
 use workspaces::{
 	create_workspace, delete_workspace, list_workspaces, rename_workspace, reorder_workspaces,
 	update_workspace_config,
@@ -390,6 +393,9 @@ fn main() {
 			get_media_port,
 			preview_edit,
 			commit_edit,
+			video_info,
+			video_frame,
+			commit_video_edit,
 			list_workspaces,
 			create_workspace,
 			rename_workspace,

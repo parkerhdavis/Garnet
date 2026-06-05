@@ -29,6 +29,7 @@ import { AppStatsPage } from "@/pages/AppStatsPage";
 import { AssetDetailPage } from "@/pages/AssetDetailPage";
 import { DuplicatesPage } from "@/pages/DuplicatesPage";
 import { EditorPage } from "@/pages/EditorPage";
+import { VideoEditorPage } from "@/pages/VideoEditorPage";
 import { AutomationsPage } from "@/pages/AutomationsPage";
 import { LibraryPage } from "@/pages/LibraryPage";
 import { PluginsPage } from "@/pages/PluginsPage";
@@ -69,6 +70,7 @@ export default function App() {
 						<Route index element={<LibraryPage />} />
 						<Route path="asset/:id" element={<AssetDetailPage />} />
 						<Route path="edit/:id" element={<EditorPage />} />
+						<Route path="edit-video/:id" element={<VideoEditorPage />} />
 
 						{/* Ad-hoc ("ephemeral") open: a single file outside any
 						    library root, addressed by `?path=` instead of an
@@ -76,6 +78,7 @@ export default function App() {
 						    branch on `isEphemeral(asset)` for id-only features. */}
 						<Route path="preview" element={<AssetDetailPage />} />
 						<Route path="edit" element={<EditorPage />} />
+						<Route path="edit-video" element={<VideoEditorPage />} />
 
 						<Route path="workspaces" element={<WorkspacesPage />} />
 						<Route path="workspaces/:id" element={<WorkspaceRoute />} />

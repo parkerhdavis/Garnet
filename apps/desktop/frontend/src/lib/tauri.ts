@@ -405,6 +405,39 @@ export const api = {
 		invoke<void>("restore_from_trash", { trashPath, destinationAbsPath }),
 	/// Every group of byte-identical assets (shared content hash, count ≥ 2).
 	findDuplicates: () => invoke<DuplicateGroup[]>("find_duplicates"),
+
+	// ---- Video editor (shells out to system ffmpeg/ffprobe) ----
+	/// Probe a video for the facts the editor needs up front (duration,
+	/// dimensions, fps, codec, audio presence). Rejects if ffprobe is
+	/// missing or the file has no video stream.
+	videoInfo: (path: string) => invoke<VideoInfo>("video_info", { path }),
+	/// Extract a single raw frame at `timestampSecs` as a PNG; returns the
+	/// temp file's absolute path (wrap with `mediaUrl`). `maxDim` downscales
+	/// the preview frame for snappy scrubbing.
+	videoFrame: (path: string, timestampSecs: number, maxDim?: number) =>
+		invoke<string>("video_frame", {
+			path,
+			timestampSecs,
+			maxDim: maxDim ?? null,
+		}),
+	/// Transcode the source through the op list to `outputPath` in `format`
+	/// (e.g. "mp4_h264"). Writes via a temp sibling + rename.
+	commitVideoEdit: (
+		path: string,
+		ops: unknown[],
+		outputPath: string,
+		format: string,
+	) => invoke<void>("commit_video_edit", { path, ops, outputPath, format }),
+};
+
+/// Mirrors the Rust `video_editor::VideoInfo`.
+export type VideoInfo = {
+	duration_secs: number;
+	width: number;
+	height: number;
+	fps: number;
+	codec: string;
+	has_audio: boolean;
 };
 
 /// Construct a URL for inline `<video>` / `<audio>` playback. Goes through

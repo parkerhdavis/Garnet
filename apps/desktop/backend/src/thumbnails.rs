@@ -51,13 +51,6 @@ const MODEL_FORMATS: &[&str] =
 /// frontend — same dispatch path as image/video.
 const BLEND_FORMATS: &[&str] = &["blend"];
 
-/// Cap on concurrent ffmpeg subprocesses. A full grid of 60 video tiles
-/// otherwise spawns 60 ffmpeg processes simultaneously and each decode runs at
-/// 1/60th speed because of CPU oversubscription. Limiting to a small handful
-/// lets the first few tiles fill in fast (the user-facing perception) without
-/// sacrificing total throughput meaningfully.
-const FFMPEG_PARALLELISM: usize = 4;
-
 /// Cap on concurrent in-process image decodes. Without this, 60 simultaneous
 /// `ensure_thumbnail` calls all hit `image::open` at once, saturating every
 /// core. The UI thread is unaffected (these run on the blocking pool) but
@@ -319,55 +312,12 @@ fn release_in_progress(key: &str) {
 	}
 }
 
-fn ffmpeg_available() -> bool {
-	static AVAILABLE: OnceLock<bool> = OnceLock::new();
-	*AVAILABLE.get_or_init(|| {
-		Command::new("ffmpeg")
-			.arg("-version")
-			.output()
-			.map(|o| o.status.success())
-			.unwrap_or(false)
-	})
-}
-
-/// Counting-semaphore permit. A `Mutex<usize>` plus a small backoff loop —
-/// std doesn't ship `Semaphore` and the queue here is small enough that a
-/// token-counter under a regular mutex is fine. The blocking pool has more
-/// threads than we'd ever park, so this is safe.
-struct Permit {
-	slots: &'static Mutex<usize>,
-}
-impl Drop for Permit {
-	fn drop(&mut self) {
-		if let Ok(mut g) = self.slots.lock() {
-			*g += 1;
-		}
-	}
-}
-fn acquire(slot: &'static Mutex<usize>) -> Permit {
-	loop {
-		{
-			let mut g = match slot.lock() {
-				Ok(g) => g,
-				Err(_) => return Permit { slots: slot },
-			};
-			if *g > 0 {
-				*g -= 1;
-				return Permit { slots: slot };
-			}
-		}
-		std::thread::sleep(std::time::Duration::from_millis(20));
-	}
-}
-
-fn ffmpeg_slot() -> Permit {
+/// Acquire an image-decode slot. ffmpeg has its own separate budget in
+/// `crate::ffmpeg`; image decodes get their own so a CPU-bound decode burst
+/// and a video-decode burst don't share (and starve) one pool.
+fn image_slot() -> crate::ffmpeg::Permit {
 	static AVAILABLE: OnceLock<Mutex<usize>> = OnceLock::new();
-	acquire(AVAILABLE.get_or_init(|| Mutex::new(FFMPEG_PARALLELISM)))
-}
-
-fn image_slot() -> Permit {
-	static AVAILABLE: OnceLock<Mutex<usize>> = OnceLock::new();
-	acquire(AVAILABLE.get_or_init(|| Mutex::new(IMAGE_DECODE_PARALLELISM)))
+	crate::ffmpeg::acquire(AVAILABLE.get_or_init(|| Mutex::new(IMAGE_DECODE_PARALLELISM)))
 }
 
 /// Pulls the embedded preview out of a `.blend` file (Blender writes one
@@ -418,11 +368,11 @@ fn extract_image_thumb(path: &Path, size: u32, cache_file: &Path) -> bool {
 }
 
 fn extract_video_thumb(path: &Path, size: u32, cache_file: &Path) -> bool {
-	if !ffmpeg_available() {
+	if !crate::ffmpeg::ffmpeg_available() {
 		tracing::debug!("ffmpeg not on PATH; skipping video thumbnail for {path:?}");
 		return false;
 	}
-	let _permit = ffmpeg_slot();
+	let _permit = crate::ffmpeg::ffmpeg_slot();
 	let filter = format!("scale='min({size},iw)':-2");
 	let out = Command::new("ffmpeg")
 		.args([
